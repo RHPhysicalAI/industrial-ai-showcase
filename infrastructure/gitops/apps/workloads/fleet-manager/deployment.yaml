@@ -42,7 +42,7 @@ spec:
             - name: KAFKA_SECURITY_PROTOCOL
               value: PLAINTEXT
             - name: POLICY_VERSION
-              value: vla-warehouse-v1.3
+              value: vla-warehouse-v1.4
             - name: GITHUB_TOKEN
               valueFrom:
                 secretKeyRef:
