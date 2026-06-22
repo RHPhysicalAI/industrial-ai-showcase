@@ -1,0 +1,21 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: wbc-model-registry-postgres
+  namespace: rhoai-model-registries
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  instances: 1
+  storage:
+    size: 5Gi
+    storageClass: gp3
+  bootstrap:
+    initdb:
+      database: wbc_model_registry
+      owner: mlmduser
+      secret:
+        name: wbc-model-registry-db
+  # CNPG auto-generates the Secret wbc-model-registry-postgres-app with keys:
+  #   username, password, host, port, dbname, uri, jdbc-uri.
+  # ModelRegistry references this database via host: wbc-model-registry-postgres
