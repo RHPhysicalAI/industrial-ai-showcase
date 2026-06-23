@@ -13,7 +13,7 @@ configMapGenerator:
       - seed.py
   - name: nucleus-seeder-scene
     files:
-      - Warehouse_edit.usd=../../../../../workloads/isaac-sim/scenes/Warehouse_edit.usd
+      - Warehouse_edit.usd
 
 generatorOptions:
   disableNameSuffixHash: true
