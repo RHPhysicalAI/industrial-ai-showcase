@@ -11,7 +11,7 @@ metadata:
   annotations:
     haproxy.router.openshift.io/timeout: 3600s
 spec:
-  host: nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com
+  host: nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
   port:
     targetPort: web
   to:
@@ -30,7 +30,7 @@ metadata:
   annotations:
     haproxy.router.openshift.io/timeout: 86400s
 spec:
-  host: nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com
+  host: nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
   path: /omni/api
   port:
     targetPort: api
@@ -50,7 +50,7 @@ metadata:
   annotations:
     haproxy.router.openshift.io/timeout: 3600s
 spec:
-  host: nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com
+  host: nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
   path: /omni/discovery
   port:
     targetPort: discovery
@@ -70,7 +70,7 @@ metadata:
   annotations:
     haproxy.router.openshift.io/timeout: 3600s
 spec:
-  host: nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com
+  host: nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
   path: /omni/auth
   port:
     targetPort: auth
@@ -90,7 +90,7 @@ metadata:
   annotations:
     haproxy.router.openshift.io/rewrite-target: /
 spec:
-  host: nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com
+  host: nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
   path: /omni/auth-login
   port:
     targetPort: auth-login
@@ -110,7 +110,7 @@ metadata:
   annotations:
     haproxy.router.openshift.io/timeout: 3600s
 spec:
-  host: nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com
+  host: nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
   path: /omni/search
   port:
     targetPort: search
@@ -130,7 +130,7 @@ metadata:
   annotations:
     haproxy.router.openshift.io/timeout: 3600s
 spec:
-  host: nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com
+  host: nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
   path: /omni/tagging
   port:
     targetPort: tagging
@@ -151,7 +151,7 @@ metadata:
     haproxy.router.openshift.io/timeout: 86400s
     haproxy.router.openshift.io/rewrite-target: /
 spec:
-  host: nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com
+  host: nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
   path: /omni/lft
   port:
     targetPort: lft
