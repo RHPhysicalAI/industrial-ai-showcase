@@ -14,8 +14,6 @@ spec:
     initdb:
       database: wbc_model_registry
       owner: mlmduser
-      secret:
-        name: wbc-model-registry-db
   # CNPG auto-generates the Secret wbc-model-registry-postgres-app with keys:
   #   username, password, host, port, dbname, uri, jdbc-uri.
   # ModelRegistry references this database via host: wbc-model-registry-postgres
