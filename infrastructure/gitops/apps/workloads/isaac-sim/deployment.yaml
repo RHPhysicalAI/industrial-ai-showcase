@@ -50,8 +50,8 @@ spec:
                 --/app/window/hideUi=true \
                 --/app/livestream/webrtcEnabled=true \
                 --/app/livestream/nativeStreamerEnabled=true \
-                --/persistent/isaac/asset_root/default="omniverse://nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com/Projects/showcase/assets/Isaac/6.0" \
-                --/persistent/isaac/asset_root/nvidia="omniverse://nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com/Projects/showcase/assets/Isaac/6.0" \
+                --/persistent/isaac/asset_root/default="omniverse://nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com/Projects/showcase/assets/Isaac/6.0" \
+                --/persistent/isaac/asset_root/nvidia="omniverse://nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com/Projects/showcase/assets/Isaac/6.0" \
                 --exec /scenarios/warehouse_baseline.py
           env:
             - name: ACCEPT_EULA
@@ -63,7 +63,7 @@ spec:
             - name: OMNI_SERVER
               value: "omniverse://nucleus-api.omniverse-nucleus.svc.cluster.local"
             - name: SCENE_PACK_URL
-              value: "omniverse://nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com/Projects/showcase/custom/Warehouse_edit.usd"
+              value: "omniverse://nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com/Projects/showcase/custom/Warehouse_edit.usd"
             - name: NUCLEUS_USER
               value: omniverse
             - name: NUCLEUS_PASS
