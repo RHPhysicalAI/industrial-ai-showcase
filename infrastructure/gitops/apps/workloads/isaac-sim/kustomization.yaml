@@ -22,8 +22,8 @@ configMapGenerator:
   - name: isaac-sim-scenarios
     namespace: isaac-sim
     files:
-      - warehouse_baseline.py=../../../../../workloads/isaac-sim/scenarios/warehouse_baseline.py
-      - viewport_mjpeg.py=../../../../../workloads/isaac-sim/scenarios/viewport_mjpeg.py
+      - warehouse_baseline.py=scenarios/warehouse_baseline.py
+      - viewport_mjpeg.py=scenarios/viewport_mjpeg.py
 
 generatorOptions:
   disableNameSuffixHash: true
