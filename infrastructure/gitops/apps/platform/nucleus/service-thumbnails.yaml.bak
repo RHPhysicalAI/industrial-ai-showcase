@@ -1,0 +1,80 @@
+---
+# Source: omniverse-nucleus/templates/services/thumbnails.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nucleus-thumbnails
+  namespace: omniverse-nucleus
+  labels:
+    app: nucleus-thumbnails
+    app.kubernetes.io/part-of: omniverse-nucleus
+    app.kubernetes.io/version: "2023.2.9"
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nucleus-thumbnails
+  template:
+    metadata:
+      labels:
+        app: nucleus-thumbnails
+    spec:
+      serviceAccountName: nucleus
+      imagePullSecrets:
+        - name: ngc-pull-secret
+      containers:
+        - name: nucleus-thumbnails
+          image: nvcr.io/nvidia/omniverse/nucleus-thumbnails:1.5.14
+          env:
+            - name: ACCEPT_EULA
+              value: "1"
+            - name: SERVICE_DISCOVERY_URL
+              value: ws://nucleus-discovery:3333
+            - name: SERVICE_DEPLOYMENTS_LOOKUP
+              value: internal
+            - name: SERVICE_USE_OMNI_CONFIG
+              value: "False"
+            - name: SERVICE_STRUCTURED_LOGGING
+              value: "0"
+            - name: OV_USERNAME
+              value: thumbnails_service
+            - name: OV_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nucleus-passwords
+                  key: service-password
+            - name: OV_MEMORY_RESERVE
+              value: "256"
+            - name: OV_MEMORY_LIMIT
+              value: "4096"
+            - name: OV_CPU_RESERVE
+              value: "0.25"
+            - name: OV_CPU_LIMIT
+              value: "1"
+            - name: OV_SERVICE_BIND_HOST
+              value: 0.0.0.0
+            - name: OV_HOST_NAME
+              value: ""
+            - name: OV_EXCLUDE_PATHS
+              value: "['/@', '/.tags/', '/.system/']"
+            - name: OV_INSTANCE_NAME
+              value: "my_omniverse"
+            - name: OV_LOGFILE
+              value: /omni/log/create_thumbnails.log
+          resources:
+            limits:
+              cpu: "1"
+              memory: 4Gi
+            requests:
+              cpu: 250m
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /omni/log
+              subPath: log/thumbnails
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: nucleus-data

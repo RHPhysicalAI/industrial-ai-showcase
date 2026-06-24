@@ -39,3 +39,8 @@ resources:
   # Service Mesh — PeerAuthentication PERMISSIVE (namespace joins the
   # default Istio revision via the istio.io/rev label on the Namespace)
   - peerauthentication.yaml
+
+
+# Strategic merge patches — pod affinity for RWO PVC co-location
+patchesStrategicMerge:
+  - pod-affinity-patches.yaml

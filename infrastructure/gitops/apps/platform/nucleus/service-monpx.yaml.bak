@@ -1,30 +1,31 @@
 ---
-# Source: omniverse-nucleus/templates/services/navigator.yaml
+# Source: omniverse-nucleus/templates/services/monpx.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: nucleus-navigator
+  name: nucleus-monpx
   namespace: omniverse-nucleus
   labels:
-    app: nucleus-navigator
+    app: nucleus-monpx
     app.kubernetes.io/part-of: omniverse-nucleus
     app.kubernetes.io/version: "2023.2.9"
 spec:
   selector:
-    app: nucleus-navigator
+    app: nucleus-monpx
   ports:
-    - name: web
-      port: 8080
-      targetPort: 80
+    - name: metrics
+      port: 3010
+      targetPort: 8080
+      appProtocol: tcp
 ---
-# Source: omniverse-nucleus/templates/services/navigator.yaml
+# Source: omniverse-nucleus/templates/services/monpx.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nucleus-navigator
+  name: nucleus-monpx
   namespace: omniverse-nucleus
   labels:
-    app: nucleus-navigator
+    app: nucleus-monpx
     app.kubernetes.io/part-of: omniverse-nucleus
     app.kubernetes.io/version: "2023.2.9"
 spec:
@@ -33,40 +34,27 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nucleus-navigator
+      app: nucleus-monpx
   template:
     metadata:
       labels:
-        app: nucleus-navigator
+        app: nucleus-monpx
     spec:
       serviceAccountName: nucleus
       imagePullSecrets:
         - name: ngc-pull-secret
       containers:
-        - name: nucleus-navigator
-          image: nvcr.io/nvidia/omniverse/nucleus-navigator:3.3.6
+        - name: nucleus-monpx
+          image: nvcr.io/nvidia/omniverse/utl-monpx:1.14.53
           env:
             - name: ACCEPT_EULA
               value: "1"
-            - name: PUBLIC_URL
-              value: /
-            - name: SSL
-              value: "0"
-            - name: SETTINGS_JSON
-              value: |
-                {
-                  "etag": "a66b3b6fc8bc5aa68b06f4eba0cb8c8e",
-                  "features": { "soft-delete": 0 },
-                  "storages": {
-                    "items": [
-                      {
-                        "name": "nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com",
-                        "provider": { "type": "nucleus" }
-                      }
-                    ],
-                    "readOnly": true
-                  }
-                }
+            - name: OMNI_MONPX_SCRAPE_URLS
+              value: "http://nucleus-api:9500/metrics;http://nucleus-api:3010/metrics;http://nucleus-log-processor:9500/metrics"
+            - name: OMNI_MONPX_ALLOWED_METRIC_PREFIXES
+              value: "omni:nginx:redis:exposer:otcollector:otelcol"
+            - name: OMNI_DS_BLACKLIST_PATH
+              value: /omni/data/PathBlackList.json
           resources:
             limits:
               cpu: 500m
@@ -75,18 +63,26 @@ spec:
               cpu: 100m
               memory: 128Mi
           ports:
-            - containerPort: 80
+            - containerPort: 8080
           readinessProbe:
             tcpSocket:
-              port: 80
+              port: 8080
             initialDelaySeconds: 20
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
           livenessProbe:
             tcpSocket:
-              port: 80
+              port: 8080
             initialDelaySeconds: 60
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /omni/data
+              subPath: data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: nucleus-data

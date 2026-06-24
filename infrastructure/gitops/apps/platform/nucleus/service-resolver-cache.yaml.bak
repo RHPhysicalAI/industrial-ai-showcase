@@ -1,0 +1,82 @@
+---
+# Source: omniverse-nucleus/templates/services/resolver-cache.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nucleus-resolver-cache
+  namespace: omniverse-nucleus
+  labels:
+    app: nucleus-resolver-cache
+    app.kubernetes.io/part-of: omniverse-nucleus
+    app.kubernetes.io/version: "2023.2.9"
+spec:
+  selector:
+    app: nucleus-resolver-cache
+  ports:
+    - name: cache
+      port: 8891
+      targetPort: 8891
+      appProtocol: tcp
+---
+# Source: omniverse-nucleus/templates/services/resolver-cache.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nucleus-resolver-cache
+  namespace: omniverse-nucleus
+  labels:
+    app: nucleus-resolver-cache
+    app.kubernetes.io/part-of: omniverse-nucleus
+    app.kubernetes.io/version: "2023.2.9"
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nucleus-resolver-cache
+  template:
+    metadata:
+      labels:
+        app: nucleus-resolver-cache
+    spec:
+      serviceAccountName: nucleus
+      imagePullSecrets:
+        - name: ngc-pull-secret
+      containers:
+        - name: nucleus-resolver-cache
+          image: nvcr.io/nvidia/omniverse/nucleus-resolver-cache:1.14.53
+          env:
+            - name: ACCEPT_EULA
+              value: "1"
+          resources:
+            limits:
+              cpu: "1"
+              memory: 2Gi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          ports:
+            - containerPort: 8891
+          readinessProbe:
+            tcpSocket:
+              port: 8891
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 8891
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /omni/data
+              subPath: resolver-cache
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: nucleus-data

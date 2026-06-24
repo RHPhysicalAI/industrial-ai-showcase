@@ -1,31 +1,31 @@
 ---
-# Source: omniverse-nucleus/templates/services/discovery.yaml
+# Source: omniverse-nucleus/templates/services/search.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: nucleus-discovery
+  name: nucleus-search
   namespace: omniverse-nucleus
   labels:
-    app: nucleus-discovery
+    app: nucleus-search
     app.kubernetes.io/part-of: omniverse-nucleus
     app.kubernetes.io/version: "2023.2.9"
 spec:
   selector:
-    app: nucleus-discovery
+    app: nucleus-search
   ports:
-    - name: discovery
-      port: 3333
-      targetPort: 3333
+    - name: search
+      port: 3400
+      targetPort: 3400
       appProtocol: tcp
 ---
-# Source: omniverse-nucleus/templates/services/discovery.yaml
+# Source: omniverse-nucleus/templates/services/search.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nucleus-discovery
+  name: nucleus-search
   namespace: omniverse-nucleus
   labels:
-    app: nucleus-discovery
+    app: nucleus-search
     app.kubernetes.io/part-of: omniverse-nucleus
     app.kubernetes.io/version: "2023.2.9"
 spec:
@@ -34,30 +34,43 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nucleus-discovery
+      app: nucleus-search
   template:
     metadata:
       labels:
-        app: nucleus-discovery
+        app: nucleus-search
     spec:
       serviceAccountName: nucleus
       imagePullSecrets:
         - name: ngc-pull-secret
       containers:
-        - name: nucleus-discovery
-          image: nvcr.io/nvidia/omniverse/nucleus-discovery:1.5.5
+        - name: nucleus-search
+          image: nvcr.io/nvidia/omniverse/nucleus-search:3.2.12
           env:
             - name: ACCEPT_EULA
               value: "1"
-            - name: CANONICAL_NAME
-              value: "nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com"
-            - name: SERVICE_TOKEN
-              value: /omni/secrets/SERVICE_TOKEN
-            - name: SERVICE_PUBLIC_KEY
-              value: /omni/secrets/SERVICE_PUBLIC_KEY
-            - name: WS_MAX_HTTP_LINE
-              value: "65535"
+            - name: SERVICE_BACKEND_USER
+              value: search_service
+            - name: SERVICE_BACKEND_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nucleus-passwords
+                  key: service-password
+            - name: SERVICE_HOST
+              value: 0.0.0.0
+            - name: SERVICE_PORT
+              value: "3400"
+            - name: SERVICE_DEPLOYMENTS_LOOKUP
+              value: internal
+            - name: SERVICE_DISCOVERY_TOKEN
+              value: /omni/secrets/SERVICE_DISCOVERY_TOKEN
+            - name: SERVICE_DISCOVERY_URL
+              value: ws://nucleus-discovery:3333
+            - name: SERVICE_AUTH_PUBLIC_KEY
+              value: /omni/secrets/SERVICE_AUTH_PUBLIC_KEY
             - name: SERVICE_STRUCTURED_LOGGING
+              value: "0"
+            - name: SERVICE_USE_OMNI_CONFIG
               value: "0"
             - name: SERVICE_DEPLOYMENTS
               value: |
@@ -66,45 +79,45 @@ spec:
                     transport:
                       type: sows
                       params:
-                        host: nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
+                        host: nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com
                         port: 80
-                        path: /omni/discovery
+                        path: /omni/search
                   - name: internal
                     transport:
                       type: sows
                       params:
-                        host: nucleus-discovery
-                        port: 3333
+                        host: nucleus-search
+                        port: 3400
           resources:
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: "1"
+              memory: 2Gi
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: 250m
+              memory: 256Mi
           ports:
-            - containerPort: 3333
+            - containerPort: 3400
           readinessProbe:
             tcpSocket:
-              port: 3333
+              port: 3400
             initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
           livenessProbe:
             tcpSocket:
-              port: 3333
+              port: 3400
             initialDelaySeconds: 180
             periodSeconds: 20
             timeoutSeconds: 5
             failureThreshold: 3
           volumeMounts:
             - name: crypto-secrets
-              mountPath: /omni/secrets/SERVICE_TOKEN
+              mountPath: /omni/secrets/SERVICE_DISCOVERY_TOKEN
               subPath: svc_reg_token
               readOnly: true
             - name: crypto-secrets
-              mountPath: /omni/secrets/SERVICE_PUBLIC_KEY
+              mountPath: /omni/secrets/SERVICE_AUTH_PUBLIC_KEY
               subPath: auth_root_of_trust_pub
               readOnly: true
       volumes:

@@ -1,7 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="909a62fd-4d8d-4ecd-8009-8cdf14b28506" name="Changes" comment="" />
+    <list default="true" id="909a62fd-4d8d-4ecd-8009-8cdf14b28506" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus-seeder/job.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus-seeder/job.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/kustomization.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/kustomization.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-api.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-api.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-auth.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-auth.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-discovery.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-discovery.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-navigator.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-navigator.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-search.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-search.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-tagging.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-tagging.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/workloads/isaac-sim/scenarios/warehouse_baseline.py" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/workloads/isaac-sim/scenarios/warehouse_baseline.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -52,7 +63,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1781797256852</updated>
-      <workItem from="1781797257949" duration="22162000" />
+      <workItem from="1781797257949" duration="44282000" />
     </task>
     <servers />
   </component>

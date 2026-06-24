@@ -78,7 +78,7 @@ spec:
             - name: OMNI_AUTH_JWT_PUBKEY
               value: /omni/secrets/jwt_pubkey.pub
             - name: OMNI_LFT_ADDRESS
-              value: "http://nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com/omni/lft"
+              value: "http://nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com/omni/lft"
             - name: OMNI_LFT_THRESHOLD
               value: "1024"
             - name: OMNI_CONTENT_RAM_SZ
@@ -176,7 +176,7 @@ spec:
                     transport:
                       type: connlib
                       params:
-                        url: ws://nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com/omni/api
+                        url: ws://nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com/omni/api
                   - name: internal
                     transport:
                       type: connlib

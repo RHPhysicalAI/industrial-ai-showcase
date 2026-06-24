@@ -41,11 +41,11 @@ spec:
             - name: WMS_STUB_BASE_URL
               value: http://wms-stub.fleet-ops.svc:8082
             - name: MJPEG_URL
-              value: https://isaac-sim-mjpeg-isaac-sim.apps.jary-qs-0323.7w5j.p1.openshiftapps.com/stream.mjpg
+              value: https://isaac-sim-mjpeg-isaac-sim.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com/stream.mjpg
             - name: SIGNALING_SERVER
-              value: isaac-sim-signaling-isaac-sim.apps.jary-qs-0323.7w5j.p1.openshiftapps.com
+              value: isaac-sim-signaling-isaac-sim.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
             - name: TURN_URL
-              value: "turns:turn-omni-streaming.apps.jary-qs-0323.7w5j.p1.openshiftapps.com:443?transport=tcp"
+              value: "turns:turn-omni-streaming.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com:443?transport=tcp"
             - name: TURN_USERNAME
               value: kasdemo
             - name: TURN_CREDENTIAL
@@ -63,7 +63,7 @@ spec:
             - name: NODE_EXTRA_CA_CERTS
               value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
             - name: CLUSTER_APPS_DOMAIN
-              value: apps.jary-qs-0323.7w5j.p1.openshiftapps.com
+              value: apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
           resources:
             requests:
               cpu: 100m

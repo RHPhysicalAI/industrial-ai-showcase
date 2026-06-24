@@ -120,11 +120,11 @@ spec:
                     transport:
                       type: sows
                       params:
-                        host: nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
+                        host: nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com
                         port: 80
                         path: /omni/auth
                     meta:
-                      login_url: http://nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com/omni/auth-login/
+                      login_url: http://nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com/omni/auth-login/
                   - name: internal
                     transport:
                       type: sows
