@@ -120,7 +120,24 @@ class MissionPlanner:
             return None
 
         active.phase = Phase.AWAITING_CLEARANCE
-        log.info("clearance.requested", robot_id=robot_id, aisle=aisle_id)
+
+        # AUTO-CLEARANCE: If the aisle is not obstructed, immediately grant PROCEED
+        if active.route_aisle not in self.obstructed_aisles:
+            log.info(
+                "clearance.auto_granted",
+                robot_id=robot_id,
+                aisle=aisle_id,
+                reason="aisle_not_obstructed"
+            )
+            return self._proceed(active, log)
+
+        # Otherwise, wait for obstruction alert to clear
+        log.info(
+            "clearance.requested",
+            robot_id=robot_id,
+            aisle=aisle_id,
+            obstructed=True
+        )
         return None
 
     def handle_alert(
