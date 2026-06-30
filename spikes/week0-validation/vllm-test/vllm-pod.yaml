@@ -1,0 +1,132 @@
+# vLLM Test Pod - Llama-3.1-8B on L4 GPU
+#
+# Purpose: Validate that vLLM can serve Llama-3.1-8B-Instruct on L4 GPU
+#          with acceptable latency (< 5 seconds p50 for inference).
+#
+# This is a SPIKE - not production-ready. No PVC, no replicas, no monitoring.
+#
+# Prerequisites:
+# 1. L4 GPU node available in cluster
+# 2. HuggingFace token stored in secret (see instructions below)
+# 3. Namespace 'agentic-ops' exists
+#
+# Usage:
+#   oc create namespace agentic-ops
+#   oc create secret generic hf-token -n agentic-ops --from-literal=token='YOUR_HF_TOKEN'
+#   oc apply -f vllm-pod.yaml
+#   oc logs -f vllm-test -n agentic-ops  # Watch model loading
+#   oc port-forward vllm-test 8000:8000 -n agentic-ops  # Access from workstation
+#
+# Test inference:
+#   curl http://localhost:8000/v1/completions \
+#     -H "Content-Type: application/json" \
+#     -d '{"model": "meta-llama/Llama-3.1-8B-Instruct", "prompt": "What is 2+2?", "max_tokens": 50}'
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vllm-test
+  namespace: agentic-ops
+  labels:
+    app: vllm-test
+    spike: week0-validation
+spec:
+  restartPolicy: Never
+
+  containers:
+  - name: vllm
+    image: vllm/vllm-openai:v0.6.3.post1
+
+    args:
+    # Model configuration
+    - --model=meta-llama/Llama-3.1-8B-Instruct
+    - --dtype=float16
+    - --max-model-len=4096
+    - --gpu-memory-utilization=0.85
+
+    # API configuration
+    - --host=0.0.0.0
+    - --port=8000
+    - --trust-remote-code
+
+    # Performance tuning
+    - --max-num-seqs=32
+    - --enable-chunked-prefill
+
+    env:
+    # HuggingFace token for downloading gated models
+    - name: HUGGING_FACE_HUB_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: hf-token
+          key: token
+
+    # Disable analytics
+    - name: VLLM_NO_USAGE_STATS
+      value: "1"
+
+    ports:
+    - name: http
+      containerPort: 8000
+      protocol: TCP
+
+    resources:
+      requests:
+        cpu: "4"
+        memory: "16Gi"
+        nvidia.com/gpu: "1"
+      limits:
+        cpu: "8"
+        memory: "20Gi"
+        nvidia.com/gpu: "1"
+
+    # Readiness probe - vLLM is ready when /health returns 200
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      initialDelaySeconds: 300  # Model loading takes ~5 minutes
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+
+    # Liveness probe - ensure vLLM doesn't hang
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: 8000
+      initialDelaySeconds: 600
+      periodSeconds: 30
+      timeoutSeconds: 10
+      failureThreshold: 3
+
+  # Target L4 GPU nodes specifically
+  nodeSelector:
+    nvidia.com/gpu.product: NVIDIA-L4
+
+  # Tolerate GPU taints if any
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+---
+# Optional: Service for easier access
+# (Not needed for port-forward testing, but useful for in-cluster access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-test
+  namespace: agentic-ops
+  labels:
+    app: vllm-test
+    spike: week0-validation
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+  selector:
+    app: vllm-test
