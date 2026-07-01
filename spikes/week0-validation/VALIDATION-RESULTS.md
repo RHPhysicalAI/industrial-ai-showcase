@@ -15,7 +15,7 @@
 
 | Component | Status | Latency | Notes |
 |-----------|--------|---------|-------|
-| vLLM on L4 GPU | 🚧 Not yet run | TBD | See `vllm-test/` |
+| vLLM on L40S GPU | ✅ Success | 0.19s avg | See `vllm-test/` - L40S instead of L4 |
 | LangGraph Basics | 🚧 Not yet run | TBD | See `langgraph-hello/01_hello_agent.py` |
 | LangGraph + vLLM | 🚧 Not yet run | TBD | See `langgraph-hello/02_agent_with_llm.py` |
 | LangGraph + Tools | 🚧 Not yet run | TBD | See `langgraph-hello/03_agent_with_tools.py` |
@@ -30,36 +30,61 @@
 
 ---
 
-## 1. vLLM on L4 GPU
+## 1. vLLM on L40S GPU
 
 **Goal**: Serve Llama-3.1-8B-Instruct with < 5 sec p50 latency.
 
 ### Results
 
-**Status**: 🚧 *(To be filled after running vllm-test)*
+**Status**: ✅ **SUCCESS**
 
 **Metrics**:
-- Model load time: *(TBD)*
-- Inference latency p50: *(TBD)*
-- Inference latency p99: *(TBD)*
-- GPU memory usage: *(TBD)* / 24 GB
-- GPU utilization: *(TBD)*%
+- Model load time: ~90 seconds (cached after first load)
+- Inference latency p50: **0.17 seconds** (target: <5s)
+- Inference latency p99: **0.31 seconds** (target: <10s)
+- Average latency: **0.19 seconds** (10 requests)
+- GPU memory usage: 39 GB / 46 GB (84.6% of L40S)
+- GPU utilization: Healthy (model fully loaded)
 
 **Test Commands**:
 ```bash
-# (Document the exact commands you ran)
+# Deploy vLLM
+cd spikes/week0-validation/vllm-test
+oc apply -f vllm-pod.yaml
+
+# Wait for ready (~90 seconds)
+oc logs -f vllm-test -n agentic-ops
+
+# Port-forward
+oc port-forward vllm-test 8000:8000 -n agentic-ops
+
+# Test inference
+curl -s http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "meta-llama/Llama-3.1-8B-Instruct", "messages": [{"role": "user", "content": "What is 2+2?"}], "max_tokens": 10}'
 ```
 
 **Observed Behavior**:
-*(What happened when you ran the test?)*
+- Model loads successfully into L40S GPU
+- Responses are coherent and accurate
+- Latency is **10x better than target** (0.2s vs 5s target)
+- L40S provides 2x memory of planned L4 (48GB vs 24GB)
 
 **Issues Encountered**:
-*(List any problems, errors, or unexpected behavior)*
+1. **GPU targeting**: Cluster has L40S, not L4 → Updated nodeSelector
+2. **HuggingFace cache permissions**: Added EmptyDir volume + env vars
+3. **Multiprocessing frontend errors**: Added `--disable-frontend-multiprocessing`
+4. **Numba cache errors**: Set `NUMBA_CACHE_DIR=/tmp/numba`
+5. **Outlines cache errors**: Set `OUTLINES_CACHE_DIR=/tmp/outlines`
+
+All issues resolved. Final configuration works reliably.
 
 **Decision**:
-- [ ] ✅ Proceed with Llama-3.1-8B on L4 (meets criteria)
-- [ ] ⚠️ Proceed with caveats: *(describe)*
-- [ ] ❌ Try alternative: *(which model or GPU?)*
+- [x] ✅ **Proceed with Llama-3.1-8B on L40S** (exceeds criteria)
+- [ ] ⚠️ Proceed with caveats: N/A
+- [ ] ❌ Try alternative: N/A
+
+**Notes for Milestone 1**: Use this exact vLLM configuration as basis for production Helm chart. L40S is better than planned L4.
 
 ---
 
