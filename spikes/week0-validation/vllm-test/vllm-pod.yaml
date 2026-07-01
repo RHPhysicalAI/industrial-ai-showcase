@@ -52,6 +52,7 @@ spec:
     # Performance tuning
     - --max-num-seqs=32
     - --enable-chunked-prefill
+    - --disable-frontend-multiprocessing
 
     env:
     # HuggingFace token for downloading gated models
@@ -64,6 +65,24 @@ spec:
     # Disable analytics
     - name: VLLM_NO_USAGE_STATS
       value: "1"
+
+    # Set writable cache directory
+    - name: HF_HOME
+      value: /tmp/huggingface
+    - name: TRANSFORMERS_CACHE
+      value: /tmp/huggingface/hub
+    # Disable Numba caching to avoid permission errors
+    - name: NUMBA_CACHE_DIR
+      value: /tmp/numba
+    - name: NUMBA_DISABLE_JIT
+      value: "0"
+    # Set outlines cache directory
+    - name: OUTLINES_CACHE_DIR
+      value: /tmp/outlines
+
+    volumeMounts:
+    - name: cache
+      mountPath: /tmp/huggingface
 
     ports:
     - name: http
@@ -100,15 +119,21 @@ spec:
       timeoutSeconds: 10
       failureThreshold: 3
 
-  # Target L4 GPU nodes specifically
+  # Target L40S GPU nodes (updated from L4 based on actual cluster)
   nodeSelector:
-    nvidia.com/gpu.product: NVIDIA-L4
+    nvidia.com/gpu.product: NVIDIA-L40S
 
   # Tolerate GPU taints if any
   tolerations:
   - key: nvidia.com/gpu
     operator: Exists
     effect: NoSchedule
+
+  # Volumes
+  volumes:
+  - name: cache
+    emptyDir:
+      sizeLimit: 20Gi  # Large enough for model download (~16 GB)
 
 ---
 # Optional: Service for easier access
