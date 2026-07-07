@@ -78,3 +78,28 @@ export function subscribeEvents(onMessage: (m: FleetMessage) => void): () => voi
   });
   return () => es.close();
 }
+
+export async function queryAgent(query: string): Promise<{
+  query: string;
+  response: string;
+  timestamp: string;
+}> {
+  const resp = await fetch("/api/agent/query", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
+  });
+  if (!resp.ok) {
+    const errorData = await resp.json().catch(() => ({ error: resp.statusText })) as { error?: string };
+    throw new Error(errorData.error ?? `Agent query failed: ${resp.statusText}`);
+  }
+  return (await resp.json()) as { query: string; response: string; timestamp: string };
+}
+
+export async function getAgentHealth(): Promise<{ status: string }> {
+  const resp = await fetch("/api/agent/health");
+  if (!resp.ok) {
+    return { status: "unavailable" };
+  }
+  return (await resp.json()) as { status: string };
+}
