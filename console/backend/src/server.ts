@@ -316,6 +316,62 @@ fastify.get("/api/events", async (_request, reply) => {
   return reply;
 });
 
+// Agent assistant endpoints
+fastify.post<{ Body: { query: string; sessionId?: string } }>(
+  "/api/agent/query",
+  async (request, reply) => {
+    const { query } = request.body;
+
+    if (!query || typeof query !== "string") {
+      reply.code(400).send({ error: "query is required" });
+      return;
+    }
+
+    try {
+      const resp = await fetch(
+        `${config.agenticOrchestratorUrl}/query`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        }
+      );
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        log.warn({ status: resp.status, error: errorText }, "agent query failed");
+        reply.code(resp.status).send({ error: "Agent query failed" });
+        return;
+      }
+
+      const data = await resp.json() as { query: string; response: string };
+      return {
+        query: data.query,
+        response: data.response,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (err) {
+      log.error({ err }, "agent query error");
+      reply.code(500).send({ error: "Agent service unavailable" });
+    }
+  }
+);
+
+fastify.get("/api/agent/health", async () => {
+  try {
+    const resp = await fetch(`${config.agenticOrchestratorUrl}/health`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (resp.ok) {
+      const data = await resp.json() as { status: string };
+      return { status: "ready", service: data.status };
+    }
+    return { status: "unavailable" };
+  } catch {
+    return { status: "unavailable" };
+  }
+});
+
 await stream.start();
 
 const shutdown = async (signal: string): Promise<void> => {

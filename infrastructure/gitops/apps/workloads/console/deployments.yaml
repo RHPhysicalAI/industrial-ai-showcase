@@ -64,6 +64,8 @@ spec:
               value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
             - name: CLUSTER_APPS_DOMAIN
               value: apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
+            - name: AGENTIC_ORCHESTRATOR_URL
+              value: http://agentic-orchestrator.agentic-ops.svc.cluster.local:8080
           resources:
             requests:
               cpu: 100m
