@@ -139,15 +139,6 @@ export function App(){
                   ))}
                 </ToggleGroup>
               </FlexItem>
-              <FlexItem>
-                <Button
-                  variant="secondary"
-                  onClick={() => setIsDrawerExpanded(!isDrawerExpanded)}
-                  icon={<CommentIcon />}
-                >
-                  AI Assistant
-                </Button>
-              </FlexItem>
             </Flex>
           </MastheadContent>
         </Masthead>
@@ -211,6 +202,27 @@ export function App(){
           </DrawerContentBody>
         </DrawerContent>
       </Drawer>
+
+      {/* Floating AI Assistant Button */}
+      {!isDrawerExpanded && (
+        <Button
+          variant="primary"
+          onClick={() => setIsDrawerExpanded(true)}
+          icon={<CommentIcon />}
+          style={{
+            position: "fixed",
+            bottom: "24px",
+            right: "24px",
+            zIndex: 1000,
+            borderRadius: "50%",
+            width: "60px",
+            height: "60px",
+            padding: 0,
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+          }}
+          aria-label="Open AI Assistant"
+        />
+      )}
     </Page>
   );
 }
