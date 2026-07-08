@@ -148,7 +148,7 @@ export function App(){
         <DrawerContent
           panelContent={
             <DrawerPanelContent widths={{ default: "width_50", xl: "width_33" }}>
-              <AgentAssistant />
+              <AgentAssistant onClose={() => setIsDrawerExpanded(false)} />
             </DrawerPanelContent>
           }
         >

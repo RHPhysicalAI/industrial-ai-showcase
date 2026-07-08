@@ -15,6 +15,7 @@ import {
   StackItem,
   TextArea,
 } from "@patternfly/react-core";
+import { TimesIcon } from "@patternfly/react-icons";
 import { queryAgent } from "./api.js";
 
 interface Message {
@@ -24,7 +25,11 @@ interface Message {
   status?: "thinking" | "complete" | "error";
 }
 
-export function AgentAssistant() {
+interface AgentAssistantProps {
+  onClose?: () => void;
+}
+
+export function AgentAssistant({ onClose }: AgentAssistantProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -67,7 +72,18 @@ export function AgentAssistant() {
   return (
     <Card isFullHeight>
       <CardHeader>
-        <CardTitle>Agent Assistant (Read-Only)</CardTitle>
+        <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}>
+          <FlexItem>
+            <CardTitle>Agent Assistant (Read-Only)</CardTitle>
+          </FlexItem>
+          {onClose && (
+            <FlexItem>
+              <Button variant="plain" onClick={onClose} aria-label="Close">
+                <TimesIcon />
+              </Button>
+            </FlexItem>
+          )}
+        </Flex>
       </CardHeader>
       <CardBody>
         <Stack hasGutter style={{ height: "100%" }}>
