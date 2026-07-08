@@ -16,7 +16,6 @@ import {
 import type { Topology } from "./types.js";
 import { fetchTopology } from "./api.js";
 import { PlatformGovernanceTab } from "./PlatformGovernanceTab.js";
-import { AgentAssistant } from "./AgentAssistant.js";
 import archDiagram from "./phases-1-2-arch.png";
 
 type ArchView = "purdue" | "diagram" | "governance";
@@ -233,11 +232,6 @@ export function ArchitectureView() {
                 </Card>
               </FlexItem>
             </Flex>
-          </StackItem>
-
-          {/* Agent Assistant Panel (Phase 3 Milestone 1) */}
-          <StackItem>
-            <AgentAssistant />
           </StackItem>
         </>
       )}

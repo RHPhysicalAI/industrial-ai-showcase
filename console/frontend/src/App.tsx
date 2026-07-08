@@ -7,6 +7,10 @@ import {
   CardBody,
   CardHeader,
   CardTitle,
+  Drawer,
+  DrawerContent,
+  DrawerContentBody,
+  DrawerPanelContent,
   Flex,
   FlexItem,
   Label,
@@ -22,12 +26,14 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@patternfly/react-core";
+import { CommentIcon } from "@patternfly/react-icons";
 import type { ButtonDef, FleetMessage, ScenarioDetail, Topology, ViewName } from "./types.js";
 import { executeAction, fetchScenarioDetail, fetchScenarios, fetchTopology, subscribeEvents } from "./api.js";
 import { StageCard } from "./Stage.js";
 import { ArchitectureView } from "./ArchitectureView.js";
 import { FleetView } from "./FleetView.js";
 import { LineageView } from "./LineageView.js";
+import { AgentAssistant } from "./AgentAssistant.js";
 import topologyImg from "./topology.png";
 
 const VIEWS: ViewName[] = ["stage", "lineage", "fleet", "architecture"];
@@ -51,6 +57,7 @@ export function App(){
   const [connected, setConnected] = useState(false);
   const [cameraTick, setCameraTick] = useState(0);
   const [alertActive, setAlertActive] = useState(false);
+  const [isDrawerExpanded, setIsDrawerExpanded] = useState(false);
 
   useEffect(() => {
     fetchTopology().then(setTopology).catch(() => undefined);
@@ -132,13 +139,31 @@ export function App(){
                   ))}
                 </ToggleGroup>
               </FlexItem>
+              <FlexItem>
+                <Button
+                  variant="secondary"
+                  onClick={() => setIsDrawerExpanded(!isDrawerExpanded)}
+                  icon={<CommentIcon />}
+                >
+                  AI Assistant
+                </Button>
+              </FlexItem>
             </Flex>
           </MastheadContent>
         </Masthead>
       }
     >
-      <PageSection>
-        {currentView === "stage" && (
+      <Drawer isExpanded={isDrawerExpanded}>
+        <DrawerContent
+          panelContent={
+            <DrawerPanelContent widths={{ default: "width_50", xl: "width_33" }}>
+              <AgentAssistant />
+            </DrawerPanelContent>
+          }
+        >
+          <DrawerContentBody>
+            <PageSection>
+              {currentView === "stage" && (
           <Flex spaceItems={{ default: "spaceItemsLg" }} alignItems={{ default: "alignItemsStretch" }}>
             <FlexItem
               flex={{ default: "flex_1" }}
@@ -179,10 +204,13 @@ export function App(){
           </Flex>
         )}
 
-        {currentView === "architecture" && <ArchitectureView />}
-        {currentView === "fleet" && <FleetView events={events} />}
-        {currentView === "lineage" && <LineageView />}
-      </PageSection>
+              {currentView === "architecture" && <ArchitectureView />}
+              {currentView === "fleet" && <FleetView events={events} />}
+              {currentView === "lineage" && <LineageView />}
+            </PageSection>
+          </DrawerContentBody>
+        </DrawerContent>
+      </Drawer>
     </Page>
   );
 }
