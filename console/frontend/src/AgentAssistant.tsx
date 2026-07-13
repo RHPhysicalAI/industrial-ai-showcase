@@ -208,7 +208,7 @@ export function AgentAssistant({ onClose }: AgentAssistantProps) {
                       <FlexItem key={idx}>
                         <Button
                           variant="secondary"
-                          isSmall
+                          size="sm"
                           onClick={() => handleSuggestionClick(s.text)}
                         >
                           {s.icon} {s.text}
