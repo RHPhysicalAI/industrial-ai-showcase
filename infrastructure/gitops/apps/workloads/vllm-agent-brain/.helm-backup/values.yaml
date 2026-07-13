@@ -1,0 +1,159 @@
+# This project was developed with assistance from AI tools.
+#
+# vLLM Agent Brain - Default Values
+#
+# This configuration is based on Week 0 validation results:
+# - GPU: L40S (48GB VRAM) - validated in spikes/week0-validation/vllm-test/
+# - Model: Llama-3.1-8B-Instruct
+# - Latency: 0.19s average (10x better than 5s target)
+#
+# Override for different environments:
+#   helm install ... --set model.name=meta-llama/Llama-3.2-3B-Instruct
+#   helm install ... --set gpu.product=NVIDIA-L4
+
+# Global settings
+global:
+  namespace: agentic-ops
+
+# vLLM image configuration
+image:
+  # Using the exact image from Week 0 validation (vLLM 0.6.3.post1)
+  # This version is validated to work with our GPU and model
+  repository: vllm/vllm-openai
+  tag: ":v0.6.3.post1"
+  pullPolicy: IfNotPresent
+
+# Model configuration
+model:
+  # HuggingFace model name
+  name: meta-llama/Llama-3.1-8B-Instruct
+
+  # Model precision (validated in Week 0)
+  dtype: float16
+
+  # Max sequence length
+  maxModelLen: 4096
+
+  # GPU memory utilization (85% is safe based on Week 0)
+  gpuMemoryUtilization: 0.85
+
+  # vLLM-specific flags (CRITICAL - from Week 0 validation)
+  disableFrontendMultiprocessing: true
+  enableAutoToolChoice: true
+  toolCallParser: hermes
+
+# GPU configuration (based on Week 0 - L40S not L4!)
+gpu:
+  # GPU product (MUST match cluster - we have L40S, not L4)
+  product: NVIDIA-L40S
+
+  # Number of GPUs per pod
+  count: 1
+
+  # GPU resource type (standard NVIDIA label)
+  resourceType: nvidia.com/gpu
+
+# HuggingFace configuration
+huggingface:
+  # Token secret name (already exists in agentic-ops namespace)
+  tokenSecretName: hf-token
+  tokenSecretKey: token
+
+# Resource requests and limits
+resources:
+  requests:
+    cpu: "4"
+    memory: 16Gi
+  limits:
+    cpu: "8"
+    memory: 20Gi
+    # GPU limit set dynamically in template based on gpu.count
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8000
+  targetPort: 8000
+  name: http
+
+# Health check configuration (from Week 0 validation)
+healthCheck:
+  enabled: true
+  liveness:
+    initialDelaySeconds: 600  # Model loading can take up to 5 minutes
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 300  # Model loading takes ~5 minutes
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# Replicas (single replica for Milestone 1)
+replicas: 1
+
+# Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+# Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  runAsNonRoot: true
+
+# Labels and annotations
+labels:
+  app.kubernetes.io/component: model-serving
+  app.kubernetes.io/part-of: agentic-orchestrator
+  phase: "3"
+  milestone: "1"
+
+annotations:
+  # Prometheus scraping
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8000"
+  prometheus.io/path: "/metrics"
+
+# Storage for caches (EmptyDir validated in Week 0)
+storage:
+  # HuggingFace cache
+  hfCache:
+    enabled: true
+    sizeLimit: 20Gi
+
+  # Numba cache (required - Week 0 validation)
+  numbaCache:
+    enabled: true
+    sizeLimit: 1Gi
+
+  # Outlines cache (required - Week 0 validation)
+  outlinesCache:
+    enabled: true
+    sizeLimit: 5Gi
+
+# Node selector and tolerations
+nodeSelector: {}
+  # GPU node selector set dynamically in template based on gpu.product
+
+tolerations:
+  - key: nvidia.com/gpu
+    operator: Equal
+    value: L40S_SHARED
+    effect: NoSchedule
+
+affinity: {}
+
+# OpenShift Route (optional - not needed for Milestone 1)
+route:
+  enabled: false
+  host: ""
+  tls:
+    enabled: true
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

@@ -1,0 +1,18 @@
+# This project was developed with assistance from AI tools.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-agent-brain
+  annotations:
+    prometheus.io/path: /metrics
+    prometheus.io/port: "8000"
+    prometheus.io/scrape: "true"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: vllm-agent-brain

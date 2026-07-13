@@ -1,0 +1,145 @@
+# This project was developed with assistance from AI tools.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vllm-agent-brain.fullname" . }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "vllm-agent-brain.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "vllm-agent-brain.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "vllm-agent-brain.selectorLabels" . | nindent 8 }}
+        {{- with .Values.labels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        {{- with .Values.annotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+
+      containers:
+      - name: vllm
+        image: "{{ .Values.image.repository }}{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+
+        # Use image's default ENTRYPOINT - do not override command
+        # vllm/vllm-openai:v0.6.3.post1 has built-in entrypoint
+        args:
+          {{- include "vllm-agent-brain.args" . | nindent 10 }}
+
+        ports:
+        - name: {{ .Values.service.name }}
+          containerPort: {{ .Values.service.targetPort }}
+          protocol: TCP
+
+        env:
+        # HuggingFace token (for model download)
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.huggingface.tokenSecretName }}
+              key: {{ .Values.huggingface.tokenSecretKey }}
+
+        # Cache directories (CRITICAL - from Week 0 validation)
+        - name: HF_HOME
+          value: /tmp/huggingface
+        - name: TRANSFORMERS_CACHE
+          value: /tmp/huggingface/hub
+        - name: NUMBA_CACHE_DIR
+          value: /tmp/numba
+        - name: OUTLINES_CACHE_DIR
+          value: /tmp/outlines
+
+        volumeMounts:
+        {{- if .Values.storage.hfCache.enabled }}
+        - name: hf-cache
+          mountPath: /tmp/huggingface
+        {{- end }}
+        {{- if .Values.storage.numbaCache.enabled }}
+        - name: numba-cache
+          mountPath: /tmp/numba
+        {{- end }}
+        {{- if .Values.storage.outlinesCache.enabled }}
+        - name: outlines-cache
+          mountPath: /tmp/outlines
+        {{- end }}
+
+        resources:
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+            {{ .Values.gpu.resourceType }}: {{ .Values.gpu.count | quote }}
+          limits:
+            cpu: {{ .Values.resources.limits.cpu }}
+            memory: {{ .Values.resources.limits.memory }}
+            {{ .Values.gpu.resourceType }}: {{ .Values.gpu.count | quote }}
+
+        {{- if .Values.healthCheck.enabled }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.service.name }}
+          initialDelaySeconds: {{ .Values.healthCheck.liveness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.healthCheck.liveness.periodSeconds }}
+          timeoutSeconds: {{ .Values.healthCheck.liveness.timeoutSeconds }}
+          failureThreshold: {{ .Values.healthCheck.liveness.failureThreshold }}
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.service.name }}
+          initialDelaySeconds: {{ .Values.healthCheck.readiness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.healthCheck.readiness.periodSeconds }}
+          timeoutSeconds: {{ .Values.healthCheck.readiness.timeoutSeconds }}
+          failureThreshold: {{ .Values.healthCheck.readiness.failureThreshold }}
+        {{- end }}
+
+      # GPU node selector (CRITICAL - must match cluster GPU product)
+      nodeSelector:
+        nvidia.com/gpu.product: {{ .Values.gpu.product }}
+        {{- with .Values.nodeSelector }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      volumes:
+      {{- if .Values.storage.hfCache.enabled }}
+      - name: hf-cache
+        emptyDir:
+          sizeLimit: {{ .Values.storage.hfCache.sizeLimit }}
+      {{- end }}
+      {{- if .Values.storage.numbaCache.enabled }}
+      - name: numba-cache
+        emptyDir:
+          sizeLimit: {{ .Values.storage.numbaCache.sizeLimit }}
+      {{- end }}
+      {{- if .Values.storage.outlinesCache.enabled }}
+      - name: outlines-cache
+        emptyDir:
+          sizeLimit: {{ .Values.storage.outlinesCache.sizeLimit }}
+      {{- end }}

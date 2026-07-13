@@ -1,0 +1,130 @@
+# This project was developed with assistance from AI tools.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-agent-brain
+  annotations:
+    prometheus.io/path: /metrics
+    prometheus.io/port: "8000"
+    prometheus.io/scrape: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-agent-brain
+  template:
+    metadata:
+      labels:
+        app: vllm-agent-brain
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8000"
+        prometheus.io/scrape: "true"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+      - name: vllm
+        image: "vllm/vllm-openai:v0.6.3.post1"
+        imagePullPolicy: IfNotPresent
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+
+        # Use image's default ENTRYPOINT - do not override command
+        # vllm/vllm-openai:v0.6.3.post1 has built-in entrypoint
+        args:
+          - "--model=meta-llama/Llama-3.3-70B-Instruct"
+          - "--quantization=awq"
+          - "--dtype=auto"
+          - "--max-model-len=8192"
+          - "--gpu-memory-utilization=0.90"
+          - "--disable-frontend-multiprocessing"
+          - "--enable-auto-tool-choice"
+          - "--tool-call-parser=llama3_json"
+          - "--port=8000"
+
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+
+        env:
+        # HuggingFace token (for model download)
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: token
+
+        # Cache directories (CRITICAL - from Week 0 validation)
+        - name: HF_HOME
+          value: /tmp/huggingface
+        - name: TRANSFORMERS_CACHE
+          value: /tmp/huggingface/hub
+        - name: NUMBA_CACHE_DIR
+          value: /tmp/numba
+        - name: OUTLINES_CACHE_DIR
+          value: /tmp/outlines
+
+        volumeMounts:
+        - name: hf-cache
+          mountPath: /tmp/huggingface
+        - name: numba-cache
+          mountPath: /tmp/numba
+        - name: outlines-cache
+          mountPath: /tmp/outlines
+
+        resources:
+          requests:
+            cpu: 8
+            memory: 32Gi
+            nvidia.com/gpu: "1"
+          limits:
+            cpu: 16
+            memory: 40Gi
+            nvidia.com/gpu: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 900
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 600
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+      # GPU node selector (CRITICAL - must match cluster GPU product)
+      nodeSelector:
+        nvidia.com/gpu.product: NVIDIA-L40S
+      tolerations:
+        - effect: NoSchedule
+          key: nvidia.com/gpu
+          operator: Equal
+          value: L40S_SHARED
+
+      volumes:
+      - name: hf-cache
+        emptyDir:
+          sizeLimit: 80Gi
+      - name: numba-cache
+        emptyDir:
+          sizeLimit: 2Gi
+      - name: outlines-cache
+        emptyDir:
+          sizeLimit: 10Gi

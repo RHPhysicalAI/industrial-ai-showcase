@@ -1,0 +1,27 @@
+# This project was developed with assistance from AI tools.
+apiVersion: v2
+name: vllm-agent-brain
+description: vLLM serving Llama-3.1-8B-Instruct for Phase 3 agentic orchestration
+type: application
+version: 0.1.0
+appVersion: "0.6.3"
+
+keywords:
+  - vllm
+  - llama
+  - llm
+  - inference
+  - phase3
+
+maintainers:
+  - name: Red Hat Industrial AI Showcase Team
+
+annotations:
+  # OpenShift-specific
+  openshift.io/display-name: "vLLM Agent Brain"
+  openshift.io/description: "Serves Llama-3.1-8B-Instruct for agentic operations"
+
+  # Phase 3 metadata
+  industrial-ai.redhat.com/phase: "3"
+  industrial-ai.redhat.com/milestone: "1"
+  industrial-ai.redhat.com/component: "model-serving"
