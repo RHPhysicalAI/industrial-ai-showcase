@@ -6,12 +6,11 @@ import {
   CardBody,
   CardHeader,
   CardTitle,
-  Chip,
-  ChipGroup,
   Flex,
   FlexItem,
   Form,
   FormGroup,
+  Label,
   Spinner,
   Stack,
   StackItem,
@@ -204,17 +203,19 @@ export function AgentAssistant({ onClose }: AgentAssistantProps) {
                   </div>
                 </StackItem>
                 <StackItem>
-                  <ChipGroup>
+                  <Flex spaceItems={{ default: "spaceItemsSm" }} flexWrap={{ default: "wrap" }}>
                     {suggestions.map((s, idx) => (
-                      <Chip
-                        key={idx}
-                        onClick={() => handleSuggestionClick(s.text)}
-                        isReadOnly={false}
-                      >
-                        {s.icon} {s.text}
-                      </Chip>
+                      <FlexItem key={idx}>
+                        <Button
+                          variant="secondary"
+                          isSmall
+                          onClick={() => handleSuggestionClick(s.text)}
+                        >
+                          {s.icon} {s.text}
+                        </Button>
+                      </FlexItem>
                     ))}
-                  </ChipGroup>
+                  </Flex>
                 </StackItem>
               </Stack>
             </StackItem>
