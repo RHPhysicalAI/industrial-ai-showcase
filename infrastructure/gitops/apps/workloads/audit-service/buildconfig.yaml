@@ -18,7 +18,7 @@ spec:
   strategy:
     type: Docker
     dockerStrategy:
-      dockerfilePath: Containerfile
+      dockerfilePath: infrastructure/gitops/apps/workloads/audit-service/Containerfile
   output:
     to:
       kind: ImageStreamTag

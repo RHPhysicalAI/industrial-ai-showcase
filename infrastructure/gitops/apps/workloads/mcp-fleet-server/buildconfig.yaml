@@ -19,6 +19,6 @@ spec:
   strategy:
     type: Docker
     dockerStrategy:
-      dockerfilePath: Dockerfile
+      dockerfilePath: infrastructure/gitops/apps/workloads/mcp-fleet-server/Dockerfile
   triggers:
     - type: ConfigChange
