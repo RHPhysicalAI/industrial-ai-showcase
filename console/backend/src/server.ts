@@ -473,9 +473,10 @@ fastify.get("/api/agent/suggestions", async () => {
 // Helper function to get next version
 function getNextVersion(current: string): string | null {
   const match = current.match(/v(\d+)\.(\d+)/);
-  if (match) {
-    const [_, major, minor] = match;
-    return `v${major}.${parseInt(minor) + 1}`;
+  if (match && match[1] && match[2]) {
+    const major = match[1];
+    const minor = match[2];
+    return `v${major}.${parseInt(minor, 10) + 1}`;
   }
   return null;
 }
