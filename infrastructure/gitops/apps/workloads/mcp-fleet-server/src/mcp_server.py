@@ -261,6 +261,7 @@ async def promote_policy_version(factory: str, model_version: str):
     try:
         config = await get_factory_config(factory)
         current_version = config.get("policy_version", "unknown")
+        factory_namespace = config.get("namespace")  # Get actual namespace (e.g., "factory-b")
         model_name = "vla-warehouse"  # Hardcoded for now - could extract from policy_version
 
     except HTTPException as e:
@@ -269,28 +270,33 @@ async def promote_policy_version(factory: str, model_version: str):
     # 2. Construct model URI (assumes MLflow storage structure)
     model_uri = f"s3://mlflow/models/{model_name}/{model_version}"
 
-    # 3. Generate Kustomize overlay
+    # 3. Generate Kustomize overlay (use namespace, not display name with spaces)
+    # factory_namespace is valid Kubernetes namespace (e.g., "factory-b")
+    # factory is display name (could be "Factory B" with space - invalid for K8s)
     try:
         overlay_files = generate_model_promotion_overlay(
             model_name=model_name,
             model_version=model_version,
             model_uri=model_uri,
-            factory=factory
+            factory=factory_namespace,  # Use namespace, not display name
+            namespace=factory_namespace
         )
 
-        # Generate human-readable summary and diff
+        # Generate human-readable summary and diff (use display name for human readability)
         summary = generate_promotion_summary(
             model_name=model_name,
             model_version=model_version,
             model_uri=model_uri,
-            factory=factory
+            factory=factory,  # Display name for summary
+            namespace=factory_namespace
         )
 
         git_diff = generate_promotion_git_diff(
             model_name=model_name,
             model_version=model_version,
             model_uri=model_uri,
-            factory=factory
+            factory=factory_namespace,  # Use namespace for paths
+            namespace=factory_namespace
         )
 
     except Exception as e:
