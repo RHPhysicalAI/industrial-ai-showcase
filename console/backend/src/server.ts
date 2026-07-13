@@ -91,7 +91,6 @@ fastify.get("/api/governance", async () => {
 fastify.get("/api/fleet", async () => {
   const telemetry = stream.getLatestTelemetry();
   const ds = stream.demoState;
-  const fa = ds.factories["factory-a"];
   const fb = ds.factories["factory-b"];
   const d = config.clusterAppsDomain;
   const links = d
@@ -108,16 +107,7 @@ fastify.get("/api/fleet", async () => {
     statusLog: ds.statusLog,
     links,
     factories: [
-      {
-        name: "Factory A",
-        namespace: "robot-edge",
-        policyVersion: fa?.policyVersion ?? telemetry["fl-07"]?.policyVersion ?? "vla-warehouse-v1.3",
-        robotId: "fl-07",
-        robotStatus: telemetry["fl-07"]?.robotStatus ?? "active",
-        anomalyScore: telemetry["fl-07"]?.anomalyScore ?? 0.12,
-        argoSyncStatus: fa?.argoSyncStatus ?? "synced",
-        lastHeartbeat: telemetry["fl-07"]?.lastHeartbeat ?? new Date().toISOString(),
-      },
+      // Factory A removed - doesn't exist in cluster (deleted earlier)
       {
         name: "Factory B",
         namespace: "factory-b",
@@ -384,30 +374,9 @@ fastify.get("/api/agent/suggestions", async () => {
     // Get current fleet state
     const telemetry = stream.getLatestTelemetry();
     const ds = stream.demoState;
-    const fa = ds.factories["factory-a"];
     const fb = ds.factories["factory-b"];
 
-    // Factory A suggestions
-    const factoryAVersion = fa?.policyVersion ?? telemetry["fl-07"]?.policyVersion ?? "v1.3";
-    suggestions.push({
-      category: "fleet-status",
-      icon: "📊",
-      text: `What's the current model version in Factory A?`,
-      priority: 2,
-    });
-
-    // Suggest upgrade (simple increment logic)
-    const nextVersionA = getNextVersion(factoryAVersion);
-    if (nextVersionA) {
-      suggestions.push({
-        category: "upgrade",
-        icon: "🆙",
-        text: `Promote vla-warehouse ${nextVersionA} to Factory A`,
-        priority: 1,
-      });
-    }
-
-    // Factory B suggestions
+    // Factory B suggestions (Factory A removed - doesn't exist in cluster)
     const factoryBVersion = fb?.policyVersion ?? telemetry["fl-08"]?.policyVersion ?? "v1.3";
     const nextVersionB = getNextVersion(factoryBVersion);
     if (nextVersionB) {
@@ -419,28 +388,28 @@ fastify.get("/api/agent/suggestions", async () => {
       });
     }
 
-    // Robot telemetry
+    // Robot telemetry (fl-08 is Factory B robot)
     suggestions.push({
       category: "telemetry",
       icon: "🤖",
-      text: "Show me telemetry for robot fl-07",
+      text: "Show me telemetry for robot fl-08",
       priority: 3,
     });
 
-    // Anomaly check
-    const factoryAAnomalyScore = telemetry["fl-07"]?.anomalyScore ?? 0.12;
-    if (factoryAAnomalyScore > 0.5) {
+    // Anomaly check (Factory B)
+    const factoryBAnomalyScore = telemetry["fl-08"]?.anomalyScore ?? 0.12;
+    if (factoryBAnomalyScore > 0.5) {
       suggestions.push({
         category: "anomaly",
         icon: "⚠️",
-        text: `Check anomaly for Factory A (score: ${factoryAAnomalyScore.toFixed(2)})`,
+        text: `Check anomaly for Factory B (score: ${factoryBAnomalyScore.toFixed(2)})`,
         priority: 0, // Highest priority
       });
     } else {
       suggestions.push({
         category: "anomaly",
         icon: "📈",
-        text: "Show me anomaly history for Factory A",
+        text: "Show me anomaly history for Factory B",
         priority: 4,
       });
     }
