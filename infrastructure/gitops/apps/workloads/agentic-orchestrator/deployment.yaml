@@ -1,0 +1,72 @@
+# This project was developed with assistance from AI tools.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentic-orchestrator
+  annotations:
+    description: LangGraph-based agentic orchestrator with MLflow tools
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agentic-orchestrator
+  template:
+    metadata:
+      labels:
+        app: agentic-orchestrator
+      annotations:
+        description: LangGraph-based agentic orchestrator
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+      - name: orchestrator
+        image: "image-registry.openshift-image-registry.svc:5000/agentic-ops/agentic-orchestrator:latest"
+        imagePullPolicy: Always
+
+        env:
+        - name: VLLM_BASE_URL
+          value: "http://vllm-agent-brain.agentic-ops.svc.cluster.local:8000/v1"
+        - name: MCP_BASE_URL
+          value: "http://mcp-mlflow-server.agentic-ops.svc.cluster.local:8080"
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 200m
+            memory: 512Mi
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3

@@ -145,12 +145,17 @@ def get_fleet_status(factory: str = None) -> str:
 def _get_factory_config_impl(factory: str) -> str:
     """Implementation of get_factory_config - calls MCP Fleet"""
     result = mcp_fleet_client.invoke_tool("get_factory_config", {"factory": factory})
-    return json.dumps(result, indent=2)
+
+    # Add a clear summary at the top so the model knows it has the answer
+    policy_version = result.get("policy_version", "unknown")
+    summary = f"The current model version deployed to {factory} is: {policy_version}\n\nFull configuration:\n"
+
+    return summary + json.dumps(result, indent=2)
 
 
 @tool
 def get_factory_config(factory: str) -> str:
-    """Get configuration for a specific factory (robots, policy version, safety zones)"""
+    """Get configuration for a specific factory including THE CURRENT MODEL VERSION (called policy_version)"""
     return _get_factory_config_impl(factory)
 
 
@@ -438,39 +443,26 @@ def run_agent(query: str, session_id: str = None) -> str:
 
     system_prompt = """You are an AI assistant that helps operators manage ML models and factory operations.
 
-CAPABILITIES:
+CRITICAL: When you receive a tool result, RESPOND IMMEDIATELY. Do NOT call more tools.
 
-MLflow Operations (Read-Only):
-- Query MLflow experiments using the list_experiments tool
-- Get experiment details using the get_experiment tool
-- List runs for experiments using the list_runs tool
-- Get run details using the get_run tool
-- Get metrics for runs using the get_metrics tool
+FLEET QUESTIONS (policy version, robots, factory status):
+- Use get_factory_config tool - it returns "policy_version" field which IS the model version
+- Example: "What's the model version?" → call get_factory_config → respond with the policy_version value
+- Do NOT call MLflow tools for factory/policy questions
 
-Fleet Operations (Read-Only):
-- Get fleet status using the get_fleet_status tool
-- Get factory configuration using the get_factory_config tool
+MLFLOW QUESTIONS (experiments, runs, metrics):
+- Use list_experiments, get_experiment, list_runs, get_run, get_metrics tools
+- Only for questions about training experiments and metrics
 
-Model Management (Requires Approval):
-- Register models from runs using the register_model tool
-- Promote models to factories using the promote_policy_version tool
-
-TOOL USE (CRITICAL RULES):
-- When the user asks about factories, robots, or policy versions, use get_fleet_status or get_factory_config.
-- When the user asks about experiments, runs, or metrics, use the MLflow tools.
-- Call ONE tool to answer the question, then STOP and respond with the result.
-- Do NOT call the same tool multiple times for the same query.
-- Do NOT call additional tools after you have the information needed to answer.
-- After receiving tool results, respond directly with a clear summary - DO NOT call more tools.
+WORKFLOW:
+1. Read the question
+2. Call ONE tool that answers it
+3. When you get the tool result, STOP and respond - do NOT call another tool
+4. Present the answer in natural language
 
 STATE-MODIFYING ACTIONS (Require Approval):
 - register_model - registers a new model in MLflow
 - promote_policy_version - opens a GitHub PR to promote a model to a factory
-
-RESPONSE STYLE:
-- Answer concisely and conversationally.
-- Present tool results in natural language, not raw JSON.
-- ONE tool call per question - then respond.
 """
 
     initial_state = {

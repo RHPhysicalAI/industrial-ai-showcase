@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-fleet-server
+  namespace: agentic-ops
+  labels:
+    app: mcp-fleet-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-fleet-server
+  template:
+    metadata:
+      labels:
+        app: mcp-fleet-server
+    spec:
+      containers:
+      - name: mcp-fleet-server
+        image: image-registry.openshift-image-registry.svc:5000/agentic-ops/mcp-fleet-server:latest
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        env:
+        - name: FLEET_MANAGER_URL
+          value: "http://fleet-manager.fleet-ops.svc.cluster.local:8080"
+        - name: CONSOLE_BACKEND_URL
+          value: "http://showcase-console-backend.fleet-ops.svc.cluster.local:8090"
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-bot-token
+              key: token
+        - name: GITHUB_REPO
+          value: "RHPhysicalAI/industrial-ai-showcase"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10

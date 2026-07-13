@@ -54,6 +54,10 @@ spec:
     - --enable-chunked-prefill
     - --disable-frontend-multiprocessing
 
+    # Tool calling support (for LangGraph agent tests)
+    - --enable-auto-tool-choice
+    - --tool-call-parser=hermes
+
     env:
     # HuggingFace token for downloading gated models
     - name: HUGGING_FACE_HUB_TOKEN

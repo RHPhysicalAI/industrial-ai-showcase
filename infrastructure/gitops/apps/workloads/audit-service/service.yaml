@@ -1,0 +1,22 @@
+# This project was developed with assistance from AI tools.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: audit-service
+  namespace: agentic-ops
+  labels:
+    app: audit-service
+    phase: "3"
+    milestone: "2"
+  annotations:
+    description: HIL approval tracking and audit trail service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8090
+    targetPort: 8090
+    protocol: TCP
+    name: http
+  selector:
+    app: audit-service

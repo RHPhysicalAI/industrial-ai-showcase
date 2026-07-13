@@ -107,12 +107,12 @@ def _start_ffmpeg() -> None:
         "-video_size", f"{w}x{h}",
         "-framerate", str(TARGET_FPS),
         "-i", "pipe:0",
-        "-c:v", "h264_nvenc",
-        "-preset", "p4",
-        "-tune", "ll",
-        "-b:v", "8M",
-        "-maxrate", "12M",
-        "-bufsize", "16M",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-tune", "zerolatency",
+        "-b:v", "4M",
+        "-maxrate", "6M",
+        "-bufsize", "8M",
         "-g", str(TARGET_FPS),
         "-keyint_min", str(TARGET_FPS),
         "-f", "hls",
@@ -125,7 +125,7 @@ def _start_ffmpeg() -> None:
     _ffmpeg_proc = subprocess.Popen(
         cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE,
     )
-    print(f"[viewport_stream] ffmpeg started ({w}x{h} -> HLS/NVENC)", flush=True)
+    print(f"[viewport_stream] ffmpeg started ({w}x{h} -> HLS/libx264 CPU)", flush=True)
     threading.Thread(target=_ffmpeg_stderr_reader, daemon=True, name="ffmpeg-stderr").start()
 
 

@@ -1,0 +1,23 @@
+# This project was developed with assistance from AI tools.
+apiVersion: v2
+name: mcp-mlflow-server
+description: Mock MCP server exposing MLflow-like read-only tools for Phase 3 Milestone 1
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+keywords:
+  - mcp
+  - mlflow
+  - phase3
+  - milestone1
+
+maintainers:
+  - name: Red Hat Industrial AI Showcase Team
+
+annotations:
+  openshift.io/display-name: "MCP MLflow Server (Mock)"
+  openshift.io/description: "Mock MCP server for testing agent tool calling"
+  industrial-ai.redhat.com/phase: "3"
+  industrial-ai.redhat.com/milestone: "1"
+  industrial-ai.redhat.com/component: "mcp-tools"

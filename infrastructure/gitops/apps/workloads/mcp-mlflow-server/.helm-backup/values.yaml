@@ -1,0 +1,91 @@
+# This project was developed with assistance from AI tools.
+#
+# MCP MLflow Server - Default Values
+#
+# Mock MCP server for Milestone 1 - read-only MLflow-like tools
+
+# Global settings
+global:
+  namespace: agentic-ops
+
+# Image configuration
+# NOTE: Image must be built and pushed to registry first
+# For local testing, can use `oc new-build` or build manually
+image:
+  repository: image-registry.openshift-image-registry.svc:5000/agentic-ops/mcp-mlflow-server
+  tag: "latest"
+  pullPolicy: Always
+
+# Replicas (single replica for Milestone 1)
+replicas: 1
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+  name: http
+
+# Health check configuration
+healthCheck:
+  enabled: true
+  liveness:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# Resource requests and limits
+resources:
+  requests:
+    cpu: "100m"
+    memory: 256Mi
+  limits:
+    cpu: "500m"
+    memory: 512Mi
+
+# Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+# Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  runAsNonRoot: true
+  # runAsUser is omitted - let OpenShift assign from allowed range
+
+# Labels and annotations
+labels:
+  app.kubernetes.io/component: mcp-tools
+  app.kubernetes.io/part-of: agentic-orchestrator
+  phase: "3"
+  milestone: "1"
+
+annotations:
+  description: "Mock MCP server for MLflow tools"
+
+# Node selector and tolerations
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# OpenShift Route (optional)
+route:
+  enabled: false
+  host: ""
+  tls:
+    enabled: true
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

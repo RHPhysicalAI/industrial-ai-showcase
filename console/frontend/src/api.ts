@@ -103,3 +103,60 @@ export async function getAgentHealth(): Promise<{ status: string }> {
   }
   return (await resp.json()) as { status: string };
 }
+
+// HIL Approval API functions
+export interface PendingApproval {
+  id: number;
+  session_id: string;
+  user_identity: string;
+  tool_name: string;
+  tool_arguments: Record<string, unknown>;
+  approval_status: string;
+  timestamp: string;
+  git_diff?: string;  // Git diff preview for promote_policy_version
+  summary?: string;   // Human-readable summary for promote_policy_version
+  pr_url?: string;    // PR URL if already created (for approved requests)
+}
+
+export interface ApprovalResult {
+  status: string;
+  id: number;
+  result?: string;
+  reason?: string;
+  timestamp: string;
+}
+
+export async function getPendingApprovals(): Promise<PendingApproval[]> {
+  const resp = await fetch("/api/approval/pending");
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch pending approvals: ${resp.status}`);
+  }
+  const data = (await resp.json()) as { pending: PendingApproval[] };
+  return data.pending;
+}
+
+export async function approveRequest(id: number): Promise<ApprovalResult> {
+  const resp = await fetch(`/api/approval/${id}/approve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!resp.ok) {
+    const errorData = await resp.json().catch(() => ({ error: resp.statusText })) as { error?: string };
+    throw new Error(errorData.error ?? `Approval failed: ${resp.statusText}`);
+  }
+  return (await resp.json()) as ApprovalResult;
+}
+
+export async function rejectRequest(id: number, reason: string): Promise<ApprovalResult> {
+  const resp = await fetch(`/api/approval/${id}/reject`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason }),
+  });
+  if (!resp.ok) {
+    const errorData = await resp.json().catch(() => ({ error: resp.statusText })) as { error?: string };
+    throw new Error(errorData.error ?? `Rejection failed: ${resp.statusText}`);
+  }
+  return (await resp.json()) as ApprovalResult;
+}

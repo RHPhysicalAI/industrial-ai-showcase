@@ -6,10 +6,10 @@ ENV NPM_CONFIG_CACHE=/tmp/.npm
 
 WORKDIR /opt/app-root/src
 
-COPY console/backend/package.json console/backend/tsconfig.json ./
+COPY package.json tsconfig.json ./
 RUN npm install --omit=optional --no-audit --no-fund
 
-COPY console/backend/src ./src
+COPY src ./src
 RUN npm run build && chown -R 1001:0 /opt/app-root/src
 
 USER 1001

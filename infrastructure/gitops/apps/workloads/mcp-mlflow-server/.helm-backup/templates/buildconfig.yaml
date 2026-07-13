@@ -1,0 +1,36 @@
+# This project was developed with assistance from AI tools.
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: {{ include "mcp-mlflow-server.fullname" . }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "mcp-mlflow-server.labels" . | nindent 4 }}
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: {{ include "mcp-mlflow-server.fullname" . }}:latest
+  source:
+    type: Git
+    git:
+      uri: https://github.com/rh-aiservices-bu/industrial-ai-showcase.git
+      ref: main
+    contextDir: infrastructure/gitops/apps/workloads/mcp-mlflow-server
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  triggers:
+  - type: ConfigChange
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: {{ include "mcp-mlflow-server.fullname" . }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "mcp-mlflow-server.labels" . | nindent 4 }}
+spec:
+  lookupPolicy:
+    local: true

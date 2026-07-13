@@ -3,15 +3,14 @@
   <component name="ChangeListManager">
     <list default="true" id="909a62fd-4d8d-4ecd-8009-8cdf14b28506" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus-seeder/job.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus-seeder/job.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/kustomization.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/kustomization.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-api.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-api.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-auth.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-auth.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-discovery.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-discovery.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-navigator.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-navigator.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-search.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-search.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-tagging.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/platform/nucleus/service-tagging.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/workloads/isaac-sim/scenarios/warehouse_baseline.py" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/workloads/isaac-sim/scenarios/warehouse_baseline.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/console/backend/src/config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/console/backend/src/config.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/console/frontend/src/api.ts" beforeDir="false" afterPath="$PROJECT_DIR$/console/frontend/src/api.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/workloads/agentic-orchestrator/src/orchestrator.py" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/workloads/agentic-orchestrator/src/orchestrator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/workloads/isaac-sim/scenarios/viewport_mjpeg.py" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/workloads/isaac-sim/scenarios/viewport_mjpeg.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/spikes/week0-validation/langgraph-hello/02_agent_with_llm.py" beforeDir="false" afterPath="$PROJECT_DIR$/spikes/week0-validation/langgraph-hello/02_agent_with_llm.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/spikes/week0-validation/langgraph-hello/03_agent_with_tools.py" beforeDir="false" afterPath="$PROJECT_DIR$/spikes/week0-validation/langgraph-hello/03_agent_with_tools.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/spikes/week0-validation/langgraph-hello/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/spikes/week0-validation/langgraph-hello/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/spikes/week0-validation/vllm-test/vllm-pod.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/spikes/week0-validation/vllm-test/vllm-pod.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -33,21 +32,53 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/ahameed/projects/ai/physical-ai/industrial-ai-showcase&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.go.formatter.settings.were.checked": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "git-widget-placeholder": "phase3",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "/Users/ahameed/projects/ai/physical-ai/industrial-ai-showcase",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
+  <component name="RunManager">
+    <configuration default="true" type="GoApplicationRunConfiguration" factoryName="Go Application">
+      <module name="industrial-ai-showcase" />
+      <working_directory value="$PROJECT_DIR$" />
+      <go_parameters value="-i" />
+      <kind value="FILE" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="GoTestRunConfiguration" factoryName="Go Test">
+      <module name="industrial-ai-showcase" />
+      <working_directory value="$PROJECT_DIR$" />
+      <go_parameters value="-i" />
+      <kind value="DIRECTORY" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="JetRunConfigurationType">
+      <module name="industrial-ai-showcase" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration default="true" type="KotlinStandaloneScriptRunConfigurationType">
+      <module name="industrial-ai-showcase" />
+      <option name="filePath" />
+      <method v="2" />
+    </configuration>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -63,11 +94,24 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1781797256852</updated>
-      <workItem from="1781797257949" duration="44282000" />
+      <workItem from="1781797257949" duration="61593000" />
+      <workItem from="1782403650106" duration="19823000" />
+      <workItem from="1782740319993" duration="115691000" />
     </task>
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
 </project>

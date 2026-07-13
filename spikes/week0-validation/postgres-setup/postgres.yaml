@@ -1,0 +1,126 @@
+# Postgres for Agent State - Week 0 Spike
+#
+# Purpose: Validate Postgres schema for agent sessions and audit trails
+#
+# This is a SPIKE - not production-ready:
+# - EmptyDir storage (data lost on pod restart)
+# - No replicas, no backups
+# - Simple password authentication
+#
+# Usage:
+#   oc apply -f postgres.yaml
+#   oc port-forward svc/postgres 5432:5432 -n agentic-ops
+#   psql postgresql://agent:changeme123@localhost:5432/agentic_orchestrator
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: agentic-ops
+type: Opaque
+stringData:
+  POSTGRES_USER: agent
+  POSTGRES_PASSWORD: changeme123
+  POSTGRES_DB: agentic_orchestrator
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: agentic-ops
+  labels:
+    app: postgres
+    spike: week0-validation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        spike: week0-validation
+    spec:
+      containers:
+      - name: postgres
+        image: registry.redhat.io/rhel9/postgresql-15:latest
+
+        env:
+        - name: POSTGRESQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_USER
+        - name: POSTGRESQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+        - name: POSTGRESQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_DB
+
+        ports:
+        - name: postgresql
+          containerPort: 5432
+          protocol: TCP
+
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1
+            memory: 1Gi
+
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/pgsql/data
+
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRESQL_USER -d $POSTGRESQL_DATABASE
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRESQL_USER -d $POSTGRESQL_DATABASE
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+
+      volumes:
+      - name: postgres-data
+        emptyDir:
+          sizeLimit: 5Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: agentic-ops
+  labels:
+    app: postgres
+    spike: week0-validation
+spec:
+  type: ClusterIP
+  ports:
+  - name: postgresql
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app: postgres
