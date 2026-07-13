@@ -1,0 +1,19 @@
+# This project was developed with assistance from AI tools.
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: agentic-orchestrator
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: agentic-orchestrator:latest
+  source:
+    type: Binary
+    binary: {}
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  triggers:
+  - type: ConfigChange

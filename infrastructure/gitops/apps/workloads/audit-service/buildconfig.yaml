@@ -1,0 +1,31 @@
+# This project was developed with assistance from AI tools.
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: audit-service
+  namespace: agentic-ops
+  labels:
+    app: audit-service
+    phase: "3"
+    milestone: "2"
+spec:
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: infrastructure/gitops/apps/workloads/audit-service/Containerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: audit-service:latest
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+  triggers:
+    - type: ConfigChange
