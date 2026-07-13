@@ -40,12 +40,15 @@ spec:
 
         # Use image's default ENTRYPOINT - do not override command
         # vllm/vllm-openai:v0.6.3.post1 has built-in entrypoint
+        #
+        # LIMITATION: Llama-3.1-8B-Instruct has recursion issues with agentic queries.
+        # Upgrade to 70B blocked by single-GPU VRAM limit (48GB L40S).
+        # Solutions: (1) TP=2 across 2x L40S, (2) Wait for AWQ/GPTQ Llama-3.3-70B, (3) Use smaller 32B model with good tool-calling
         args:
-          - "--model=meta-llama/Llama-3.3-70B-Instruct"
-          - "--quantization=awq"
-          - "--dtype=auto"
-          - "--max-model-len=8192"
-          - "--gpu-memory-utilization=0.90"
+          - "--model=meta-llama/Llama-3.1-8B-Instruct"
+          - "--dtype=float16"
+          - "--max-model-len=4096"
+          - "--gpu-memory-utilization=0.85"
           - "--disable-frontend-multiprocessing"
           - "--enable-auto-tool-choice"
           - "--tool-call-parser=llama3_json"
@@ -84,18 +87,18 @@ spec:
 
         resources:
           requests:
-            cpu: 8
-            memory: 32Gi
+            cpu: 4
+            memory: 16Gi
             nvidia.com/gpu: "1"
           limits:
-            cpu: 16
-            memory: 40Gi
+            cpu: 8
+            memory: 20Gi
             nvidia.com/gpu: "1"
         livenessProbe:
           httpGet:
             path: /health
             port: http
-          initialDelaySeconds: 900
+          initialDelaySeconds: 600
           periodSeconds: 30
           timeoutSeconds: 10
           failureThreshold: 3
@@ -104,7 +107,7 @@ spec:
           httpGet:
             path: /health
             port: http
-          initialDelaySeconds: 600
+          initialDelaySeconds: 300
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
@@ -121,10 +124,10 @@ spec:
       volumes:
       - name: hf-cache
         emptyDir:
-          sizeLimit: 80Gi
+          sizeLimit: 20Gi
       - name: numba-cache
         emptyDir:
-          sizeLimit: 2Gi
+          sizeLimit: 1Gi
       - name: outlines-cache
         emptyDir:
-          sizeLimit: 10Gi
+          sizeLimit: 5Gi
