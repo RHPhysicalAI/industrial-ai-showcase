@@ -320,7 +320,7 @@ fastify.get("/api/events", async (_request, reply) => {
 fastify.post<{ Body: { query: string; sessionId?: string } }>(
   "/api/agent/query",
   async (request, reply) => {
-    const { query } = request.body;
+    const { query, sessionId } = request.body;
 
     if (!query || typeof query !== "string") {
       reply.code(400).send({ error: "query is required" });
@@ -333,7 +333,7 @@ fastify.post<{ Body: { query: string; sessionId?: string } }>(
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query }),
+          body: JSON.stringify({ query, session_id: sessionId }),
         }
       );
 
@@ -371,6 +371,255 @@ fastify.get("/api/agent/health", async () => {
     return { status: "unavailable" };
   }
 });
+
+fastify.get("/api/agent/suggestions", async () => {
+  const suggestions: Array<{
+    category: string;
+    icon: string;
+    text: string;
+    priority?: number;
+  }> = [];
+
+  try {
+    // Get current fleet state
+    const telemetry = stream.getLatestTelemetry();
+    const ds = stream.demoState;
+    const fa = ds.factories["factory-a"];
+    const fb = ds.factories["factory-b"];
+
+    // Factory A suggestions
+    const factoryAVersion = fa?.policyVersion ?? telemetry["fl-07"]?.policyVersion ?? "v1.3";
+    suggestions.push({
+      category: "fleet-status",
+      icon: "📊",
+      text: `What's the current model version in Factory A?`,
+      priority: 2,
+    });
+
+    // Suggest upgrade (simple increment logic)
+    const nextVersionA = getNextVersion(factoryAVersion);
+    if (nextVersionA) {
+      suggestions.push({
+        category: "upgrade",
+        icon: "🆙",
+        text: `Promote vla-warehouse ${nextVersionA} to Factory A`,
+        priority: 1,
+      });
+    }
+
+    // Factory B suggestions
+    const factoryBVersion = fb?.policyVersion ?? telemetry["fl-08"]?.policyVersion ?? "v1.3";
+    const nextVersionB = getNextVersion(factoryBVersion);
+    if (nextVersionB) {
+      suggestions.push({
+        category: "upgrade",
+        icon: "🆙",
+        text: `Promote vla-warehouse ${nextVersionB} to Factory B`,
+        priority: 1,
+      });
+    }
+
+    // Robot telemetry
+    suggestions.push({
+      category: "telemetry",
+      icon: "🤖",
+      text: "Show me telemetry for robot fl-07",
+      priority: 3,
+    });
+
+    // Anomaly check
+    const factoryAAnomalyScore = telemetry["fl-07"]?.anomalyScore ?? 0.12;
+    if (factoryAAnomalyScore > 0.5) {
+      suggestions.push({
+        category: "anomaly",
+        icon: "⚠️",
+        text: `Check anomaly for Factory A (score: ${factoryAAnomalyScore.toFixed(2)})`,
+        priority: 0, // Highest priority
+      });
+    } else {
+      suggestions.push({
+        category: "anomaly",
+        icon: "📈",
+        text: "Show me anomaly history for Factory A",
+        priority: 4,
+      });
+    }
+
+    // Help
+    suggestions.push({
+      category: "help",
+      icon: "❓",
+      text: "What can you help me with?",
+      priority: 5,
+    });
+
+    // Sort by priority
+    suggestions.sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+
+    return { suggestions: suggestions.slice(0, 5) }; // Return top 5
+  } catch (err) {
+    log.error({ err }, "failed to generate suggestions");
+    // Return static fallbacks
+    return {
+      suggestions: [
+        { category: "help", icon: "❓", text: "What can you help me with?" },
+        { category: "fleet-status", icon: "📊", text: "Show me all factory statuses" },
+        { category: "telemetry", icon: "🤖", text: "Show me telemetry for robot fl-07" },
+      ],
+    };
+  }
+});
+
+// Helper function to get next version
+function getNextVersion(current: string): string | null {
+  const match = current.match(/v(\d+)\.(\d+)/);
+  if (match) {
+    const [_, major, minor] = match;
+    return `v${major}.${parseInt(minor) + 1}`;
+  }
+  return null;
+}
+
+// HIL Approval endpoints
+fastify.get("/api/approval/pending", async (request, reply) => {
+  try {
+    const resp = await fetch(`${config.auditServiceUrl}/audit/pending`, {
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!resp.ok) {
+      const errorText = await resp.text();
+      log.warn({ status: resp.status, error: errorText }, "failed to fetch pending approvals");
+      reply.code(resp.status).send({ error: "Failed to fetch pending approvals" });
+      return;
+    }
+
+    const data = await resp.json() as { pending: Array<unknown> };
+    return data;
+  } catch (err) {
+    log.error({ err }, "approval pending query error");
+    reply.code(500).send({ error: "Audit service unavailable" });
+  }
+});
+
+fastify.post<{ Params: { id: string } }>(
+  "/api/approval/:id/approve",
+  async (request, reply) => {
+    const { id } = request.params;
+
+    try {
+      // Record approval in audit service
+      const auditResp = await fetch(
+        `${config.auditServiceUrl}/audit/approve/${id}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ approver_identity: "demo-operator" }),
+          signal: AbortSignal.timeout(5000),
+        }
+      );
+
+      if (!auditResp.ok) {
+        const errorText = await auditResp.text();
+        log.warn({ status: auditResp.status, error: errorText, id }, "failed to approve request");
+        reply.code(auditResp.status).send({ error: "Failed to approve request" });
+        return;
+      }
+
+      // Resume orchestrator execution
+      const resumeResp = await fetch(
+        `${config.agenticOrchestratorUrl}/approval/${id}/resume`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision: "approved" }),
+          signal: AbortSignal.timeout(30000),
+        }
+      );
+
+      if (!resumeResp.ok) {
+        const errorText = await resumeResp.text();
+        log.warn({ status: resumeResp.status, error: errorText, id }, "failed to resume after approval");
+        reply.code(resumeResp.status).send({ error: "Failed to resume execution" });
+        return;
+      }
+
+      const result = await resumeResp.json() as { response: string };
+      return {
+        status: "approved",
+        id: parseInt(id, 10),
+        result: result.response,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (err) {
+      log.error({ err, id }, "approval error");
+      reply.code(500).send({ error: "Approval service unavailable" });
+    }
+  }
+);
+
+fastify.post<{ Params: { id: string }; Body: { reason: string } }>(
+  "/api/approval/:id/reject",
+  async (request, reply) => {
+    const { id } = request.params;
+    const { reason } = request.body;
+
+    if (!reason || typeof reason !== "string") {
+      reply.code(400).send({ error: "reason is required" });
+      return;
+    }
+
+    try {
+      // Record rejection in audit service
+      const auditResp = await fetch(
+        `${config.auditServiceUrl}/audit/reject/${id}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            approver_identity: "demo-operator",
+            reason,
+          }),
+          signal: AbortSignal.timeout(5000),
+        }
+      );
+
+      if (!auditResp.ok) {
+        const errorText = await auditResp.text();
+        log.warn({ status: auditResp.status, error: errorText, id }, "failed to reject request");
+        reply.code(auditResp.status).send({ error: "Failed to reject request" });
+        return;
+      }
+
+      // Notify orchestrator of rejection
+      const resumeResp = await fetch(
+        `${config.agenticOrchestratorUrl}/approval/${id}/resume`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision: "rejected", reason }),
+          signal: AbortSignal.timeout(5000),
+        }
+      );
+
+      if (!resumeResp.ok) {
+        const errorText = await resumeResp.text();
+        log.warn({ status: resumeResp.status, error: errorText, id }, "failed to notify orchestrator of rejection");
+        // Don't fail - rejection is already recorded in audit service
+      }
+
+      return {
+        status: "rejected",
+        id: parseInt(id, 10),
+        reason,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (err) {
+      log.error({ err, id }, "rejection error");
+      reply.code(500).send({ error: "Approval service unavailable" });
+    }
+  }
+);
 
 await stream.start();
 

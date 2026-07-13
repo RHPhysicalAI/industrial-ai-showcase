@@ -1,11 +1,13 @@
 // This project was developed with assistance from AI tools.
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Button,
   Card,
   CardBody,
   CardHeader,
   CardTitle,
+  Chip,
+  ChipGroup,
   Flex,
   FlexItem,
   Form,
@@ -16,13 +18,21 @@ import {
   TextArea,
 } from "@patternfly/react-core";
 import { TimesIcon } from "@patternfly/react-icons";
-import { queryAgent } from "./api.js";
+import { queryAgent, approveRequest, rejectRequest } from "./api.js";
+import { HILDrawer } from "./HILDrawer.js";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
   status?: "thinking" | "complete" | "error";
+}
+
+interface Suggestion {
+  category: string;
+  icon: string;
+  text: string;
+  priority?: number;
 }
 
 interface AgentAssistantProps {
@@ -33,6 +43,93 @@ export function AgentAssistant({ onClose }: AgentAssistantProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pendingApprovalId, setPendingApprovalId] = useState<number | null>(null);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(true);
+
+  // Load suggestions on mount
+  useEffect(() => {
+    const loadSuggestions = async () => {
+      try {
+        const resp = await fetch("/api/agent/suggestions");
+        if (resp.ok) {
+          const data = (await resp.json()) as { suggestions: Suggestion[] };
+          setSuggestions(data.suggestions);
+        }
+      } catch (err) {
+        console.error("Failed to load suggestions:", err);
+      }
+    };
+    void loadSuggestions();
+  }, []);
+
+  const handleApprove = async () => {
+    if (!pendingApprovalId) return;
+
+    try {
+      setLoading(true);
+      const result = await approveRequest(pendingApprovalId);
+
+      const resultMessage: Message = {
+        role: "assistant",
+        content: result.result ?? `✅ Action approved and executed successfully`,
+        timestamp: result.timestamp,
+        status: "complete",
+      };
+      setMessages((prev) => [...prev, resultMessage]);
+      setPendingApprovalId(null);
+    } catch (err) {
+      const errorMessage: Message = {
+        role: "assistant",
+        content: `Error approving request: ${err instanceof Error ? err.message : "Unknown error"}`,
+        timestamp: new Date().toISOString(),
+        status: "error",
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReject = async (reason: string) => {
+    if (!pendingApprovalId) return;
+
+    try {
+      setLoading(true);
+      const result = await rejectRequest(pendingApprovalId, reason);
+
+      const resultMessage: Message = {
+        role: "assistant",
+        content: `❌ Action rejected: ${reason}`,
+        timestamp: result.timestamp,
+        status: "complete",
+      };
+      setMessages((prev) => [...prev, resultMessage]);
+      setPendingApprovalId(null);
+    } catch (err) {
+      const errorMessage: Message = {
+        role: "assistant",
+        content: `Error rejecting request: ${err instanceof Error ? err.message : "Unknown error"}`,
+        timestamp: new Date().toISOString(),
+        status: "error",
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSuggestionClick = (text: string) => {
+    setInput(text);
+    setShowSuggestions(false);
+    // Auto-submit
+    setTimeout(() => {
+      const form = document.querySelector("form");
+      if (form) {
+        form.requestSubmit();
+      }
+    }, 100);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,6 +153,16 @@ export function AgentAssistant({ onClose }: AgentAssistantProps) {
         status: "complete",
       };
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Check if response indicates approval needed
+      if (response.response.includes("⏸️") && response.response.includes("approval")) {
+        // Extract approval ID from response
+        const match = response.response.match(/Request #(\d+)/);
+        if (match && match[1]) {
+          const approvalId = parseInt(match[1], 10);
+          setPendingApprovalId(approvalId);
+        }
+      }
     } catch (err) {
       const errorMessage: Message = {
         role: "assistant",
@@ -69,12 +176,12 @@ export function AgentAssistant({ onClose }: AgentAssistantProps) {
     }
   };
 
-  return (
+  const chatContent = (
     <Card isFullHeight>
       <CardHeader>
         <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}>
           <FlexItem>
-            <CardTitle>Agent Assistant (Read-Only)</CardTitle>
+            <CardTitle>Agent Assistant</CardTitle>
           </FlexItem>
           {onClose && (
             <FlexItem>
@@ -87,10 +194,40 @@ export function AgentAssistant({ onClose }: AgentAssistantProps) {
       </CardHeader>
       <CardBody>
         <Stack hasGutter style={{ height: "100%" }}>
+          {/* Suggested Questions */}
+          {showSuggestions && suggestions.length > 0 && messages.length === 0 && (
+            <StackItem>
+              <Stack hasGutter>
+                <StackItem>
+                  <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#151515" }}>
+                    Suggested Questions:
+                  </div>
+                </StackItem>
+                <StackItem>
+                  <ChipGroup>
+                    {suggestions.map((s, idx) => (
+                      <Chip
+                        key={idx}
+                        onClick={() => handleSuggestionClick(s.text)}
+                        isReadOnly={false}
+                      >
+                        {s.icon} {s.text}
+                      </Chip>
+                    ))}
+                  </ChipGroup>
+                </StackItem>
+              </Stack>
+            </StackItem>
+          )}
+
           <StackItem isFilled style={{ overflowY: "auto", minHeight: 300, maxHeight: 500 }}>
-            {messages.length === 0 ? (
+            {messages.length === 0 && !showSuggestions ? (
               <p style={{ color: "#6a6e73", fontStyle: "italic" }}>
                 Ask a question about MLflow experiments, runs, or metrics...
+              </p>
+            ) : messages.length === 0 ? (
+              <p style={{ color: "#6a6e73", fontStyle: "italic", marginTop: 8 }}>
+                Or ask your own question below...
               </p>
             ) : (
               <Stack hasGutter>
@@ -152,4 +289,20 @@ export function AgentAssistant({ onClose }: AgentAssistantProps) {
       </CardBody>
     </Card>
   );
+
+  // Wrap with HIL drawer if approval pending
+  if (pendingApprovalId !== null) {
+    return (
+      <HILDrawer
+        approvalId={pendingApprovalId}
+        onApprove={handleApprove}
+        onReject={handleReject}
+        onClose={() => setPendingApprovalId(null)}
+      >
+        {chatContent}
+      </HILDrawer>
+    );
+  }
+
+  return chatContent;
 }
