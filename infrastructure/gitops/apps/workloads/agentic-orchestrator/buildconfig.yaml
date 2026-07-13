@@ -3,14 +3,23 @@ apiVersion: build.openshift.io/v1
 kind: BuildConfig
 metadata:
   name: agentic-orchestrator
+  namespace: agentic-ops
+  labels:
+    app: agentic-orchestrator
+    phase: phase-3
 spec:
   output:
     to:
       kind: ImageStreamTag
       name: agentic-orchestrator:latest
   source:
-    type: Binary
-    binary: {}
+    type: Git
+    git:
+      uri: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
+      ref: phase3
+    contextDir: infrastructure/gitops/apps/workloads/agentic-orchestrator
+    sourceSecret:
+      name: git-source-secret
   strategy:
     type: Docker
     dockerStrategy:

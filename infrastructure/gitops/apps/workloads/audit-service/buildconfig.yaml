@@ -11,11 +11,17 @@ metadata:
     milestone: "2"
 spec:
   source:
-    type: Binary
+    type: Git
+    git:
+      uri: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
+      ref: phase3
+    contextDir: infrastructure/gitops/apps/workloads/audit-service
+    sourceSecret:
+      name: git-source-secret
   strategy:
     type: Docker
     dockerStrategy:
-      dockerfilePath: infrastructure/gitops/apps/workloads/audit-service/Containerfile
+      dockerfilePath: Containerfile
   output:
     to:
       kind: ImageStreamTag
