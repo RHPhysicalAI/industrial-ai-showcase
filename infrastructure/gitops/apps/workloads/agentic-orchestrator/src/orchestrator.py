@@ -211,7 +211,17 @@ tools = all_tools  # Keep this for compatibility
 def call_agent(state: AgentState) -> dict:
     """Agent decision node - decides whether to use tools or respond"""
     messages = state["messages"]
+    print(f"DEBUG [call_agent]: Processing {len(messages)} messages")
     response = llm_with_tools.invoke(messages)
+
+    # Debug tool calls
+    if hasattr(response, 'tool_calls') and response.tool_calls:
+        print(f"DEBUG [call_agent]: Agent wants to call {len(response.tool_calls)} tools:")
+        for tc in response.tool_calls:
+            print(f"  - {tc.get('name')}({tc.get('args')})")
+    else:
+        print(f"DEBUG [call_agent]: Agent responding with text (no tools)")
+
     return {"messages": [response]}
 
 
@@ -475,11 +485,14 @@ RESPONSE STYLE:
     # Run the graph with recursion limit = 15 (agent → tools → agent = 3 steps per cycle)
     # Increased from 10 to handle fleet queries which might need 2-3 tool calls
     config = {"recursion_limit": 15}
+    print(f"DEBUG [run_agent]: Starting query: {query[:100]}")
     try:
         final_state = app.invoke(initial_state, config=config)
+        print(f"DEBUG [run_agent]: Completed successfully with {len(final_state['messages'])} messages")
     except Exception as e:
         # If we hit recursion limit, extract the last message before failing
         if "Recursion limit" in str(e):
+            print(f"DEBUG [run_agent]: HIT RECURSION LIMIT after {len(initial_state['messages'])} steps")
             # Return a fallback response
             return "I apologize, but I encountered an issue processing your request. The system made too many tool calls. Please try rephrasing your question more specifically."
         raise
