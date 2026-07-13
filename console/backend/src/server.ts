@@ -472,6 +472,33 @@ fastify.get("/api/approval/pending", async (request, reply) => {
   }
 });
 
+fastify.get<{ Querystring: { limit?: string } }>(
+  "/api/audit/history",
+  async (request, reply) => {
+    const limit = parseInt(request.query.limit ?? "10", 10);
+
+    try {
+      const resp = await fetch(
+        `${config.auditServiceUrl}/audit/history?limit=${limit}`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        log.warn({ status: resp.status, error: errorText }, "failed to fetch audit history");
+        reply.code(resp.status).send({ error: "Failed to fetch audit history" });
+        return;
+      }
+
+      const data = await resp.json() as { history: Array<unknown> };
+      return data;
+    } catch (err) {
+      log.error({ err }, "audit history query error");
+      reply.code(500).send({ error: "Audit service unavailable" });
+    }
+  }
+);
+
 fastify.post<{ Params: { id: string } }>(
   "/api/approval/:id/approve",
   async (request, reply) => {

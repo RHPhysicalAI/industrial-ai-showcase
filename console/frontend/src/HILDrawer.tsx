@@ -58,13 +58,20 @@ export function HILDrawer({
   useEffect(() => {
     const loadApprovalData = async () => {
       try {
+        // Get current pending approval
         const pending = await getPendingApprovals();
         const current = pending.find((a) => a.id === approvalId);
         setApproval(current ?? null);
 
-        // Get recent approvals (excluding current)
-        const recent = pending.filter((a) => a.id !== approvalId).slice(-5);
-        setRecentApprovals(recent);
+        // Get recent COMPLETED approvals from history (not other pending items)
+        const historyResp = await fetch("/api/audit/history?limit=10");
+        if (historyResp.ok) {
+          const historyData = await historyResp.json() as { history: PendingApproval[] };
+          const completedApprovals = historyData.history
+            .filter((a) => a.approval_status !== "pending" && a.id !== approvalId)
+            .slice(0, 5);
+          setRecentApprovals(completedApprovals);
+        }
       } catch (err) {
         console.error("Failed to load approval data:", err);
       } finally {
