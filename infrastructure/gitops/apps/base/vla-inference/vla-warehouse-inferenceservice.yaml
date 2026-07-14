@@ -5,6 +5,9 @@ metadata:
   name: vla-warehouse
 spec:
   predictor:
+    # Target L4 GPU class for VLA inference
+    nodeSelector:
+      nvidia.com/gpu.product: NVIDIA-L4
     model:
       modelFormat:
         name: vllm
