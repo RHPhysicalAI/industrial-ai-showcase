@@ -421,8 +421,8 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
   const handlePromoteClick = () => {
     // Pre-fill with next version (e.g., v1.3 → v1.4)
     const currentVer = factory.policyVersion.match(/v(\d+)\.(\d+)/);
-    if (currentVer) {
-      const nextMinor = parseInt(currentVer[2]) + 1;
+    if (currentVer && currentVer[1] && currentVer[2]) {
+      const nextMinor = parseInt(currentVer[2], 10) + 1;
       setNewVersion(`v${currentVer[1]}.${nextMinor}`);
     } else {
       setNewVersion("v1.4");
