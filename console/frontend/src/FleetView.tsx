@@ -459,33 +459,21 @@ function FactoryPanel({
         return;
       }
 
-      // Don't close modal yet - keep showing loading
-
-      // Retry polling with exponential backoff (500ms, 1s, 2s, 4s)
-      let approval = null;
-      const delays = [500, 1000, 2000, 4000];
-
-      for (const delay of delays) {
-        await new Promise(resolve => setTimeout(resolve, delay));
-
-        const pendingResp = await fetch("/api/audit/pending");
-        if (pendingResp.ok) {
-          const pendingData = await pendingResp.json() as { pending: any[] };
-          // Get the most recent approval (highest ID)
-          const sortedApprovals = pendingData.pending.sort((a, b) => b.id - a.id);
-          approval = sortedApprovals[0];
-
-          if (approval) break; // Found it!
-        }
-      }
+      // Get response with approval ID
+      const data = await resp.json() as { query: string; response: string; pending_approval_id?: number };
 
       // Close modal
       setShowPromoteModal(false);
 
-      if (approval && onPromotionTriggered) {
-        // Trigger HIL drawer via callback
-        onPromotionTriggered(approval.id);
+      if (data.pending_approval_id && onPromotionTriggered) {
+        // Got approval ID directly from response - no polling needed!
+        onPromotionTriggered(data.pending_approval_id);
+      } else if (data.pending_approval_id === null) {
+        // No approval needed (read-only query)
+        // This shouldn't happen for promote_policy_version, but handle gracefully
+        alert(`Promotion completed without requiring approval.`);
       } else {
+        // Fallback: approval ID not in response (shouldn't happen after this fix)
         alert(
           `Promotion request is taking longer than expected.\n\n` +
           `Click the chat icon (💬) in the top-right to view the pending approval for:\n` +

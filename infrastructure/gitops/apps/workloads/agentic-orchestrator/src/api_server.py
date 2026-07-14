@@ -32,6 +32,7 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     query: str
     response: str
+    pending_approval_id: int | None = None  # HIL approval ID if created
 
 
 class ApprovalResumeRequest(BaseModel):
@@ -58,8 +59,12 @@ async def health():
 async def query(request: QueryRequest):
     """Process a user query through the agent"""
     try:
-        response = run_agent(request.query, session_id=request.session_id)
-        return QueryResponse(query=request.query, response=response)
+        result = run_agent(request.query, session_id=request.session_id)
+        return QueryResponse(
+            query=request.query,
+            response=result["response"],
+            pending_approval_id=result.get("pending_approval_id")
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

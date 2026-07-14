@@ -343,10 +343,11 @@ fastify.post<{ Body: { query: string; sessionId?: string } }>(
         return;
       }
 
-      const data = await resp.json() as { query: string; response: string };
+      const data = await resp.json() as { query: string; response: string; pending_approval_id?: number };
       return {
         query: data.query,
         response: data.response,
+        pending_approval_id: data.pending_approval_id ?? null,
         timestamp: new Date().toISOString(),
       };
     } catch (err) {

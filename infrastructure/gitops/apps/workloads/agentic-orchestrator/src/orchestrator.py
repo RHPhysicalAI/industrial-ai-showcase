@@ -441,8 +441,15 @@ app = workflow.compile()
 
 
 # Main agent interface
-def run_agent(query: str, session_id: str = None) -> str:
-    """Run the agent with a user query"""
+def run_agent(query: str, session_id: str = None) -> dict[str, any]:
+    """
+    Run the agent with a user query.
+
+    Returns:
+        dict with:
+            - response: str - The agent's response message
+            - pending_approval_id: int | None - ID if HIL approval was created
+    """
     from langchain_core.messages import SystemMessage
     import uuid
 
@@ -497,14 +504,17 @@ STATE-MODIFYING ACTIONS (Require Approval):
             return "I apologize, but I encountered an issue processing your request. The system made too many tool calls. Please try rephrasing your question more specifically."
         raise
 
-    # Extract final response
+    # Extract final response and approval ID
     messages = final_state["messages"]
     last_message = messages[-1]
+    pending_approval_id = final_state.get("pending_approval_id")
 
-    if isinstance(last_message, AIMessage):
-        return last_message.content
+    response_text = last_message.content if isinstance(last_message, AIMessage) else str(last_message)
 
-    return str(last_message)
+    return {
+        "response": response_text,
+        "pending_approval_id": pending_approval_id
+    }
 
 
 if __name__ == "__main__":
