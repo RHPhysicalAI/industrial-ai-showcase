@@ -239,6 +239,31 @@ class GitHubClient:
 
 Co-Authored-by: Claude Sonnet 4.5 <noreply@anthropic.com>"""
 
+    def merge_pr(self, pr_number: int, merge_method: str = "squash") -> dict:
+        """
+        Merge a pull request.
+
+        Args:
+            pr_number: PR number to merge
+            merge_method: Merge method ("merge", "squash", or "rebase"). Default: "squash"
+
+        Returns:
+            Merge result with SHA
+
+        Raises:
+            httpx.HTTPStatusError: If merge fails (e.g., conflicts, checks not passed)
+
+        Example:
+            >>> client.merge_pr(pr_number=42, merge_method="squash")
+            {'sha': 'abc123...', 'merged': True, 'message': 'Pull Request successfully merged'}
+        """
+        resp = self.client.put(
+            f"{self.api_base}/repos/{self.repo}/pulls/{pr_number}/merge",
+            json={"merge_method": merge_method}
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     def close(self):
         """Close HTTP client."""
         self.client.close()

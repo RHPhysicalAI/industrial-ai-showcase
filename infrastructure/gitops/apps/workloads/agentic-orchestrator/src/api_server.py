@@ -198,22 +198,45 @@ async def resume_after_approval(approval_id: int, request: ApprovalResumeRequest
                         pass
                     raise HTTPException(status_code=500, detail=error_msg)
 
-                # Update audit record with result (including PR URL)
+                pr_url = result.get("pr_url", "")
+                pr_number = result.get("pr_number", "")
+
+                # Auto-merge the PR since operator approved the git diff
+                merge_result = None
+                try:
+                    from github_client import get_github_client
+                    github = get_github_client()
+                    merge_result = github.merge_pr(pr_number, merge_method="squash")
+                    print(f"Auto-merged PR #{pr_number}: {merge_result.get('message')}")
+                except Exception as e:
+                    # Log error but don't fail - PR is created, operator can merge manually
+                    print(f"Warning: Failed to auto-merge PR #{pr_number}: {e}")
+                    merge_result = {"error": str(e)}
+
+                # Update audit record with result (including PR URL and merge status)
                 try:
                     client.post(
                         f"{AUDIT_SERVICE_URL}/audit/result/{approval_id}",
-                        json={"result": {"status": "pr_created", "data": result}}
+                        json={"result": {
+                            "status": "merged" if merge_result and not merge_result.get("error") else "pr_created",
+                            "data": result,
+                            "merge_result": merge_result
+                        }}
                     )
                 except Exception as e:
                     print(f"Warning: Failed to update audit result: {e}")
 
-                pr_url = result.get("pr_url", "")
-                pr_number = result.get("pr_number", "")
-
-                return ApprovalResumeResponse(
-                    response=f"✅ Approved and executed: PR #{pr_number} created for {factory} → {model_version}. PR URL: {pr_url}",
-                    status="approved"
-                )
+                # Response message based on merge success
+                if merge_result and not merge_result.get("error"):
+                    return ApprovalResumeResponse(
+                        response=f"✅ Approved and merged: PR #{pr_number} merged for {factory} → {model_version}. Argo CD will sync shortly. PR URL: {pr_url}",
+                        status="approved"
+                    )
+                else:
+                    return ApprovalResumeResponse(
+                        response=f"✅ Approved and executed: PR #{pr_number} created for {factory} → {model_version}. Manual merge required. PR URL: {pr_url}",
+                        status="approved"
+                    )
 
             else:
                 raise HTTPException(
