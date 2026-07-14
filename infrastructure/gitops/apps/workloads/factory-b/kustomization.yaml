@@ -1,5 +1,12 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: factory-b
+
 resources:
-- model-vla-warehouse-isvc.yaml
+  - ../../base/vla-inference
+
+patches:
+  - path: model-vla-warehouse-patch.yaml
+    target:
+      kind: InferenceService
+      name: vla-warehouse

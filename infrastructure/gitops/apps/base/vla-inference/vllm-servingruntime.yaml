@@ -1,0 +1,63 @@
+# This project was developed with assistance from AI tools.
+apiVersion: serving.kserve.io/v1alpha1
+kind: ServingRuntime
+metadata:
+  name: vllm-runtime
+spec:
+  supportedModelFormats:
+    - name: vllm
+      version: "1"
+      autoSelect: true
+
+  # Disable built-in model agent to let vLLM handle downloads
+  builtInAdapter:
+    serverType: ""
+    runtimeManagementPort: 8888
+    memBufferBytes: 134217728
+    modelLoadingTimeoutMillis: 90000
+
+  containers:
+    - name: kserve-container
+      image: vllm/vllm-openai:v0.6.3.post1
+      command:
+        - python3
+        - -m
+        - vllm.entrypoints.openai.api_server
+      args:
+        - --model
+        - /mnt/models
+        - --port
+        - "8080"
+        - --served-model-name
+        - "$(MODEL_NAME)"
+        - --dtype
+        - auto
+        - --max-model-len
+        - "4096"
+
+      env:
+        - name: MODEL_NAME
+          value: vla-warehouse
+
+      ports:
+        - containerPort: 8080
+          protocol: TCP
+
+      resources:
+        limits:
+          nvidia.com/gpu: "1"
+          cpu: "4"
+          memory: 16Gi
+        requests:
+          nvidia.com/gpu: "1"
+          cpu: "2"
+          memory: 8Gi
+
+  # Protocol versions
+  protocolVersions:
+    - v1
+    - v2
+
+  # gRPC support disabled (REST only)
+  grpcEndpoint: ""
+  grpcDataEndpoint: ""
