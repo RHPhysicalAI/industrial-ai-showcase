@@ -1,6 +1,8 @@
 // This project was developed with assistance from AI tools.
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
+  AlertActionCloseButton,
   Button,
   Card,
   CardBody,
@@ -438,6 +440,45 @@ function FactoryPanel({
     setShowPromoteModal(true);
   };
 
+  const validateVersion = (version: string): { valid: boolean; error?: string; warning?: string } => {
+    if (!version.trim()) {
+      return { valid: false, error: "Version cannot be empty" };
+    }
+
+    // Check format: v1.2, v1.3, etc.
+    const versionPattern = /^v\d+\.\d+$/;
+    if (!versionPattern.test(version)) {
+      return { valid: false, error: "Version must be in format: v1.2" };
+    }
+
+    // Check if downgrading
+    const currentMatch = factory.policyVersion.match(/v(\d+)\.(\d+)/);
+    const newMatch = version.match(/v(\d+)\.(\d+)/);
+
+    if (currentMatch && newMatch) {
+      const currentMajor = parseInt(currentMatch[1], 10);
+      const currentMinor = parseInt(currentMatch[2], 10);
+      const newMajor = parseInt(newMatch[1], 10);
+      const newMinor = parseInt(newMatch[2], 10);
+
+      if (newMajor < currentMajor || (newMajor === currentMajor && newMinor < currentMinor)) {
+        return {
+          valid: true,
+          warning: `⚠️ Downgrading from ${factory.policyVersion} to ${version}. This will rollback the model.`
+        };
+      }
+
+      if (newMajor === currentMajor && newMinor === currentMinor) {
+        return {
+          valid: false,
+          error: `${version} is already deployed to ${factory.name}`
+        };
+      }
+    }
+
+    return { valid: true };
+  };
+
   const handlePromoteSubmit = async () => {
     if (!newVersion.trim()) return;
     setPromoting(true);
@@ -571,11 +612,23 @@ function FactoryPanel({
       >
         <Stack hasGutter>
           <StackItem>
+            <div style={{
+              backgroundColor: "#F0F0F0",
+              padding: 12,
+              borderRadius: 4,
+              marginBottom: 12
+            }}>
+              <div style={{ fontSize: 13, color: "#6A6E73" }}>Factory</div>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{factory.name}</div>
+              <div style={{ fontSize: 12, color: "#6A6E73", marginTop: 4 }}>
+                namespace: <code>{factory.namespace}</code>
+              </div>
+            </div>
             <div style={{ marginBottom: 8 }}>
               <strong>Current version:</strong> {factory.policyVersion}
             </div>
-            <div style={{ marginBottom: 16, fontSize: 14, color: "#6A6E73" }}>
-              Enter the new model version to promote:
+            <div style={{ marginBottom: 8, fontSize: 14, color: "#6A6E73" }}>
+              Enter the new model version:
             </div>
             <TextInput
               value={newVersion}
@@ -583,6 +636,38 @@ function FactoryPanel({
               placeholder="v1.4"
               autoFocus
             />
+            {newVersion && (() => {
+              const validation = validateVersion(newVersion);
+              if (validation.error) {
+                return (
+                  <div style={{
+                    marginTop: 8,
+                    fontSize: 13,
+                    color: "#C9190B",
+                    backgroundColor: "#FAEAE8",
+                    padding: 8,
+                    borderRadius: 4
+                  }}>
+                    {validation.error}
+                  </div>
+                );
+              }
+              if (validation.warning) {
+                return (
+                  <div style={{
+                    marginTop: 8,
+                    fontSize: 13,
+                    color: "#795600",
+                    backgroundColor: "#FFF4E5",
+                    padding: 8,
+                    borderRadius: 4
+                  }}>
+                    {validation.warning}
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </StackItem>
           <StackItem>
             <div
@@ -630,7 +715,7 @@ function FactoryPanel({
                 <Button
                   variant="primary"
                   onClick={handlePromoteSubmit}
-                  isDisabled={!newVersion.trim() || promoting}
+                  isDisabled={!newVersion.trim() || promoting || !validateVersion(newVersion).valid}
                   isLoading={promoting}
                 >
                   Initiate Promotion
@@ -655,6 +740,7 @@ export function FleetView({
   const [argo, setArgo] = useState<ArgoAppStatus | null>(null);
   const [auditHistory, setAuditHistory] = useState<any[]>([]);
   const [pendingApprovalId, setPendingApprovalId] = useState<number | null>(null);
+  const [toast, setToast] = useState<{ message: string; variant: "success" | "danger" | "info" } | null>(null);
 
   const refresh = useCallback(() => {
     fetchFleetStatus().then(setFleet).catch(() => undefined);
@@ -685,10 +771,19 @@ export function FleetView({
     try {
       await approveRequest(pendingApprovalId);
       setPendingApprovalId(null);
+      setToast({
+        message: "✓ Promotion approved! GitHub PR is being created...",
+        variant: "success"
+      });
       refresh(); // Refresh to show updated audit history
+      // Clear toast after 5 seconds
+      setTimeout(() => setToast(null), 5000);
     } catch (err) {
       console.error("Approval failed:", err);
-      alert("Failed to approve request");
+      setToast({
+        message: "Failed to approve request. Please try again.",
+        variant: "danger"
+      });
     }
   };
 
@@ -706,6 +801,18 @@ export function FleetView({
 
   const fleetContent = (
     <Stack hasGutter>
+      {/* Toast Notification */}
+      {toast && (
+        <StackItem>
+          <Alert
+            variant={toast.variant}
+            title={toast.message}
+            actionClose={<AlertActionCloseButton onClose={() => setToast(null)} />}
+            timeout={5000}
+          />
+        </StackItem>
+      )}
+
       {/* Header */}
       <StackItem>
         <Card>
