@@ -9,6 +9,11 @@ spec:
     # TODO: Switch to L4 when available per GPU resource planning
     nodeSelector:
       nvidia.com/gpu.product: NVIDIA-L40S
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Equal
+        value: L40S_SHARED
+        effect: NoSchedule
     model:
       modelFormat:
         name: vllm
