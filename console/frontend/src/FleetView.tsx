@@ -453,38 +453,49 @@ function FactoryPanel({
 
       if (!resp.ok) {
         console.error("Failed to initiate promotion");
-        alert("Failed to initiate promotion. Please try using the AI Assistant.");
+        alert("Failed to initiate promotion. Please click the chat icon (💬) to try via AI Assistant.");
         setShowPromoteModal(false);
         setPromoting(false);
         return;
       }
 
+      // Don't close modal yet - keep showing loading
+
+      // Retry polling with exponential backoff (500ms, 1s, 2s, 4s)
+      let approval = null;
+      const delays = [500, 1000, 2000, 4000];
+
+      for (const delay of delays) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+        const pendingResp = await fetch("/api/audit/pending");
+        if (pendingResp.ok) {
+          const pendingData = await pendingResp.json() as { pending: any[] };
+          // Get the most recent approval (highest ID)
+          const sortedApprovals = pendingData.pending.sort((a, b) => b.id - a.id);
+          approval = sortedApprovals[0];
+
+          if (approval) break; // Found it!
+        }
+      }
+
       // Close modal
       setShowPromoteModal(false);
 
-      // Wait a moment for the approval to be created
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Poll for pending approvals to find the one just created
-      const pendingResp = await fetch("/api/audit/pending");
-      if (pendingResp.ok) {
-        const pendingData = await pendingResp.json() as { pending: any[] };
-        // Get the most recent approval (highest ID)
-        const sortedApprovals = pendingData.pending.sort((a, b) => b.id - a.id);
-        const latestApproval = sortedApprovals[0];
-
-        if (latestApproval && onPromotionTriggered) {
-          // Trigger HIL drawer via callback
-          onPromotionTriggered(latestApproval.id);
-        } else if (!latestApproval) {
-          alert("Promotion request created, but approval not found. Please check AI Assistant.");
-        }
+      if (approval && onPromotionTriggered) {
+        // Trigger HIL drawer via callback
+        onPromotionTriggered(approval.id);
       } else {
-        alert("Promotion request created. Please check AI Assistant for approval.");
+        alert(
+          `Promotion request is taking longer than expected.\n\n` +
+          `Click the chat icon (💬) in the top-right to view the pending approval for:\n` +
+          `${factory.name} → ${newVersion}`
+        );
       }
     } catch (err) {
       console.error("Promotion error:", err);
-      alert("Promotion error. Please try using the AI Assistant.");
+      alert("Promotion error. Click the chat icon (💬) to try via AI Assistant.");
+      setShowPromoteModal(false);
     } finally {
       setPromoting(false);
     }
@@ -599,12 +610,30 @@ function FactoryPanel({
               review the proposed Git changes before the PR is created.
             </div>
           </StackItem>
+          {promoting && (
+            <StackItem>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: "#06C",
+                  backgroundColor: "#E7F1FA",
+                  padding: 12,
+                  borderRadius: 4,
+                  textAlign: "center",
+                }}
+              >
+                <Spinner size="md" style={{ marginRight: 8 }} />
+                Preparing approval request...
+              </div>
+            </StackItem>
+          )}
           <StackItem>
             <Flex justifyContent={{ default: "justifyContentFlexEnd" }}>
               <FlexItem>
                 <Button
                   variant="link"
                   onClick={() => setShowPromoteModal(false)}
+                  isDisabled={promoting}
                 >
                   Cancel
                 </Button>
