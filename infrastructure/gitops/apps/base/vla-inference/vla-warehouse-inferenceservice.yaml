@@ -5,9 +5,10 @@ metadata:
   name: vla-warehouse
 spec:
   predictor:
-    # Target L4 GPU class for VLA inference
+    # Target L40S GPU class (L4 nodes not yet provisioned)
+    # TODO: Switch to L4 when available per GPU resource planning
     nodeSelector:
-      nvidia.com/gpu.product: NVIDIA-L4
+      nvidia.com/gpu.product: NVIDIA-L40S
     model:
       modelFormat:
         name: vllm

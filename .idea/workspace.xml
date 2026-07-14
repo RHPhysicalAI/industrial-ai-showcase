@@ -3,14 +3,7 @@
   <component name="ChangeListManager">
     <list default="true" id="909a62fd-4d8d-4ecd-8009-8cdf14b28506" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/backend/src/config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/console/backend/src/config.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/console/frontend/src/api.ts" beforeDir="false" afterPath="$PROJECT_DIR$/console/frontend/src/api.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/workloads/agentic-orchestrator/src/orchestrator.py" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/workloads/agentic-orchestrator/src/orchestrator.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/workloads/isaac-sim/scenarios/viewport_mjpeg.py" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/workloads/isaac-sim/scenarios/viewport_mjpeg.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/spikes/week0-validation/langgraph-hello/02_agent_with_llm.py" beforeDir="false" afterPath="$PROJECT_DIR$/spikes/week0-validation/langgraph-hello/02_agent_with_llm.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/spikes/week0-validation/langgraph-hello/03_agent_with_tools.py" beforeDir="false" afterPath="$PROJECT_DIR$/spikes/week0-validation/langgraph-hello/03_agent_with_tools.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/spikes/week0-validation/langgraph-hello/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/spikes/week0-validation/langgraph-hello/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/spikes/week0-validation/vllm-test/vllm-pod.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/spikes/week0-validation/vllm-test/vllm-pod.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/infrastructure/gitops/apps/workloads/agentic-orchestrator/buildconfig.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/infrastructure/gitops/apps/workloads/agentic-orchestrator/buildconfig.yaml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -32,21 +25,21 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.go.formatter.settings.were.checked": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "git-widget-placeholder": "phase3",
-    "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "/Users/ahameed/projects/ai/physical-ai/industrial-ai-showcase",
-    "nodejs_package_manager_path": "npm",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;phase3&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/ahameed/projects/ai/physical-ai/industrial-ai-showcase&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RunManager">
     <configuration default="true" type="GoApplicationRunConfiguration" factoryName="Go Application">
       <module name="industrial-ai-showcase" />
@@ -96,12 +89,45 @@
       <updated>1781797256852</updated>
       <workItem from="1781797257949" duration="61593000" />
       <workItem from="1782403650106" duration="19823000" />
-      <workItem from="1782740319993" duration="115691000" />
+      <workItem from="1782740319993" duration="119251000" />
+      <workItem from="1784034553533" duration="15238000" />
     </task>
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+    <option name="exactExcludedFiles">
+      <list>
+        <option value="$PROJECT_DIR$/console/frontend/vite.config.d.ts" />
+        <option value="$PROJECT_DIR$/console/frontend/vite.config.js" />
+        <option value="$PROJECT_DIR$/console/frontend/src/Stage.d.ts" />
+        <option value="$PROJECT_DIR$/console/frontend/src/PlatformGovernanceTab.js" />
+        <option value="$PROJECT_DIR$/console/frontend/src/FleetView.js" />
+        <option value="$PROJECT_DIR$/console/frontend/src/main.d.ts" />
+        <option value="$PROJECT_DIR$/console/frontend/src/AgentAssistant.d.ts" />
+        <option value="$PROJECT_DIR$/console/frontend/src/App.d.ts" />
+        <option value="$PROJECT_DIR$/console/frontend/src/LineageView.d.ts" />
+        <option value="$PROJECT_DIR$/console/frontend/src/LineageView.js" />
+        <option value="$PROJECT_DIR$/console/frontend/src/MjpegCanvas.d.ts" />
+        <option value="$PROJECT_DIR$/console/frontend/src/FleetView.d.ts" />
+        <option value="$PROJECT_DIR$/console/frontend/src/MjpegCanvas.js" />
+        <option value="$PROJECT_DIR$/console/frontend/src/Stage.js" />
+        <option value="$PROJECT_DIR$/console/frontend/src/App.js" />
+        <option value="$PROJECT_DIR$/console/frontend/src/api.js" />
+        <option value="$PROJECT_DIR$/console/frontend/src/HILDrawer.d.ts" />
+        <option value="$PROJECT_DIR$/console/frontend/src/HILDrawer.js" />
+        <option value="$PROJECT_DIR$/console/frontend/src/WebRtcStream.js" />
+        <option value="$PROJECT_DIR$/console/frontend/src/types.js" />
+        <option value="$PROJECT_DIR$/console/frontend/src/AgentAssistant.js" />
+        <option value="$PROJECT_DIR$/console/frontend/src/main.js" />
+        <option value="$PROJECT_DIR$/console/frontend/src/api.d.ts" />
+        <option value="$PROJECT_DIR$/console/frontend/src/types.d.ts" />
+        <option value="$PROJECT_DIR$/console/frontend/src/ArchitectureView.js" />
+        <option value="$PROJECT_DIR$/console/frontend/src/ArchitectureView.d.ts" />
+        <option value="$PROJECT_DIR$/console/frontend/src/WebRtcStream.d.ts" />
+        <option value="$PROJECT_DIR$/console/frontend/src/PlatformGovernanceTab.d.ts" />
+      </list>
+    </option>
   </component>
   <component name="Vcs.Log.Tabs.Properties">
     <option name="TAB_STATES">

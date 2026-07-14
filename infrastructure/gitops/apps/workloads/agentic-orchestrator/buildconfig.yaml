@@ -8,6 +8,9 @@ metadata:
     app: agentic-orchestrator
     phase: phase-3
 spec:
+  failedBuildsHistoryLimit: 5
+  successfulBuildsHistoryLimit: 5
+  runPolicy: Serial
   output:
     to:
       kind: ImageStreamTag
