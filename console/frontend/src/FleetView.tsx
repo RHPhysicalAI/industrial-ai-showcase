@@ -445,12 +445,31 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
 
       if (!resp.ok) {
         console.error("Failed to initiate promotion");
+        alert("Failed to initiate promotion. Please try using the AI Assistant.");
+        setShowPromoteModal(false);
+        setPromoting(false);
+        return;
       }
 
-      // Close modal - HIL drawer will open automatically
+      // Close modal
       setShowPromoteModal(false);
+
+      // Wait a moment for the approval to be created
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Open AI Assistant drawer automatically
+      if (onOpenAIAssistant) {
+        onOpenAIAssistant();
+      } else {
+        // Fallback if callback not provided
+        alert(
+          `Promotion request created for ${factory.name} → ${newVersion}\n\n` +
+          `Please open the AI Assistant to approve the HIL request.`
+        );
+      }
     } catch (err) {
       console.error("Promotion error:", err);
+      alert("Promotion error. Please try using the AI Assistant.");
     } finally {
       setPromoting(false);
     }
@@ -593,7 +612,13 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
   );
 }
 
-export function FleetView({ events }: { events: FleetMessage[] }) {
+export function FleetView({
+  events,
+  onOpenAIAssistant,
+}: {
+  events: FleetMessage[];
+  onOpenAIAssistant?: () => void;
+}) {
   const [fleet, setFleet] = useState<FleetStatus | null>(null);
   const [argo, setArgo] = useState<ArgoAppStatus | null>(null);
   const [auditHistory, setAuditHistory] = useState<any[]>([]);

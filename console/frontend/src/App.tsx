@@ -196,7 +196,12 @@ export function App(){
         )}
 
               {currentView === "architecture" && <ArchitectureView />}
-              {currentView === "fleet" && <FleetView events={events} />}
+              {currentView === "fleet" && (
+                <FleetView
+                  events={events}
+                  onOpenAIAssistant={() => setIsDrawerExpanded(true)}
+                />
+              )}
               {currentView === "lineage" && <LineageView />}
             </PageSection>
           </DrawerContentBody>
