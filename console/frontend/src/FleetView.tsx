@@ -9,11 +9,14 @@ import {
   Flex,
   FlexItem,
   Label,
+  Modal,
+  ModalVariant,
   ProgressStepper,
   ProgressStep,
   Spinner,
   Stack,
   StackItem,
+  TextInput,
 } from "@patternfly/react-core";
 import type {
   ArgoAppStatus,
@@ -398,6 +401,9 @@ function ArgoSyncPanel({
 function FactoryPanel({ factory }: { factory: FactoryStatus }) {
   const prevVersion = useRef(factory.policyVersion);
   const [pillClass, setPillClass] = useState("");
+  const [showPromoteModal, setShowPromoteModal] = useState(false);
+  const [newVersion, setNewVersion] = useState("");
+  const [promoting, setPromoting] = useState(false);
 
   useEffect(() => {
     if (prevVersion.current !== factory.policyVersion) {
@@ -411,6 +417,44 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
       return () => clearTimeout(timer);
     }
   }, [factory.policyVersion]);
+
+  const handlePromoteClick = () => {
+    // Pre-fill with next version (e.g., v1.3 → v1.4)
+    const currentVer = factory.policyVersion.match(/v(\d+)\.(\d+)/);
+    if (currentVer) {
+      const nextMinor = parseInt(currentVer[2]) + 1;
+      setNewVersion(`v${currentVer[1]}.${nextMinor}`);
+    } else {
+      setNewVersion("v1.4");
+    }
+    setShowPromoteModal(true);
+  };
+
+  const handlePromoteSubmit = async () => {
+    if (!newVersion.trim()) return;
+    setPromoting(true);
+
+    try {
+      // Call agent query API with promote command
+      const query = `Promote model ${newVersion} to ${factory.name}`;
+      const resp = await fetch("/api/agent/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+
+      if (!resp.ok) {
+        console.error("Failed to initiate promotion");
+      }
+
+      // Close modal - HIL drawer will open automatically
+      setShowPromoteModal(false);
+    } catch (err) {
+      console.error("Promotion error:", err);
+    } finally {
+      setPromoting(false);
+    }
+  };
 
   const argoClass =
     factory.argoSyncStatus === "syncing" ||
@@ -467,8 +511,80 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
               Last heartbeat: {factory.lastHeartbeat || "—"}
             </div>
           </StackItem>
+
+          <StackItem>
+            <Button
+              variant="secondary"
+              isSmall
+              onClick={handlePromoteClick}
+              style={{ marginTop: 8 }}
+            >
+              Promote New Version
+            </Button>
+          </StackItem>
         </Stack>
       </CardBody>
+
+      {/* Promote Modal */}
+      <Modal
+        variant={ModalVariant.small}
+        title={`Promote Model to ${factory.name}`}
+        isOpen={showPromoteModal}
+        onClose={() => setShowPromoteModal(false)}
+      >
+        <Stack hasGutter>
+          <StackItem>
+            <div style={{ marginBottom: 8 }}>
+              <strong>Current version:</strong> {factory.policyVersion}
+            </div>
+            <div style={{ marginBottom: 16, fontSize: 14, color: "#6A6E73" }}>
+              Enter the new model version to promote:
+            </div>
+            <TextInput
+              value={newVersion}
+              onChange={(_event, value) => setNewVersion(value)}
+              placeholder="v1.4"
+              autoFocus
+            />
+          </StackItem>
+          <StackItem>
+            <div
+              style={{
+                fontSize: 13,
+                color: "#6A6E73",
+                backgroundColor: "#F5F5F5",
+                padding: 12,
+                borderRadius: 4,
+              }}
+            >
+              This will trigger the Human-in-the-Loop approval flow. You'll
+              review the proposed Git changes before the PR is created.
+            </div>
+          </StackItem>
+          <StackItem>
+            <Flex justifyContent={{ default: "justifyContentFlexEnd" }}>
+              <FlexItem>
+                <Button
+                  variant="link"
+                  onClick={() => setShowPromoteModal(false)}
+                >
+                  Cancel
+                </Button>
+              </FlexItem>
+              <FlexItem>
+                <Button
+                  variant="primary"
+                  onClick={handlePromoteSubmit}
+                  isDisabled={!newVersion.trim() || promoting}
+                  isLoading={promoting}
+                >
+                  Initiate Promotion
+                </Button>
+              </FlexItem>
+            </Flex>
+          </StackItem>
+        </Stack>
+      </Modal>
     </Card>
   );
 }
