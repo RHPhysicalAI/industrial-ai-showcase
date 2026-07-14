@@ -11,14 +11,11 @@ import {
   Flex,
   FlexItem,
   Label,
-  Modal,
-  ModalVariant,
   ProgressStepper,
   ProgressStep,
   Spinner,
   Stack,
   StackItem,
-  TextInput,
 } from "@patternfly/react-core";
 import { HILDrawer } from "./HILDrawer.js";
 import { approveRequest, rejectRequest } from "./api.js";
@@ -411,8 +408,6 @@ function FactoryPanel({
 }) {
   const prevVersion = useRef(factory.policyVersion);
   const [pillClass, setPillClass] = useState("");
-  const [showPromoteModal, setShowPromoteModal] = useState(false);
-  const [newVersion, setNewVersion] = useState("");
   const [promoting, setPromoting] = useState(false);
 
   useEffect(() => {
@@ -428,64 +423,23 @@ function FactoryPanel({
     }
   }, [factory.policyVersion]);
 
-  const handlePromoteClick = () => {
-    // Pre-fill with next version (e.g., v1.3 → v1.4)
+  const calculateNextVersion = (): string => {
     const currentVer = factory.policyVersion.match(/v(\d+)\.(\d+)/);
     if (currentVer && currentVer[1] && currentVer[2]) {
       const nextMinor = parseInt(currentVer[2], 10) + 1;
-      setNewVersion(`v${currentVer[1]}.${nextMinor}`);
-    } else {
-      setNewVersion("v1.4");
+      return `v${currentVer[1]}.${nextMinor}`;
     }
-    setShowPromoteModal(true);
+    return "v1.4";
   };
 
-  const validateVersion = (version: string): { valid: boolean; error?: string; warning?: string } => {
-    if (!version.trim()) {
-      return { valid: false, error: "Version cannot be empty" };
-    }
-
-    // Check format: v1.2, v1.3, etc.
-    const versionPattern = /^v\d+\.\d+$/;
-    if (!versionPattern.test(version)) {
-      return { valid: false, error: "Version must be in format: v1.2" };
-    }
-
-    // Check if downgrading
-    const currentMatch = factory.policyVersion.match(/v(\d+)\.(\d+)/);
-    const newMatch = version.match(/v(\d+)\.(\d+)/);
-
-    if (currentMatch && newMatch && currentMatch[1] && currentMatch[2] && newMatch[1] && newMatch[2]) {
-      const currentMajor = parseInt(currentMatch[1], 10);
-      const currentMinor = parseInt(currentMatch[2], 10);
-      const newMajor = parseInt(newMatch[1], 10);
-      const newMinor = parseInt(newMatch[2], 10);
-
-      if (newMajor < currentMajor || (newMajor === currentMajor && newMinor < currentMinor)) {
-        return {
-          valid: true,
-          warning: `⚠️ Downgrading from ${factory.policyVersion} to ${version}. This will rollback the model.`
-        };
-      }
-
-      if (newMajor === currentMajor && newMinor === currentMinor) {
-        return {
-          valid: false,
-          error: `${version} is already deployed to ${factory.name}`
-        };
-      }
-    }
-
-    return { valid: true };
-  };
-
-  const handlePromoteSubmit = async () => {
-    if (!newVersion.trim()) return;
+  const handlePromoteClick = async () => {
+    // Calculate next version and start promotion immediately
+    const nextVersion = calculateNextVersion();
     setPromoting(true);
 
     try {
       // Call agent query API with promote command
-      const query = `Promote model ${newVersion} to ${factory.name}`;
+      const query = `Promote model ${nextVersion} to ${factory.name}`;
       const resp = await fetch("/api/agent/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -494,8 +448,7 @@ function FactoryPanel({
 
       if (!resp.ok) {
         console.error("Failed to initiate promotion");
-        alert("Failed to initiate promotion. Please click the chat icon (💬) to try via AI Assistant.");
-        setShowPromoteModal(false);
+        alert("Failed to initiate promotion. Click the chat icon (💬) to try via AI Assistant.");
         setPromoting(false);
         return;
       }
@@ -503,32 +456,24 @@ function FactoryPanel({
       // Get response with approval ID
       const data = await resp.json() as { query: string; response: string; pending_approval_id?: number };
 
-      // Close modal
-      setShowPromoteModal(false);
-
       if (data.pending_approval_id && onPromotionTriggered) {
-        // Got approval ID directly from response - no polling needed!
+        // Got approval ID - open HIL drawer directly!
         onPromotionTriggered(data.pending_approval_id);
-      } else if (data.pending_approval_id === null) {
-        // No approval needed (read-only query)
-        // This shouldn't happen for promote_policy_version, but handle gracefully
-        alert(`Promotion completed without requiring approval.`);
       } else {
-        // Fallback: approval ID not in response (shouldn't happen after this fix)
         alert(
           `Promotion request is taking longer than expected.\n\n` +
           `Click the chat icon (💬) in the top-right to view the pending approval for:\n` +
-          `${factory.name} → ${newVersion}`
+          `${factory.name} → ${nextVersion}`
         );
       }
     } catch (err) {
       console.error("Promotion error:", err);
       alert("Promotion error. Click the chat icon (💬) to try via AI Assistant.");
-      setShowPromoteModal(false);
     } finally {
       setPromoting(false);
     }
   };
+
 
   const argoClass =
     factory.argoSyncStatus === "syncing" ||
@@ -595,136 +540,15 @@ function FactoryPanel({
               variant="secondary"
               size="sm"
               onClick={handlePromoteClick}
+              isLoading={promoting}
+              isDisabled={promoting}
               style={{ marginTop: 8 }}
             >
-              Promote New Version
+              {promoting ? "Preparing..." : `Promote to ${calculateNextVersion()}`}
             </Button>
           </StackItem>
         </Stack>
       </CardBody>
-
-      {/* Promote Modal */}
-      <Modal
-        variant={ModalVariant.small}
-        title={`Promote Model to ${factory.name}`}
-        isOpen={showPromoteModal}
-        onClose={() => setShowPromoteModal(false)}
-      >
-        <Stack hasGutter>
-          <StackItem>
-            <div style={{
-              backgroundColor: "#F0F0F0",
-              padding: 12,
-              borderRadius: 4,
-              marginBottom: 12
-            }}>
-              <div style={{ fontSize: 13, color: "#6A6E73" }}>Factory</div>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>{factory.name}</div>
-              <div style={{ fontSize: 12, color: "#6A6E73", marginTop: 4 }}>
-                namespace: <code>{factory.namespace}</code>
-              </div>
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <strong>Current version:</strong> {factory.policyVersion}
-            </div>
-            <div style={{ marginBottom: 8, fontSize: 14, color: "#6A6E73" }}>
-              Enter the new model version:
-            </div>
-            <TextInput
-              value={newVersion}
-              onChange={(_event, value) => setNewVersion(value)}
-              placeholder="v1.4"
-              autoFocus
-            />
-            {newVersion && (() => {
-              const validation = validateVersion(newVersion);
-              if (validation.error) {
-                return (
-                  <div style={{
-                    marginTop: 8,
-                    fontSize: 13,
-                    color: "#C9190B",
-                    backgroundColor: "#FAEAE8",
-                    padding: 8,
-                    borderRadius: 4
-                  }}>
-                    {validation.error}
-                  </div>
-                );
-              }
-              if (validation.warning) {
-                return (
-                  <div style={{
-                    marginTop: 8,
-                    fontSize: 13,
-                    color: "#795600",
-                    backgroundColor: "#FFF4E5",
-                    padding: 8,
-                    borderRadius: 4
-                  }}>
-                    {validation.warning}
-                  </div>
-                );
-              }
-              return null;
-            })()}
-          </StackItem>
-          <StackItem>
-            <div
-              style={{
-                fontSize: 13,
-                color: "#6A6E73",
-                backgroundColor: "#F5F5F5",
-                padding: 12,
-                borderRadius: 4,
-              }}
-            >
-              This will trigger the Human-in-the-Loop approval flow. You'll
-              review the proposed Git changes before the PR is created.
-            </div>
-          </StackItem>
-          {promoting && (
-            <StackItem>
-              <div
-                style={{
-                  fontSize: 13,
-                  color: "#06C",
-                  backgroundColor: "#E7F1FA",
-                  padding: 12,
-                  borderRadius: 4,
-                  textAlign: "center",
-                }}
-              >
-                <Spinner size="md" style={{ marginRight: 8 }} />
-                Preparing approval request...
-              </div>
-            </StackItem>
-          )}
-          <StackItem>
-            <Flex justifyContent={{ default: "justifyContentFlexEnd" }}>
-              <FlexItem>
-                <Button
-                  variant="link"
-                  onClick={() => setShowPromoteModal(false)}
-                  isDisabled={promoting}
-                >
-                  Cancel
-                </Button>
-              </FlexItem>
-              <FlexItem>
-                <Button
-                  variant="primary"
-                  onClick={handlePromoteSubmit}
-                  isDisabled={!newVersion.trim() || promoting || !validateVersion(newVersion).valid}
-                  isLoading={promoting}
-                >
-                  Initiate Promotion
-                </Button>
-              </FlexItem>
-            </Flex>
-          </StackItem>
-        </Stack>
-      </Modal>
     </Card>
   );
 }
