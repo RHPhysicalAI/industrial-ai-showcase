@@ -107,7 +107,16 @@ fastify.get("/api/fleet", async () => {
     statusLog: ds.statusLog,
     links,
     factories: [
-      // Factory A removed - doesn't exist in cluster (deleted earlier)
+      {
+        name: "Factory A",
+        namespace: "robot-edge",
+        policyVersion: telemetry["fl-07"]?.policyVersion ?? "vla-warehouse-v1.3",
+        robotId: "fl-07",
+        robotStatus: telemetry["fl-07"]?.robotStatus ?? "idle",
+        anomalyScore: telemetry["fl-07"]?.anomalyScore ?? 0.05,
+        argoSyncStatus: "synced",
+        lastHeartbeat: telemetry["fl-07"]?.lastHeartbeat ?? new Date().toISOString(),
+      },
       {
         name: "Factory B",
         namespace: "factory-b",
