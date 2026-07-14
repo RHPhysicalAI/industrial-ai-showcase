@@ -32,6 +32,17 @@ spec:
           value: "http://vllm-agent-brain.agentic-ops.svc.cluster.local:8000/v1"
         - name: MCP_BASE_URL
           value: "http://mcp-mlflow-server.agentic-ops.svc.cluster.local:8080"
+        - name: MCP_FLEET_URL
+          value: "http://mcp-fleet-server.agentic-ops.svc.cluster.local:8080"
+        - name: AUDIT_SERVICE_URL
+          value: "http://audit-service.agentic-ops.svc.cluster.local:8090"
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-bot-token
+              key: token
+        - name: GITHUB_REPO
+          value: "RHPhysicalAI/industrial-ai-showcase"
 
         securityContext:
           allowPrivilegeEscalation: false
