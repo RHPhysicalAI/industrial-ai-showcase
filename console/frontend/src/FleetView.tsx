@@ -455,7 +455,7 @@ function FactoryPanel({
     const currentMatch = factory.policyVersion.match(/v(\d+)\.(\d+)/);
     const newMatch = version.match(/v(\d+)\.(\d+)/);
 
-    if (currentMatch && newMatch) {
+    if (currentMatch && newMatch && currentMatch[1] && currentMatch[2] && newMatch[1] && newMatch[2]) {
       const currentMajor = parseInt(currentMatch[1], 10);
       const currentMinor = parseInt(currentMatch[2], 10);
       const newMajor = parseInt(newMatch[1], 10);
