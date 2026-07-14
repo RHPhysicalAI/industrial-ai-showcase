@@ -274,8 +274,9 @@ def custom_tool_node(state: AgentState) -> dict:
 
                     # Get factory namespace (K8s-compliant, e.g., "factory-b")
                     # factory might be display name with spaces (e.g., "Factory B")
-                    factory_config = get_factory_config(factory)
-                    factory_namespace = json.loads(factory_config).get("namespace", factory.lower().replace(" ", "-"))
+                    # Call MCP Fleet directly to get the dict, not the LangChain tool wrapper
+                    factory_config_result = mcp_fleet_client.invoke_tool("get_factory_config", {"factory": factory})
+                    factory_namespace = factory_config_result.get("namespace", factory.lower().replace(" ", "-"))
 
                     git_diff = generate_promotion_git_diff(
                         model_name=model_name,
