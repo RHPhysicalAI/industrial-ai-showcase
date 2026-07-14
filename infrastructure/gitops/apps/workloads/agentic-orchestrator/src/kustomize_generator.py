@@ -48,8 +48,10 @@ class KustomizeGenerator:
             >>> for path, content in overlay.items():
             ...     print(f"{path}:\\n{content}\\n")
         """
+        # Use namespace (K8s-compliant, e.g., "factory-b") for both namespace field and paths
+        # promotion.factory could be display name with spaces (e.g., "Factory B") - NEVER use it for paths
         namespace = promotion.namespace or promotion.factory
-        base_path = f"infrastructure/gitops/apps/workloads/{promotion.factory}"
+        base_path = f"infrastructure/gitops/apps/workloads/{namespace}"
 
         # Generate InferenceService patch
         isvc_patch = self._generate_isvc_patch(promotion, namespace)
