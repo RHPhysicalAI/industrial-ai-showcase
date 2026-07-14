@@ -465,17 +465,10 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
   return (
     <Card isFullHeight>
       <CardHeader>
-        <CardTitle>
-          {factory.name}
-          <Label
-            color={statusColor(factory.argoSyncStatus)}
-            isCompact
-            className={argoClass}
-            style={{ marginLeft: 8 }}
-          >
-            {factory.argoSyncStatus}
-          </Label>
-        </CardTitle>
+        <CardTitle>{factory.name}</CardTitle>
+        <div style={{ fontSize: 12, color: "#6A6E73", marginTop: 4 }}>
+          namespace: <code style={{ fontSize: 11 }}>{factory.namespace}</code>
+        </div>
       </CardHeader>
       <CardBody>
         <Stack hasGutter>
@@ -499,6 +492,17 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
                 </div>
               </FlexItem>
             </Flex>
+          </StackItem>
+
+          <StackItem>
+            <div style={{ fontSize: 13, color: "#6A6E73" }}>Sync status</div>
+            <Label
+              color={statusColor(factory.argoSyncStatus)}
+              isCompact
+              className={argoClass}
+            >
+              {factory.argoSyncStatus}
+            </Label>
           </StackItem>
 
           <StackItem>
@@ -592,12 +596,17 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
 export function FleetView({ events }: { events: FleetMessage[] }) {
   const [fleet, setFleet] = useState<FleetStatus | null>(null);
   const [argo, setArgo] = useState<ArgoAppStatus | null>(null);
-  const [scenario, setScenario] = useState<ScenarioDetail | null>(null);
-  const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const [auditHistory, setAuditHistory] = useState<any[]>([]);
 
   const refresh = useCallback(() => {
     fetchFleetStatus().then(setFleet).catch(() => undefined);
     fetchArgoStatus().then(setArgo).catch(() => undefined);
+
+    // Fetch recent audit history
+    fetch("/api/audit/history?limit=5")
+      .then(res => res.json())
+      .then(data => setAuditHistory(data.history || []))
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -607,74 +616,30 @@ export function FleetView({ events }: { events: FleetMessage[] }) {
   }, [refresh]);
 
   useEffect(() => {
-    fetchScenarioDetail("fleet-demo").then(setScenario).catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
     const hasFleetEvent = events.some(
       (e) => e.topic === "fleet.events" || e.topic === "fleet.telemetry",
     );
     if (hasFleetEvent) refresh();
   }, [events, refresh]);
 
-  const onStepAction = useCallback(
-    async (action: string) => {
-      if (!scenario) return;
-      const btn = scenario.buttons.find((b: ButtonDef) => b.action === action);
-      if (!btn) return;
-      setActionBusy(action);
-      try {
-        await executeAction(btn.action, btn.params);
-        setTimeout(refresh, 500);
-      } catch {
-        // action failed — poll will show current state
-      } finally {
-        setActionBusy(null);
-      }
-    },
-    [scenario, refresh],
-  );
-
-  const demoPhase = fleet?.demoPhase ?? "idle";
-  const currentStepIdx = phaseToStepIndex(demoPhase);
-  const transitioning = isPhaseTransitioning(demoPhase);
-
   return (
     <Stack hasGutter>
+      {/* Header */}
       <StackItem>
         <Card>
           <CardHeader>
-            <CardTitle>Fleet Demo — Policy Promotion & Auto-Rollback</CardTitle>
+            <CardTitle>Fleet Management — AI-Driven Policy Promotion</CardTitle>
           </CardHeader>
           <CardBody>
-            <ProgressStepper>
-              {DEMO_STEPS.map((step, i) => (
-                <ProgressStep
-                  key={step.id}
-                  id={step.id}
-                  titleId={`step-${step.id}`}
-                  variant={stepVariant(i, currentStepIdx, transitioning)}
-                  isCurrent={i === currentStepIdx}
-                  description={
-                    <StepDescription
-                      step={step}
-                      isActive={i === currentStepIdx}
-                      isDone={i < currentStepIdx}
-                      isBusy={actionBusy === step.action}
-                      isTransitioning={i === currentStepIdx && transitioning}
-                      onAction={() => void onStepAction(step.action)}
-                    />
-                  }
-                >
-                  {step.label}
-                </ProgressStep>
-              ))}
-            </ProgressStepper>
-            <ActivityLog entries={fleet?.statusLog ?? []} />
+            <div style={{ color: "#6A6E73", fontSize: 14 }}>
+              Promote VLA models to factories using AI-assisted workflows.
+              All state changes require Human-in-the-Loop approval.
+            </div>
           </CardBody>
         </Card>
       </StackItem>
 
+      {/* Factory Cards */}
       <StackItem>
         <Flex spaceItems={{ default: "spaceItemsLg" }}>
           {fleet?.factories.map((f) => (
@@ -693,8 +658,118 @@ export function FleetView({ events }: { events: FleetMessage[] }) {
         </Flex>
       </StackItem>
 
+      {/* Audit Trail */}
       <StackItem>
-        <ArgoSyncPanel argo={argo} links={fleet?.links ?? null} />
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Promotion Activity</CardTitle>
+          </CardHeader>
+          <CardBody>
+            {auditHistory.length === 0 ? (
+              <div style={{ color: "#6A6E73", fontStyle: "italic" }}>
+                No recent promotion activity
+              </div>
+            ) : (
+              <Stack hasGutter>
+                {auditHistory.map((item) => (
+                  <StackItem key={item.id}>
+                    <Flex alignItems={{ default: "alignItemsCenter" }}>
+                      <FlexItem spacer={{ default: "spacerSm" }}>
+                        {item.approval_status === "approved" ? (
+                          <span style={{ color: "#3E8635", fontSize: 18 }}>✓</span>
+                        ) : item.approval_status === "rejected" ? (
+                          <span style={{ color: "#C9190B", fontSize: 18 }}>✗</span>
+                        ) : (
+                          <span style={{ color: "#F0AB00", fontSize: 18 }}>⧗</span>
+                        )}
+                      </FlexItem>
+                      <FlexItem flex={{ default: "flex_1" }}>
+                        <div style={{ fontSize: 14 }}>
+                          <strong>{item.tool_name}</strong>
+                          {item.tool_arguments?.model_version && (
+                            <span style={{ color: "#6A6E73" }}>
+                              {" "}— v{item.tool_arguments.model_version} →{" "}
+                              {item.tool_arguments.factory}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#6A6E73" }}>
+                          {new Date(item.timestamp).toLocaleString()}
+                          {item.pr_url && (
+                            <>
+                              {" "}|{" "}
+                              <a
+                                href={item.pr_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: "#06C" }}
+                              >
+                                PR ↗
+                              </a>
+                            </>
+                          )}
+                        </div>
+                      </FlexItem>
+                      <FlexItem>
+                        <Label
+                          color={
+                            item.approval_status === "approved"
+                              ? "green"
+                              : item.approval_status === "rejected"
+                              ? "red"
+                              : "orange"
+                          }
+                          isCompact
+                        >
+                          {item.approval_status}
+                        </Label>
+                      </FlexItem>
+                    </Flex>
+                  </StackItem>
+                ))}
+              </Stack>
+            )}
+          </CardBody>
+        </Card>
+      </StackItem>
+
+      {/* GitOps Status */}
+      <StackItem>
+        <Card>
+          <CardHeader>
+            <CardTitle>GitOps Pipeline Status</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <Flex spaceItems={{ default: "spaceItemsLg" }}>
+              {fleet?.factories.map((f) => (
+                <FlexItem key={f.name}>
+                  <div style={{ fontSize: 13 }}>
+                    <strong>{f.name}:</strong>{" "}
+                    <Label
+                      color={statusColor(f.argoSyncStatus)}
+                      isCompact
+                      style={{ marginLeft: 4 }}
+                    >
+                      {f.argoSyncStatus}
+                    </Label>
+                  </div>
+                </FlexItem>
+              ))}
+              {fleet?.links?.argoFleetManager && (
+                <FlexItem>
+                  <a
+                    href={fleet.links.argoFleetManager}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: 13, color: "#06C" }}
+                  >
+                    View in Argo CD ↗
+                  </a>
+                </FlexItem>
+              )}
+            </Flex>
+          </CardBody>
+        </Card>
       </StackItem>
     </Stack>
   );
