@@ -467,7 +467,7 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
       <CardHeader>
         <CardTitle>{factory.name}</CardTitle>
         <div style={{ fontSize: 12, color: "#6A6E73", marginTop: 4 }}>
-          namespace: <code style={{ fontSize: 11 }}>{factory.namespace}</code>
+          namespace: <code style={{ fontSize: 11 }}>{factory.namespace || "—"}</code>
         </div>
       </CardHeader>
       <CardBody>
@@ -519,7 +519,7 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
           <StackItem>
             <Button
               variant="secondary"
-              isSmall
+              size="sm"
               onClick={handlePromoteClick}
               style={{ marginTop: 8 }}
             >
