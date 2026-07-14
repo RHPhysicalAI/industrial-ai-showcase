@@ -18,6 +18,8 @@ import {
   StackItem,
   TextInput,
 } from "@patternfly/react-core";
+import { HILDrawer } from "./HILDrawer.js";
+import { approveRequest, rejectRequest } from "./api.js";
 import type {
   ArgoAppStatus,
   ArgoResourceStatus,
@@ -455,17 +457,24 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
       setShowPromoteModal(false);
 
       // Wait a moment for the approval to be created
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Open AI Assistant drawer automatically
-      if (onOpenAIAssistant) {
-        onOpenAIAssistant();
+      // Poll for pending approvals to find the one just created
+      const pendingResp = await fetch("/api/audit/pending");
+      if (pendingResp.ok) {
+        const pendingData = await pendingResp.json() as { pending: any[] };
+        // Get the most recent approval (highest ID)
+        const sortedApprovals = pendingData.pending.sort((a, b) => b.id - a.id);
+        const latestApproval = sortedApprovals[0];
+
+        if (latestApproval) {
+          // Show HIL drawer directly
+          setPendingApprovalId(latestApproval.id);
+        } else {
+          alert("Promotion request created, but approval not found. Please check AI Assistant.");
+        }
       } else {
-        // Fallback if callback not provided
-        alert(
-          `Promotion request created for ${factory.name} → ${newVersion}\n\n` +
-          `Please open the AI Assistant to approve the HIL request.`
-        );
+        alert("Promotion request created. Please check AI Assistant for approval.");
       }
     } catch (err) {
       console.error("Promotion error:", err);
@@ -622,6 +631,7 @@ export function FleetView({
   const [fleet, setFleet] = useState<FleetStatus | null>(null);
   const [argo, setArgo] = useState<ArgoAppStatus | null>(null);
   const [auditHistory, setAuditHistory] = useState<any[]>([]);
+  const [pendingApprovalId, setPendingApprovalId] = useState<number | null>(null);
 
   const refresh = useCallback(() => {
     fetchFleetStatus().then(setFleet).catch(() => undefined);
@@ -647,7 +657,31 @@ export function FleetView({
     if (hasFleetEvent) refresh();
   }, [events, refresh]);
 
-  return (
+  const handleApprove = async () => {
+    if (!pendingApprovalId) return;
+    try {
+      await approveRequest(pendingApprovalId);
+      setPendingApprovalId(null);
+      refresh(); // Refresh to show updated audit history
+    } catch (err) {
+      console.error("Approval failed:", err);
+      alert("Failed to approve request");
+    }
+  };
+
+  const handleReject = async (reason: string) => {
+    if (!pendingApprovalId) return;
+    try {
+      await rejectRequest(pendingApprovalId, reason);
+      setPendingApprovalId(null);
+      refresh(); // Refresh to show updated audit history
+    } catch (err) {
+      console.error("Rejection failed:", err);
+      alert("Failed to reject request");
+    }
+  };
+
+  const fleetContent = (
     <Stack hasGutter>
       {/* Header */}
       <StackItem>
@@ -798,4 +832,20 @@ export function FleetView({
       </StackItem>
     </Stack>
   );
+
+  // Wrap with HIL drawer if there's a pending approval
+  if (pendingApprovalId !== null) {
+    return (
+      <HILDrawer
+        approvalId={pendingApprovalId}
+        onApprove={handleApprove}
+        onReject={handleReject}
+        onClose={() => setPendingApprovalId(null)}
+      >
+        {fleetContent}
+      </HILDrawer>
+    );
+  }
+
+  return fleetContent;
 }
