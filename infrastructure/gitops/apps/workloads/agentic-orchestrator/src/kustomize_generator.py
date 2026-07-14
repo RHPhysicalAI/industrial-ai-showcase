@@ -53,15 +53,15 @@ class KustomizeGenerator:
         namespace = promotion.namespace or promotion.factory
         base_path = f"infrastructure/gitops/apps/workloads/{namespace}"
 
-        # Generate InferenceService patch
-        isvc_patch = self._generate_isvc_patch(promotion, namespace)
+        # Generate InferenceService (full resource, not patch)
+        isvc = self._generate_isvc_patch(promotion, namespace)  # Reuse same structure
 
-        # Generate kustomization.yaml update
+        # Generate kustomization.yaml
         kustomization = self._generate_kustomization(promotion, namespace)
 
         return {
-            f"{base_path}/model-{promotion.model_name}-patch.yaml": yaml.dump(
-                isvc_patch,
+            f"{base_path}/model-{promotion.model_name}-isvc.yaml": yaml.dump(
+                isvc,
                 default_flow_style=False,
                 sort_keys=False
             ),
@@ -109,25 +109,17 @@ class KustomizeGenerator:
 
     def _generate_kustomization(self, promotion: ModelPromotion, namespace: str) -> dict:
         """
-        Generate kustomization.yaml with patch reference.
+        Generate kustomization.yaml with InferenceService resource.
 
-        Uses strategic merge patch to update InferenceService.
+        For now, creates standalone InferenceService (not a patch).
+        TODO: Once base vla-inference exists, switch to patch-based approach.
         """
         return {
             "apiVersion": "kustomize.config.k8s.io/v1beta1",
             "kind": "Kustomization",
             "namespace": namespace,
             "resources": [
-                "../../base/vla-inference"
-            ],
-            "patches": [
-                {
-                    "path": f"model-{promotion.model_name}-patch.yaml",
-                    "target": {
-                        "kind": "InferenceService",
-                        "name": promotion.model_name
-                    }
-                }
+                f"model-{promotion.model_name}-isvc.yaml"
             ]
         }
 
