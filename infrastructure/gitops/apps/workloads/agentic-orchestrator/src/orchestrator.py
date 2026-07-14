@@ -272,17 +272,24 @@ def custom_tool_node(state: AgentState) -> dict:
                     model_name = "vla-warehouse"  # Default model name
                     model_uri = f"s3://mlflow/models/{model_name}/{model_version}"
 
+                    # Get factory namespace (K8s-compliant, e.g., "factory-b")
+                    # factory might be display name with spaces (e.g., "Factory B")
+                    factory_config = get_factory_config(factory)
+                    factory_namespace = json.loads(factory_config).get("namespace", factory.lower().replace(" ", "-"))
+
                     git_diff = generate_promotion_git_diff(
                         model_name=model_name,
                         model_version=model_version,
                         model_uri=model_uri,
-                        factory=factory
+                        factory=factory_namespace,  # Use namespace for paths
+                        namespace=factory_namespace
                     )
                     summary = generate_promotion_summary(
                         model_name=model_name,
                         model_version=model_version,
                         model_uri=model_uri,
-                        factory=factory
+                        factory=factory,  # Use display name for human-readable summary
+                        namespace=factory_namespace
                     )
                 except Exception as e:
                     print(f"Warning: Failed to generate git_diff/summary: {e}")
