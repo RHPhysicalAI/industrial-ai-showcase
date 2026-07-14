@@ -508,6 +508,31 @@ fastify.get<{ Querystring: { limit?: string } }>(
   }
 );
 
+fastify.get(
+  "/api/audit/pending",
+  async (_request, reply) => {
+    try {
+      const resp = await fetch(
+        `${config.auditServiceUrl}/audit/pending`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        log.warn({ status: resp.status, error: errorText }, "failed to fetch pending approvals");
+        reply.code(resp.status).send({ error: "Failed to fetch pending approvals" });
+        return;
+      }
+
+      const data = await resp.json() as { pending: Array<unknown> };
+      return data;
+    } catch (err) {
+      log.error({ err }, "pending approvals query error");
+      reply.code(500).send({ error: "Audit service unavailable" });
+    }
+  }
+);
+
 fastify.post<{ Params: { id: string } }>(
   "/api/approval/:id/approve",
   async (request, reply) => {
