@@ -593,10 +593,13 @@ export function FleetView({
   const handleApprove = async () => {
     if (!pendingApprovalId) return;
     try {
-      await approveRequest(pendingApprovalId);
+      const result = await approveRequest(pendingApprovalId);
       setPendingApprovalId(null);
+
+      // Show message based on actual result from backend
+      const message = result.result || "✓ Promotion approved and merged! Argo CD will sync shortly.";
       setToast({
-        message: "✓ Promotion approved! GitHub PR is being created...",
+        message,
         variant: "success"
       });
       refresh(); // Refresh to show updated audit history
