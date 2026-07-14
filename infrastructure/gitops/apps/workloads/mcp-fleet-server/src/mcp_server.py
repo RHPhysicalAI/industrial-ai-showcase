@@ -32,6 +32,7 @@ app = FastAPI(
 # Environment
 FLEET_MANAGER_URL = os.getenv("FLEET_MANAGER_URL", "http://fleet-manager.fleet-ops.svc.cluster.local:8080")
 CONSOLE_BACKEND_URL = os.getenv("CONSOLE_BACKEND_URL", "http://showcase-console-backend.fleet-ops.svc.cluster.local:8090")
+GITHUB_BASE_BRANCH = os.getenv("GITHUB_BASE_BRANCH", "phase3")  # Target branch for PRs (phase3 during development, main for production)
 
 
 # ========== READ-ONLY TOOLS ==========
@@ -329,7 +330,8 @@ Co-Authored-by: Claude Sonnet 4.5 <noreply@anthropic.com>
         pr = github.create_pr(
             title=pr_title,
             body=pr_body,
-            file_changes=overlay_files
+            file_changes=overlay_files,
+            base_branch=GITHUB_BASE_BRANCH
         )
 
     except Exception as e:
