@@ -9,6 +9,8 @@ import uvicorn
 import httpx
 import os
 import json
+from uuid import uuid4
+from datetime import datetime, UTC
 # Use full orchestrator with HIL gate (Milestone 2)
 from orchestrator import run_agent, mcp_client
 
@@ -16,12 +18,69 @@ from orchestrator import run_agent, mcp_client
 AUDIT_SERVICE_URL = os.getenv("AUDIT_SERVICE_URL", "http://audit-service.agentic-ops.svc.cluster.local:8090")
 MCP_BASE_URL = os.getenv("MCP_BASE_URL", "http://mcp-mlflow-server.agentic-ops.svc.cluster.local:8080")
 MCP_FLEET_URL = os.getenv("MCP_FLEET_URL", "http://mcp-fleet-server.agentic-ops.svc.cluster.local:8080")
+KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka-kafka-bootstrap.amq-streams.svc.cluster.local:9092")
 
 app = FastAPI(
     title="Agentic Orchestrator",
     description="LangGraph-based read-only agent with MLflow tools",
     version="0.1.0"
 )
+
+
+def publish_policy_promoted_event(factory: str, version: str, trace_id: str = None):
+    """
+    Publish policy.promoted event to Kafka fleet.events topic.
+    This notifies the console that a new version has been promoted.
+
+    Args:
+        factory: Factory name (e.g., "Factory A", "Factory B")
+        version: Model version (e.g., "vla-warehouse-v1.4")
+        trace_id: Optional trace ID for correlation
+    """
+    try:
+        from kafka import KafkaProducer
+
+        if trace_id is None:
+            trace_id = str(uuid4())
+
+        # Map display names to namespace names for Kafka
+        factory_namespace_map = {
+            "Factory A": "factory-a",
+            "Factory B": "factory-b",
+            "factory-a": "factory-a",
+            "factory-b": "factory-b",
+            "robot-edge": "factory-a",  # Legacy mapping
+        }
+        factory_key = factory_namespace_map.get(factory, factory.lower().replace(" ", "-"))
+
+        event = {
+            "event_id": str(uuid4()),
+            "trace_id": trace_id,
+            "event_class": "policy.promoted",
+            "source": "agentic-orchestrator",
+            "location": factory_key,
+            "confidence": 1.0,
+            "emitted_at": datetime.now(UTC).isoformat(),
+            "payload": {
+                "factory": factory_key,
+                "version": version
+            }
+        }
+
+        producer = KafkaProducer(
+            bootstrap_servers=KAFKA_BOOTSTRAP,
+            value_serializer=lambda v: json.dumps(v).encode("utf-8")
+        )
+
+        producer.send("fleet.events", value=event)
+        producer.flush(timeout=5)
+        producer.close()
+
+        print(f"Published policy.promoted event: {factory} → {version}")
+
+    except Exception as e:
+        # Log error but don't fail the approval - the PR is already merged
+        print(f"Warning: Failed to publish Kafka event: {e}")
 
 
 class QueryRequest(BaseModel):
@@ -208,6 +267,13 @@ async def resume_after_approval(approval_id: int, request: ApprovalResumeRequest
                     github = get_github_client()
                     merge_result = github.merge_pr(pr_number, merge_method="squash")
                     print(f"Auto-merged PR #{pr_number}: {merge_result.get('message')}")
+
+                    # Publish Kafka event to update console UI immediately
+                    publish_policy_promoted_event(
+                        factory=factory,
+                        version=model_version,
+                        trace_id=f"pr-{pr_number}"
+                    )
                 except Exception as e:
                     # Log error but don't fail - PR is created, operator can merge manually
                     print(f"Warning: Failed to auto-merge PR #{pr_number}: {e}")
