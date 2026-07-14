@@ -400,7 +400,13 @@ function ArgoSyncPanel({
   );
 }
 
-function FactoryPanel({ factory }: { factory: FactoryStatus }) {
+function FactoryPanel({
+  factory,
+  onPromotionTriggered,
+}: {
+  factory: FactoryStatus;
+  onPromotionTriggered?: (approvalId: number) => void;
+}) {
   const prevVersion = useRef(factory.policyVersion);
   const [pillClass, setPillClass] = useState("");
   const [showPromoteModal, setShowPromoteModal] = useState(false);
@@ -467,10 +473,10 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
         const sortedApprovals = pendingData.pending.sort((a, b) => b.id - a.id);
         const latestApproval = sortedApprovals[0];
 
-        if (latestApproval) {
-          // Show HIL drawer directly
-          setPendingApprovalId(latestApproval.id);
-        } else {
+        if (latestApproval && onPromotionTriggered) {
+          // Trigger HIL drawer via callback
+          onPromotionTriggered(latestApproval.id);
+        } else if (!latestApproval) {
           alert("Promotion request created, but approval not found. Please check AI Assistant.");
         }
       } else {
@@ -703,7 +709,10 @@ export function FleetView({
         <Flex spaceItems={{ default: "spaceItemsLg" }}>
           {fleet?.factories.map((f) => (
             <FlexItem key={f.name} flex={{ default: "flex_1" }}>
-              <FactoryPanel factory={f} />
+              <FactoryPanel
+                factory={f}
+                onPromotionTriggered={(approvalId) => setPendingApprovalId(approvalId)}
+              />
             </FlexItem>
           )) ?? (
             <FlexItem>
