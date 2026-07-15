@@ -43,6 +43,11 @@ spec:
               key: token
         - name: GITHUB_REPO
           value: "RHPhysicalAI/industrial-ai-showcase"
+        # Llama Stack integration (Phase 3)
+        - name: HIL_MODE
+          value: "passthrough"  # Options: "passthrough" (default) | "llama_stack"
+        - name: LLAMA_STACK_URL
+          value: "http://llama-stack-hil-service.agentic-ops.svc.cluster.local:8321"
 
         securityContext:
           allowPrivilegeEscalation: false
