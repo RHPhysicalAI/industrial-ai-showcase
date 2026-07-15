@@ -1,0 +1,82 @@
+# This project was developed with assistance from AI tools.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: run-config
+  namespace: agentic-ops
+  labels:
+    app.kubernetes.io/name: llama-stack-hil
+    app.kubernetes.io/part-of: agentic-orchestrator
+data:
+  config.yaml: |
+    version: 2
+    image_name: starter
+
+    # Enabled APIs for HIL governance
+    apis:
+      - agents          # Human-in-the-loop agent orchestration
+      - inference       # LLM inference
+      - safety          # Guardrails and safety checks
+      - tool_runtime    # MCP tool execution
+      - vector_io       # Memory/context
+      - files          # File handling
+
+    providers:
+      # Inference provider - use our vllm-agent-brain
+      inference:
+        - provider_id: vllm-agent-brain
+          provider_type: remote::vllm
+          config:
+            base_url: http://vllm-agent-brain.agentic-ops.svc.cluster.local:8000/v1
+            api_token: "fake"
+            max_tokens: 4096
+            tls_verify: false
+
+      # Safety provider for guardrails
+      safety:
+        - provider_id: llama-guard
+          provider_type: inline::llama-guard
+          config:
+            excluded_categories: []
+
+      # Agents provider for HIL
+      agents:
+        - provider_id: meta-reference
+          provider_type: inline::meta-reference
+          config:
+            persistence:
+              agent_state:
+                namespace: agents
+                backend: kv_default
+              responses:
+                table_name: responses
+                backend: sql_default
+                max_write_queue_size: 10000
+                num_writers: 4
+
+      # Files provider
+      files:
+        - provider_id: meta-reference-files
+          provider_type: inline::localfs
+          config:
+            storage_dir: ~/.llama/distributions/starter/files
+            metadata_store:
+              table_name: files_metadata
+              backend: sql_default
+
+    # Models configuration
+    models:
+      - metadata:
+          model_id: meta-llama/Meta-Llama-3-8B-Instruct
+          provider_id: vllm-agent-brain
+          provider_model_id: meta-llama/Meta-Llama-3-8B-Instruct
+
+    # Storage backends
+    storage:
+      backends:
+        kv_default:
+          type: kv_sqlite
+          db_path: ~/.llama/distributions/starter/kv.db
+        sql_default:
+          type: sql_sqlite
+          db_path: ~/.llama/distributions/starter/sql.db

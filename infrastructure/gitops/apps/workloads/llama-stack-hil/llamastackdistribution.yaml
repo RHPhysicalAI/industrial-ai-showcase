@@ -1,0 +1,72 @@
+# This project was developed with assistance from AI tools.
+apiVersion: llamastack.io/v1alpha1
+kind: LlamaStackDistribution
+metadata:
+  name: llama-stack-hil
+  namespace: agentic-ops
+  labels:
+    app.kubernetes.io/name: llama-stack-hil
+    app.kubernetes.io/part-of: agentic-orchestrator
+    app.kubernetes.io/component: governance
+    phase: "3"
+    milestone: "3"
+  annotations:
+    description: "Llama Stack governance layer for HIL approval, guardrails, and safety checks (ADR-019)"
+spec:
+  replicas: 1
+
+  # Network configuration
+  network:
+    exposeRoute: false
+
+  # Server configuration
+  server:
+    # Distribution image (from RH AI reference)
+    distribution:
+      image: "ogxai/distribution-starter:0.6.1"
+
+    # Container specification
+    containerSpec:
+      name: llama-stack
+      port: 8321
+
+      # Environment variables
+      env:
+        - name: RUN_CONFIG_PATH
+          value: /app-config/config.yaml
+
+      # Resources
+      resources:
+        limits:
+          cpu: "2"
+          memory: 4Gi
+        requests:
+          cpu: "1"
+          memory: 2Gi
+
+    # User configuration - references ConfigMap
+    userConfig:
+      configMapName: run-config
+
+    # Pod-level overrides
+    podOverrides:
+      # Volumes
+      volumes:
+        - name: run-config-volume
+          configMap:
+            name: run-config
+            defaultMode: 420
+        - name: dot-llama
+          persistentVolumeClaim:
+            claimName: llama-stack-data
+        - name: cache
+          emptyDir: {}
+
+      # Volume mounts
+      volumeMounts:
+        - name: run-config-volume
+          mountPath: /app-config
+        - name: dot-llama
+          mountPath: /.llama
+        - name: cache
+          mountPath: /.cache

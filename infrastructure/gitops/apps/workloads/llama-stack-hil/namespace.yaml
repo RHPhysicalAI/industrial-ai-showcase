@@ -1,0 +1,7 @@
+# This project was developed with assistance from AI tools.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agentic-ops
+  labels:
+    app.kubernetes.io/part-of: agentic-orchestrator
