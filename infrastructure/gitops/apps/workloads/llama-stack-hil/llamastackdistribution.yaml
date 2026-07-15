@@ -21,9 +21,9 @@ spec:
 
   # Server configuration
   server:
-    # Distribution image (from RH AI reference)
+    # Distribution image (latest ogxai with Agents API)
     distribution:
-      image: "ogxai/distribution-starter:0.6.1"
+      image: "ogxai/distribution-starter:latest"
 
     # Container specification
     containerSpec:
