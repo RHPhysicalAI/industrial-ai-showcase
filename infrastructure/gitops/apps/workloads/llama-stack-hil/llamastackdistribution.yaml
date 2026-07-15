@@ -21,9 +21,11 @@ spec:
 
   # Server configuration
   server:
-    # Distribution image (stable ogxai with Agents API)
+    # Distribution image (working version from RH AI reference)
+    # NOTE: Newer versions (1.2.0, 1.2.1, latest) have ModuleNotFoundError
+    # TODO: Investigate OGX operator (ogx.io/v1beta1/OGXServer) as alternative
     distribution:
-      image: "ogxai/distribution-starter:1.2.0"
+      image: "ogxai/distribution-starter:0.6.1"
 
     # Container specification
     containerSpec:
