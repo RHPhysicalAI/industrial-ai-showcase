@@ -21,9 +21,9 @@ spec:
 
   # Server configuration
   server:
-    # Distribution image (latest ogxai with Agents API)
+    # Distribution image (stable ogxai with Agents API)
     distribution:
-      image: "ogxai/distribution-starter:latest"
+      image: "ogxai/distribution-starter:1.2.0"
 
     # Container specification
     containerSpec:
