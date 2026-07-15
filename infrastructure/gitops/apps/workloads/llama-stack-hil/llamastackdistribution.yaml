@@ -21,11 +21,9 @@ spec:
 
   # Server configuration
   server:
-    # Distribution image (working version from RH AI reference)
-    # NOTE: Newer versions (1.2.0, 1.2.1, latest) have ModuleNotFoundError
-    # TODO: Investigate OGX operator (ogx.io/v1beta1/OGXServer) as alternative
+    # Distribution name (operator resolves to image)
     distribution:
-      image: "ogxai/distribution-starter:0.6.1"
+      name: starter
 
     # Container specification
     containerSpec:
