@@ -21,9 +21,9 @@ spec:
 
   # Server configuration
   server:
-    # Distribution name (operator resolves to image)
+    # Distribution name (RHOAI operator only supports 'rh-dev')
     distribution:
-      name: starter
+      name: rh-dev
 
     # Container specification
     containerSpec:
