@@ -210,7 +210,77 @@ export function HILDrawer({
               </Card>
             </StackItem>
 
-            {/* Pane 4: Proposed Git Changes (only for promote_policy_version) */}
+            {/* Pane 4: Blast Radius (only for promote_policy_version) */}
+            {approval.tool_name === "promote_policy_version" && approval.blast_radius && (
+              <StackItem>
+                <Card>
+                  <CardTitle>Blast Radius</CardTitle>
+                  <CardBody>
+                    <Stack hasGutter>
+                      <StackItem>
+                        <DescriptionList isHorizontal isCompact>
+                          <DescriptionListGroup>
+                            <DescriptionListTerm>Factory</DescriptionListTerm>
+                            <DescriptionListDescription>
+                              <strong>{approval.blast_radius.factory}</strong>
+                            </DescriptionListDescription>
+                          </DescriptionListGroup>
+                          <DescriptionListGroup>
+                            <DescriptionListTerm>Robots Affected</DescriptionListTerm>
+                            <DescriptionListDescription>
+                              <strong>{approval.blast_radius.robot_count}</strong>
+                            </DescriptionListDescription>
+                          </DescriptionListGroup>
+                          <DescriptionListGroup>
+                            <DescriptionListTerm>Version Change</DescriptionListTerm>
+                            <DescriptionListDescription>
+                              <code>{approval.blast_radius.current_version}</code>
+                              {" → "}
+                              <code>{approval.blast_radius.target_version}</code>
+                            </DescriptionListDescription>
+                          </DescriptionListGroup>
+                          <DescriptionListGroup>
+                            <DescriptionListTerm>Impact Level</DescriptionListTerm>
+                            <DescriptionListDescription>
+                              <Label
+                                color={
+                                  approval.blast_radius.impact_level === "low"
+                                    ? "green"
+                                    : approval.blast_radius.impact_level === "medium"
+                                    ? "orange"
+                                    : "red"
+                                }
+                              >
+                                {approval.blast_radius.impact_level.toUpperCase()}
+                              </Label>
+                            </DescriptionListDescription>
+                          </DescriptionListGroup>
+                        </DescriptionList>
+                      </StackItem>
+                      <StackItem>
+                        <div
+                          style={{
+                            fontSize: "0.875rem",
+                            color: "#6a6e73",
+                            backgroundColor: "#f5f5f5",
+                            padding: 12,
+                            borderRadius: 4,
+                          }}
+                        >
+                          This promotion will update <strong>{approval.blast_radius.robot_count}</strong> robot
+                          {approval.blast_radius.robot_count !== 1 ? "s" : ""} in{" "}
+                          <strong>{approval.blast_radius.factory}</strong> from version{" "}
+                          <code>{approval.blast_radius.current_version}</code> to{" "}
+                          <code>{approval.blast_radius.target_version}</code>.
+                        </div>
+                      </StackItem>
+                    </Stack>
+                  </CardBody>
+                </Card>
+              </StackItem>
+            )}
+
+            {/* Pane 5: Proposed Git Changes (only for promote_policy_version) */}
             {approval.tool_name === "promote_policy_version" && approval.git_diff && (
               <StackItem>
                 <Card>

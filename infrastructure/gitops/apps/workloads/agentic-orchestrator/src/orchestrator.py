@@ -256,9 +256,10 @@ def custom_tool_node(state: AgentState) -> dict:
             # Create approval request instead of executing tool
             session_id = state.get("session_id", "unknown")
 
-            # For promote_policy_version, pre-generate git_diff and summary
+            # For promote_policy_version, pre-generate git_diff, summary, and blast_radius
             git_diff = None
             summary = None
+            blast_radius = None
             if tool_name == "promote_policy_version":
                 try:
                     # Call MCP Fleet to get git_diff and summary (but don't execute yet)
@@ -292,8 +293,22 @@ def custom_tool_node(state: AgentState) -> dict:
                         factory=factory,  # Use display name for human-readable summary
                         namespace=factory_namespace
                     )
+
+                    # Calculate blast radius - which resources will be affected
+                    current_version = factory_config_result.get("policy_version", "unknown")
+                    robot_count = factory_config_result.get("robot_count", 0)
+                    factory_display_name = factory_config_result.get("name", factory)
+
+                    blast_radius = {
+                        "factory": factory_display_name,
+                        "namespace": factory_namespace,
+                        "robot_count": robot_count,
+                        "current_version": current_version,
+                        "target_version": model_version,
+                        "impact_level": "low" if robot_count <= 3 else "medium" if robot_count <= 10 else "high"
+                    }
                 except Exception as e:
-                    print(f"Warning: Failed to generate git_diff/summary: {e}")
+                    print(f"Warning: Failed to generate git_diff/summary/blast_radius: {e}")
 
             audit_client = httpx.Client(timeout=30.0)
             try:
@@ -303,11 +318,13 @@ def custom_tool_node(state: AgentState) -> dict:
                     "tool_name": tool_name,
                     "tool_arguments": tool_args
                 }
-                # Add git_diff and summary if available
+                # Add git_diff, summary, and blast_radius if available
                 if git_diff:
                     audit_payload["git_diff"] = git_diff
                 if summary:
                     audit_payload["summary"] = summary
+                if blast_radius:
+                    audit_payload["blast_radius"] = blast_radius
 
                 response = audit_client.post(
                     f"{AUDIT_SERVICE_URL}/audit/pending",

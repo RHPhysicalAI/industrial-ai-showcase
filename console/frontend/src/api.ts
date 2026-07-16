@@ -105,6 +105,15 @@ export async function getAgentHealth(): Promise<{ status: string }> {
 }
 
 // HIL Approval API functions
+export interface BlastRadius {
+  factory: string;
+  namespace: string;
+  robot_count: number;
+  current_version: string;
+  target_version: string;
+  impact_level: "low" | "medium" | "high";
+}
+
 export interface PendingApproval {
   id: number;
   session_id: string;
@@ -115,6 +124,7 @@ export interface PendingApproval {
   timestamp: string;
   git_diff?: string;  // Git diff preview for promote_policy_version
   summary?: string;   // Human-readable summary for promote_policy_version
+  blast_radius?: BlastRadius;  // Impact analysis for promote_policy_version (Milestone 4)
   pr_url?: string;    // PR URL if already created (for approved requests)
 }
 
