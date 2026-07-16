@@ -57,6 +57,10 @@ spec:
               value: "/tmp/hf-cache"
             - name: VLLM_SKIP_WARMUP
               value: "true"
+            - name: HOME
+              value: "/tmp"
+            - name: VLLM_USAGE_HOME
+              value: "/tmp/vllm-usage"
           volumeMounts:
             - name: cache
               mountPath: /tmp/hf-cache
