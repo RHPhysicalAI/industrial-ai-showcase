@@ -1,0 +1,28 @@
+# This project was developed with assistance from AI tools.
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: llama-guard-adapter
+  namespace: agentic-ops
+  labels:
+    app.kubernetes.io/name: llama-guard-adapter
+    app.kubernetes.io/part-of: agentic-orchestrator
+    app.kubernetes.io/component: safety
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: llama-guard-adapter:latest
+  source:
+    type: Git
+    git:
+      uri: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
+      ref: phase3
+    contextDir: infrastructure/gitops/apps/workloads/llama-guard-adapter
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Containerfile
+  triggers:
+    - type: ConfigChange
+    - type: ImageChange

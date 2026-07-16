@@ -1,0 +1,80 @@
+# This project was developed with assistance from AI tools.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-guard-adapter
+  namespace: agentic-ops
+  labels:
+    app.kubernetes.io/name: llama-guard-adapter
+    app.kubernetes.io/part-of: agentic-orchestrator
+    app.kubernetes.io/component: safety
+    phase: "3"
+    milestone: "3"
+  annotations:
+    description: "OpenAI-compatible moderation adapter for Llama Guard 3-8B (ADR-019)"
+spec:
+  replicas: 2  # High availability for safety-critical service
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: llama-guard-adapter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: llama-guard-adapter
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: adapter
+          image: quay.io/rhphysicalai/llama-guard-adapter:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          env:
+            - name: VLLM_BASE_URL
+              value: "http://llama-guard:8000"
+            - name: VLLM_MODEL
+              value: "meta-llama/Llama-Guard-3-8B"
+            - name: VLLM_TIMEOUT
+              value: "30.0"
+            # Optional: API_KEY for authentication
+            # - name: API_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: llama-guard-adapter-key
+            #       key: api-key
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+            requests:
+              cpu: "200m"
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 2
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
