@@ -14,7 +14,9 @@ data:
     image_name: rh
 
     # APIs for OGX
-    # Phase 3: inference + tool_runtime (responses requires additional setup)
+    # Phase 3: inference + tool_runtime
+    # Note: responses API requires vector_io provider not available in 'rh' distribution
+    # Guardrails work via direct llama-guard-adapter service instead
     apis:
       - inference
       - tool_runtime
