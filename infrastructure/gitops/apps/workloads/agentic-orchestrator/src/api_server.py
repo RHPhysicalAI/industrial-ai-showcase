@@ -276,7 +276,15 @@ async def query(request: QueryRequest):
 
         # Step 2: Invoke agent
         result = run_agent(request.query, session_id=request.session_id)
-        agent_response = result["response"]
+
+        # Handle both dict and string returns (recursion limit returns string)
+        if isinstance(result, dict):
+            agent_response = result["response"]
+            pending_approval_id = result.get("pending_approval_id")
+        else:
+            # String fallback (error case)
+            agent_response = str(result)
+            pending_approval_id = None
 
         # Step 3: Output moderation (fail-closed)
         output_result = await moderate_output(agent_response)
@@ -290,7 +298,7 @@ async def query(request: QueryRequest):
             return QueryResponse(
                 query=request.query,
                 response=BLOCKED_OUTPUT_RESPONSE,
-                pending_approval_id=result.get("pending_approval_id")  # Preserve HIL state
+                pending_approval_id=pending_approval_id  # Preserve HIL state
             )
 
         # Log allowed output
@@ -300,7 +308,7 @@ async def query(request: QueryRequest):
         return QueryResponse(
             query=request.query,
             response=agent_response,
-            pending_approval_id=result.get("pending_approval_id")
+            pending_approval_id=pending_approval_id
         )
 
     except Exception as e:
