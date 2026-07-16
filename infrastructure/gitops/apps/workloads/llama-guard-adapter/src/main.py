@@ -86,17 +86,51 @@ class ModerationResponse(BaseModel):
     results: List[ModerationResult]
 
 
-def build_llama_guard_prompt(text: str) -> List[Dict[str, str]]:
+def build_llama_guard_prompt(text: str) -> str:
     """
-    Build Llama Guard 3 chat messages using built-in template.
+    Build Llama Guard 3 raw prompt string.
 
-    Llama Guard 3's built-in chat template handles all formatting.
-    We only send the raw user message and let the template add categories/instructions.
+    Uses /v1/completions with full prompt control instead of /v1/chat/completions
+    to avoid chat template interference.
+
+    Llama Guard 3 expects:
+    <|begin_of_text|><|start_header_id|>user<|end_header_id|>
+
+    [Task description with categories]
+
+    <BEGIN CONVERSATION>
+    User: [text to moderate]
+    <END CONVERSATION>
+
+    [Assessment instructions]<|eot_id|><|start_header_id|>assistant<|end_header_id|>
     """
-    # Send only the raw user message - Llama Guard template handles the rest
-    return [
-        {"role": "user", "content": text}
-    ]
+    # Build category list
+    category_list = "\n".join(
+        f"{cat['code']}: {cat['name']}"
+        for cat in LLAMA_GUARD_CATEGORIES.values()
+    )
+
+    prompt = f"""<|begin_of_text|><|start_header_id|>user<|end_header_id|>
+
+Task: Check if there is unsafe content in 'User' messages in conversations according our safety policy with the below categories.
+
+<BEGIN UNSAFE CONTENT CATEGORIES>
+{category_list}
+<END UNSAFE CONTENT CATEGORIES>
+
+<BEGIN CONVERSATION>
+
+User: {text}
+
+<END CONVERSATION>
+
+Provide your safety assessment for ONLY THE LAST User message in the above conversation:
+- First line must read 'safe' or 'unsafe'.
+- If unsafe, a second line must include a comma-separated list of violated categories.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+"""
+
+    return prompt
 
 
 def parse_llama_guard_response(response_text: str) -> tuple[bool, List[str]]:
@@ -148,12 +182,15 @@ def parse_llama_guard_response(response_text: str) -> tuple[bool, List[str]]:
         raise ValueError(f"Invalid first line (expected 'safe' or 'unsafe'): {first_line}")
 
 
-async def call_vllm(messages: List[Dict[str, str]]) -> str:
+async def call_vllm(prompt: str) -> str:
     """
-    Call vLLM /v1/chat/completions endpoint.
+    Call vLLM /v1/completions endpoint with raw prompt.
+
+    Uses completions API instead of chat/completions to have full control
+    over prompt formatting, avoiding Llama Guard template interference.
 
     Args:
-        messages: Chat messages in OpenAI format
+        prompt: Fully formatted prompt string
 
     Returns:
         Response text from model
@@ -163,7 +200,7 @@ async def call_vllm(messages: List[Dict[str, str]]) -> str:
     """
     payload = {
         "model": VLLM_MODEL,
-        "messages": messages,
+        "prompt": prompt,
         "temperature": 0.0,
         "max_tokens": 100,  # Llama Guard responses are short
         "top_p": 1.0,
@@ -171,9 +208,9 @@ async def call_vllm(messages: List[Dict[str, str]]) -> str:
 
     try:
         async with httpx.AsyncClient(timeout=VLLM_TIMEOUT) as client:
-            logger.info(f"Calling vLLM at {VLLM_BASE_URL}/v1/chat/completions")
+            logger.info(f"Calling vLLM at {VLLM_BASE_URL}/v1/completions")
             response = await client.post(
-                f"{VLLM_BASE_URL}/v1/chat/completions",
+                f"{VLLM_BASE_URL}/v1/completions",
                 json=payload
             )
             response.raise_for_status()
@@ -186,7 +223,7 @@ async def call_vllm(messages: List[Dict[str, str]]) -> str:
                     detail="vLLM returned empty choices"
                 )
 
-            return result["choices"][0]["message"]["content"]
+            return result["choices"][0]["text"]
 
     except httpx.TimeoutException:
         logger.error("vLLM request timed out")
@@ -210,11 +247,11 @@ async def moderate_text(text: str) -> ModerationResult:
         HTTPException: On vLLM errors
     """
     # Build Llama Guard prompt
-    messages = build_llama_guard_prompt(text)
+    prompt = build_llama_guard_prompt(text)
 
     # Call vLLM
     start_time = time.time()
-    response_text = await call_vllm(messages)
+    response_text = await call_vllm(prompt)
     duration = time.time() - start_time
 
     logger.info(f"vLLM response in {duration:.2f}s: {response_text[:100]}")
