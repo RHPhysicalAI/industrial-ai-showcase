@@ -7,61 +7,59 @@ metadata:
   labels:
     app.kubernetes.io/name: ogx-hil
     app.kubernetes.io/part-of: agentic-orchestrator
+    ogx.io/watch: "true"  # Required for OGX operator to discover ConfigMap
 data:
   config.yaml: |
-    version: 2
-    image_name: starter
+    version: "2"
+    image_name: rh
 
-    # Enabled APIs for OGX
     apis:
-      - agents          # Human-in-the-loop agent orchestration ✅ NOW SUPPORTED!
-      - inference       # LLM inference
-      - safety          # Guardrails and safety checks
-      - tool_runtime    # MCP tool execution
-      - vector_io       # Memory/context
-      - files          # File handling
+      - inference
 
     providers:
-      # Inference provider - use our vllm-agent-brain
       inference:
-        - provider_id: vllm-agent-brain
+        - provider_id: ${env.VLLM_URL:+vllm-inference}
           provider_type: remote::vllm
           config:
-            base_url: http://vllm-agent-brain.agentic-ops.svc.cluster.local:8000/v1
-            api_token: "fake"
-            max_tokens: 4096
-            tls_verify: false
+            base_url: ${env.VLLM_URL:=}
+            max_tokens: ${env.VLLM_MAX_TOKENS:=4096}
+            api_token: ${env.VLLM_API_TOKEN:=fake}
+            tls_verify: ${env.VLLM_TLS_VERIFY:=false}
+            refresh_models: ${env.VLLM_REFRESH_MODELS:=false}
+            network:
+              tls:
+                verify: false
+              timeout:
+                connect: 1200
+                read: 1200
 
-      # Safety provider for guardrails
-      safety:
-        - provider_id: llama-guard
-          provider_type: inline::llama-guard
-          config:
-            excluded_categories: []
-
-      # Files provider
-      files:
-        - provider_id: meta-reference-files
-          provider_type: inline::localfs
-          config:
-            storage_dir: ~/.llama/distributions/starter/files
-            metadata_store:
-              table_name: files_metadata
-              backend: sql_default
-
-    # Models configuration
     models:
       - metadata:
+          llm_type: llm
           model_id: meta-llama/Meta-Llama-3-8B-Instruct
-          provider_id: vllm-agent-brain
-          provider_model_id: meta-llama/Meta-Llama-3-8B-Instruct
+          provider_id: vllm-inference
 
-    # Storage backends
     storage:
       backends:
         kv_default:
           type: kv_sqlite
-          db_path: ~/.llama/distributions/starter/kv.db
+          db_path: /.ogx/kvstore.db
         sql_default:
           type: sql_sqlite
-          db_path: ~/.llama/distributions/starter/sql.db
+          db_path: /.ogx/sqlstore.db
+
+      stores:
+        metadata:
+          type: kv
+          backend: kv_default
+          namespace: registry
+
+        inference:
+          type: sql
+          backend: sql_default
+          table_name: inference
+          max_write_queue_size: 10000
+          num_writers: 4
+
+    server:
+      port: 8321

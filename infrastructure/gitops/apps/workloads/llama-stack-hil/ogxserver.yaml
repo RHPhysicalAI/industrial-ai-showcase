@@ -13,39 +13,31 @@ metadata:
   annotations:
     description: "OGX (Open GenAI Stack) governance layer for HIL approval, guardrails, and safety checks (ADR-019)"
 spec:
-  # Distribution - use starter distribution
+  # Distribution - use rh (full distribution with Agents API)
   distribution:
-    name: starter
+    name: rh
 
-  # Override configuration via ConfigMap
-  baseConfig:
+  # Use overrideConfig for full config control (SQLite instead of PostgreSQL)
+  overrideConfig:
     name: ogx-config
     key: config.yaml
 
   # Workload configuration
   workload:
     replicas: 1
-    workers: 1
 
-    # Storage for OGX data
+    # Storage for OGX data (SQLite database will be stored here)
     storage:
       size: "5Gi"
       mountPath: "/.ogx"
 
-    # Environment overrides
+    # Environment variables
     overrides:
       env:
-        # vLLM inference backend
         - name: VLLM_URL
-          value: 'http://vllm-agent-brain.agentic-ops.svc.cluster.local:8000'
-        - name: VLLM_API_TOKEN
-          value: 'fake'
+          value: "http://vllm-agent-brain.agentic-ops.svc.cluster.local:8000"
 
   # Network configuration
   network:
     externalAccess:
       enabled: false  # Internal only, no Route
-
-  # Pod disruption budget for HA
-  podDisruptionBudget:
-    maxUnavailable: 1
