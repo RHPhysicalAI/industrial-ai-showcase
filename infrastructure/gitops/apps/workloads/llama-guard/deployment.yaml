@@ -32,7 +32,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: vllm
-          image: vllm/vllm-openai:v0.6.3.post1
+          image: vllm/vllm-openai:v0.11.1
           ports:
             - containerPort: 8000
               name: http
@@ -41,11 +41,13 @@ spec:
             - name: MODEL_NAME
               value: "meta-llama/Llama-Guard-3-8B"
             - name: MAX_MODEL_LEN
-              value: "4096"
+              value: "14336"
+            - name: MAX_NUM_SEQS
+              value: "32"
             - name: GPU_MEMORY_UTILIZATION
               value: "0.9"
             - name: DTYPE
-              value: "auto"
+              value: "bfloat16"
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -53,9 +55,13 @@ spec:
                   key: token
             - name: HF_HOME
               value: "/tmp/hf-cache"
+            - name: VLLM_SKIP_WARMUP
+              value: "true"
           volumeMounts:
             - name: cache
               mountPath: /tmp/hf-cache
+            - name: shm
+              mountPath: /dev/shm
           command:
             - python3
             - -m
@@ -64,6 +70,8 @@ spec:
             - $(MODEL_NAME)
             - --max-model-len
             - $(MAX_MODEL_LEN)
+            - --max-num-seqs
+            - $(MAX_NUM_SEQS)
             - --gpu-memory-utilization
             - $(GPU_MEMORY_UTILIZATION)
             - --dtype
@@ -94,3 +102,7 @@ spec:
       volumes:
         - name: cache
           emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
