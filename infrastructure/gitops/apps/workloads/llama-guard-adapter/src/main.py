@@ -90,9 +90,8 @@ def build_llama_guard_prompt(text: str) -> List[Dict[str, str]]:
     """
     Build Llama Guard 3 chat messages using official format.
 
-    Llama Guard expects:
-    - System message with task description and categories
-    - User message with conversation to moderate
+    Llama Guard chat template doesn't support system role - must use user only.
+    Conversation roles must alternate user/assistant/user/assistant.
     """
     # Build category list
     category_list = "\n".join(
@@ -100,7 +99,7 @@ def build_llama_guard_prompt(text: str) -> List[Dict[str, str]]:
         for cat in LLAMA_GUARD_CATEGORIES.values()
     )
 
-    system_message = f"""Task: Check if there is unsafe content in 'User' messages in conversations according our safety policy with the below categories.
+    user_message = f"""Task: Check if there is unsafe content in 'User' messages in conversations according our safety policy with the below categories.
 
 <BEGIN UNSAFE CONTENT CATEGORIES>
 {category_list}
@@ -116,9 +115,9 @@ Provide your safety assessment for User in the above conversation:
 - First line must read 'safe' or 'unsafe'.
 - If unsafe, a second line must include a comma-separated list of violated categories."""
 
+    # Llama Guard template requires user/assistant alternation - use single user message
     return [
-        {"role": "system", "content": system_message},
-        {"role": "user", "content": "Provide your safety assessment."}
+        {"role": "user", "content": user_message}
     ]
 
 

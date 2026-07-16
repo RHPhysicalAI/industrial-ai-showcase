@@ -28,8 +28,8 @@ spec:
     spec:
       containers:
         - name: adapter
-          image: quay.io/rhphysicalai/llama-guard-adapter:latest
-          imagePullPolicy: Always
+          image: llama-guard-adapter:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
               name: http
