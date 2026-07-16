@@ -2,11 +2,18 @@
 """
 Llama Stack Adapter for LangGraph Orchestrator
 
+NOTE: This code is CURRENTLY UNUSED but kept for future reference.
+
 Bridges the existing LangGraph-based orchestrator with Llama Stack HIL governance.
 
 Two integration modes:
-1. PASSTHROUGH (default for now): Use existing HIL pattern in orchestrator.py
-2. LLAMA_STACK: Route through Llama Stack Agents API for full governance
+1. PASSTHROUGH (default, ACTIVE): Use existing HIL pattern in orchestrator.py
+2. LLAMA_STACK (INACTIVE): Route through Llama Stack Agents API for full governance
+
+STATUS (2026-07-16):
+- OGX deployment removed (APIs were non-functional)
+- HIL_MODE=passthrough (custom HIL in api_server.py)
+- This code preserved for future when OGX Agents API becomes available
 
 This adapter allows gradual migration from custom HIL to Llama Stack HIL.
 """

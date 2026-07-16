@@ -2,16 +2,24 @@
 """
 Llama Stack Client for HIL Governance Integration
 
+NOTE: This code is CURRENTLY UNUSED but kept for future reference.
+
 Wraps LangGraph agentic orchestrator with Llama Stack Agents API.
 Per ADR-019: state-modifying tool calls route through HIL approval,
 read-only tool calls pass through directly.
+
+STATUS (2026-07-16):
+- OGX does not provide Agents API (/v1/agents/*) in 'rh' distribution
+- All attempts to use this client fail with 404 Not Found
+- We use custom HIL in api_server.py instead
+- Code preserved for when Agents API becomes available in future RHOAI releases
 
 Architecture:
   User Query
       ↓
   LangGraph Agent (orchestrator.py)
       ↓
-  Llama Stack Agents API (this module)
+  Llama Stack Agents API (this module) ← NOT AVAILABLE YET
       ↓
   ┌─────────────┬──────────────┐
   │ Read-only   │ State-mod    │
