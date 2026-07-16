@@ -48,6 +48,15 @@ spec:
           value: "passthrough"  # Options: "passthrough" (default) | "llama_stack"
         - name: LLAMA_STACK_URL
           value: "http://llama-stack-hil-service.agentic-ops.svc.cluster.local:8321"
+        # Content moderation (Phase 3 - ADR-019)
+        - name: MODERATION_ENDPOINT
+          value: "http://llama-guard-adapter.agentic-ops.svc.cluster.local:8080/v1/moderations"
+        - name: MODERATION_ENABLED
+          value: "true"  # Set to "false" to disable guardrails
+        - name: MODERATION_TIMEOUT
+          value: "10.0"  # Timeout in seconds
+        - name: MODERATION_MAX_RETRIES
+          value: "2"  # Max retry attempts
 
         securityContext:
           allowPrivilegeEscalation: false

@@ -9,13 +9,29 @@ import uvicorn
 import httpx
 import os
 import json
+import logging
 from uuid import uuid4
 from datetime import datetime, UTC
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 # Use full orchestrator with HIL gate (Milestone 2)
 from orchestrator import run_agent, mcp_client
 
 # Llama Stack integration (Milestone 3 - Phase 3)
 from llama_stack_adapter import get_llama_stack_adapter, is_llama_stack_enabled
+
+# Content moderation (Phase 3 - ADR-019)
+from moderation_client import (
+    moderate_input,
+    moderate_output,
+    BLOCKED_INPUT_RESPONSE,
+    BLOCKED_OUTPUT_RESPONSE
+)
 
 # Environment configuration
 AUDIT_SERVICE_URL = os.getenv("AUDIT_SERVICE_URL", "http://audit-service.agentic-ops.svc.cluster.local:8090")
@@ -170,7 +186,7 @@ class ApprovalResumeResponse(BaseModel):
 
 @app.get("/health")
 async def health():
-    """Health check endpoint with Llama Stack status"""
+    """Health check endpoint with Llama Stack and moderation status"""
     adapter = get_llama_stack_adapter()
 
     health_info = {
@@ -196,19 +212,97 @@ async def health():
                 "error": str(e)
             }
 
+    # Check moderation client connectivity
+    try:
+        from moderation_client import get_moderation_client
+        mod_client = get_moderation_client()
+
+        if mod_client.enabled:
+            # Quick health check (timeout=2s)
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                response = await client.get(f"{mod_client.endpoint.replace('/v1/moderations', '')}/health")
+                response.raise_for_status()
+                health_info["moderation"] = {
+                    "status": "connected",
+                    "endpoint": mod_client.endpoint,
+                    "enabled": True
+                }
+        else:
+            health_info["moderation"] = {
+                "status": "disabled",
+                "enabled": False
+            }
+    except Exception as e:
+        health_info["moderation"] = {
+            "status": "error",
+            "error": str(e),
+            "enabled": True
+        }
+
     return health_info
 
 
 @app.post("/query", response_model=QueryResponse)
 async def query(request: QueryRequest):
-    """Process a user query through the agent"""
+    """
+    Process a user query through the agent with input/output moderation.
+
+    Flow:
+    1. Moderate user input (fail-closed)
+    2. If blocked: return policy-safe response, skip LLM
+    3. If allowed: invoke agent
+    4. Moderate agent output (fail-closed)
+    5. If blocked: suppress output, return controlled fallback
+    6. If allowed: return normal response
+    """
     try:
+        # Step 1: Input moderation (fail-closed)
+        input_result = await moderate_input(request.query)
+
+        if not input_result.is_allowed():
+            # BLOCKED INPUT: Return policy-safe response without invoking LLM
+            logger.warning(
+                f"Input blocked: categories={input_result.get_blocked_categories()}, "
+                f"error={input_result.error}"
+            )
+            return QueryResponse(
+                query=request.query,
+                response=BLOCKED_INPUT_RESPONSE,
+                pending_approval_id=None
+            )
+
+        # Log allowed input
+        logger.info(f"Input allowed (latency={input_result.latency_ms:.0f}ms)")
+
+        # Step 2: Invoke agent
         result = run_agent(request.query, session_id=request.session_id)
+        agent_response = result["response"]
+
+        # Step 3: Output moderation (fail-closed)
+        output_result = await moderate_output(agent_response)
+
+        if not output_result.is_allowed():
+            # BLOCKED OUTPUT: Suppress LLM output, return controlled fallback
+            logger.warning(
+                f"Output blocked: categories={output_result.get_blocked_categories()}, "
+                f"error={output_result.error}"
+            )
+            return QueryResponse(
+                query=request.query,
+                response=BLOCKED_OUTPUT_RESPONSE,
+                pending_approval_id=result.get("pending_approval_id")  # Preserve HIL state
+            )
+
+        # Log allowed output
+        logger.info(f"Output allowed (latency={output_result.latency_ms:.0f}ms)")
+
+        # Step 4: Return normal response
         return QueryResponse(
             query=request.query,
-            response=result["response"],
+            response=agent_response,
             pending_approval_id=result.get("pending_approval_id")
         )
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
