@@ -75,6 +75,7 @@ class ApprovalRequest(BaseModel):
     git_diff: Optional[str] = None  # For promote_policy_version
     summary: Optional[str] = None   # For promote_policy_version
     blast_radius: Optional[dict] = None  # For promote_policy_version (Milestone 4)
+    moderation_results: Optional[dict] = None  # Input/output moderation (Milestone 4)
     pr_url: Optional[str] = None    # After approval creates PR
 
 
@@ -181,7 +182,8 @@ async def list_pending_approvals():
         cursor.execute(
             """
             SELECT id, timestamp, session_id, user_identity, tool_name,
-                   tool_arguments, approval_status, git_diff, summary, blast_radius, pr_url
+                   tool_arguments, approval_status, git_diff, summary, blast_radius,
+                   moderation_results, pr_url
             FROM hil_audit
             WHERE approval_status = 'pending'
             ORDER BY timestamp ASC
@@ -204,6 +206,7 @@ async def list_pending_approvals():
                 "git_diff": row.get("git_diff"),
                 "summary": row.get("summary"),
                 "blast_radius": row.get("blast_radius"),
+                "moderation_results": row.get("moderation_results"),
                 "pr_url": row.get("pr_url")
             }
             for row in results
@@ -301,6 +304,45 @@ async def reject_request(approval_id: int, request: RejectRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to reject request: {str(e)}")
+
+
+@app.post("/audit/moderation/{approval_id}")
+async def attach_moderation_results(approval_id: int, moderation_data: dict):
+    """
+    Attach moderation results to an approval request.
+
+    Called by orchestrator after creating approval to add input/output moderation data.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            UPDATE hil_audit
+            SET moderation_results = %s
+            WHERE id = %s
+            RETURNING id
+            """,
+            (Json(moderation_data), approval_id)
+        )
+
+        updated = cursor.fetchone()
+
+        if updated is None:
+            conn.close()
+            raise HTTPException(status_code=404, detail=f"Approval {approval_id} not found")
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return {"status": "updated", "id": approval_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to attach moderation results: {str(e)}")
 
 
 @app.post("/audit/result/{approval_id}")

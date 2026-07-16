@@ -114,6 +114,18 @@ export interface BlastRadius {
   impact_level: "low" | "medium" | "high";
 }
 
+export interface ModerationCheck {
+  decision: "allowed" | "blocked" | "error";
+  flagged: boolean;
+  categories: string[];
+  latency_ms: number;
+}
+
+export interface ModerationResults {
+  input: ModerationCheck;
+  output: ModerationCheck;
+}
+
 export interface PendingApproval {
   id: number;
   session_id: string;
@@ -125,6 +137,7 @@ export interface PendingApproval {
   git_diff?: string;  // Git diff preview for promote_policy_version
   summary?: string;   // Human-readable summary for promote_policy_version
   blast_radius?: BlastRadius;  // Impact analysis for promote_policy_version (Milestone 4)
+  moderation_results?: ModerationResults;  // Input/output safety checks (Milestone 4)
   pr_url?: string;    // PR URL if already created (for approved requests)
 }
 

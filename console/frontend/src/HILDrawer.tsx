@@ -280,7 +280,106 @@ export function HILDrawer({
               </StackItem>
             )}
 
-            {/* Pane 5: Proposed Git Changes (only for promote_policy_version) */}
+            {/* Pane 5: Guardrails (if moderation results available) */}
+            {approval.moderation_results && (
+              <StackItem>
+                <Card>
+                  <CardTitle>Safety Guardrails</CardTitle>
+                  <CardBody>
+                    <Stack hasGutter>
+                      {/* Input Moderation */}
+                      <StackItem>
+                        <DescriptionList isHorizontal isCompact>
+                          <DescriptionListGroup>
+                            <DescriptionListTerm>Input Check</DescriptionListTerm>
+                            <DescriptionListDescription>
+                              <Label
+                                color={
+                                  approval.moderation_results.input.decision === "allowed"
+                                    ? "green"
+                                    : approval.moderation_results.input.decision === "blocked"
+                                    ? "red"
+                                    : "orange"
+                                }
+                              >
+                                {approval.moderation_results.input.decision.toUpperCase()}
+                              </Label>
+                            </DescriptionListDescription>
+                          </DescriptionListGroup>
+                          {approval.moderation_results.input.categories.length > 0 && (
+                            <DescriptionListGroup>
+                              <DescriptionListTerm>Flagged Categories</DescriptionListTerm>
+                              <DescriptionListDescription>
+                                {approval.moderation_results.input.categories.join(", ")}
+                              </DescriptionListDescription>
+                            </DescriptionListGroup>
+                          )}
+                          <DescriptionListGroup>
+                            <DescriptionListTerm>Input Latency</DescriptionListTerm>
+                            <DescriptionListDescription>
+                              {approval.moderation_results.input.latency_ms.toFixed(0)}ms
+                            </DescriptionListDescription>
+                          </DescriptionListGroup>
+                        </DescriptionList>
+                      </StackItem>
+
+                      {/* Output Moderation */}
+                      <StackItem>
+                        <DescriptionList isHorizontal isCompact>
+                          <DescriptionListGroup>
+                            <DescriptionListTerm>Output Check</DescriptionListTerm>
+                            <DescriptionListDescription>
+                              <Label
+                                color={
+                                  approval.moderation_results.output.decision === "allowed"
+                                    ? "green"
+                                    : approval.moderation_results.output.decision === "blocked"
+                                    ? "red"
+                                    : "orange"
+                                }
+                              >
+                                {approval.moderation_results.output.decision.toUpperCase()}
+                              </Label>
+                            </DescriptionListDescription>
+                          </DescriptionListGroup>
+                          {approval.moderation_results.output.categories.length > 0 && (
+                            <DescriptionListGroup>
+                              <DescriptionListTerm>Flagged Categories</DescriptionListTerm>
+                              <DescriptionListDescription>
+                                {approval.moderation_results.output.categories.join(", ")}
+                              </DescriptionListDescription>
+                            </DescriptionListGroup>
+                          )}
+                          <DescriptionListGroup>
+                            <DescriptionListTerm>Output Latency</DescriptionListTerm>
+                            <DescriptionListDescription>
+                              {approval.moderation_results.output.latency_ms.toFixed(0)}ms
+                            </DescriptionListDescription>
+                          </DescriptionListGroup>
+                        </DescriptionList>
+                      </StackItem>
+
+                      <StackItem>
+                        <div
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#6a6e73",
+                            backgroundColor: "#f5f5f5",
+                            padding: 8,
+                            borderRadius: 4,
+                          }}
+                        >
+                          <strong>Llama Guard 3-8B:</strong> Content moderation powered by Meta's safety model.
+                          All requests are checked for harmful content before and after LLM processing.
+                        </div>
+                      </StackItem>
+                    </Stack>
+                  </CardBody>
+                </Card>
+              </StackItem>
+            )}
+
+            {/* Pane 6: Proposed Git Changes (only for promote_policy_version) */}
             {approval.tool_name === "promote_policy_version" && approval.git_diff && (
               <StackItem>
                 <Card>

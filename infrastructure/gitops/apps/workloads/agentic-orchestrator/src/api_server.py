@@ -304,6 +304,34 @@ async def query(request: QueryRequest):
         # Log allowed output
         logger.info(f"Output allowed (latency={output_result.latency_ms:.0f}ms)")
 
+        # Step 3.5: If approval was created, attach moderation results
+        if pending_approval_id:
+            try:
+                moderation_data = {
+                    "input": {
+                        "decision": input_result.decision.value,
+                        "flagged": input_result.flagged,
+                        "categories": input_result.get_blocked_categories() if input_result.flagged else [],
+                        "latency_ms": input_result.latency_ms
+                    },
+                    "output": {
+                        "decision": output_result.decision.value,
+                        "flagged": output_result.flagged,
+                        "categories": output_result.get_blocked_categories() if output_result.flagged else [],
+                        "latency_ms": output_result.latency_ms
+                    }
+                }
+
+                import httpx
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    await client.post(
+                        f"{AUDIT_SERVICE_URL}/audit/moderation/{pending_approval_id}",
+                        json=moderation_data
+                    )
+                logger.info(f"Attached moderation results to approval #{pending_approval_id}")
+            except Exception as e:
+                logger.warning(f"Failed to attach moderation results: {e}")
+
         # Step 4: Return normal response
         return QueryResponse(
             query=request.query,
