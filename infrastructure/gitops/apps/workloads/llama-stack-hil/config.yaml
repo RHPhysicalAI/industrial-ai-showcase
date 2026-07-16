@@ -2,19 +2,19 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: run-config
+  name: ogx-config
   namespace: agentic-ops
   labels:
-    app.kubernetes.io/name: llama-stack-hil
+    app.kubernetes.io/name: ogx-hil
     app.kubernetes.io/part-of: agentic-orchestrator
 data:
   config.yaml: |
     version: 2
     image_name: starter
 
-    # Enabled APIs for HIL governance
+    # Enabled APIs for OGX
     apis:
-      - agents          # Human-in-the-loop agent orchestration
+      - agents          # Human-in-the-loop agent orchestration ✅ NOW SUPPORTED!
       - inference       # LLM inference
       - safety          # Guardrails and safety checks
       - tool_runtime    # MCP tool execution
@@ -38,21 +38,6 @@ data:
           provider_type: inline::llama-guard
           config:
             excluded_categories: []
-
-      # Agents provider for HIL
-      agents:
-        - provider_id: meta-reference
-          provider_type: inline::meta-reference
-          config:
-            persistence:
-              agent_state:
-                namespace: agents
-                backend: kv_default
-              responses:
-                table_name: responses
-                backend: sql_default
-                max_write_queue_size: 10000
-                num_writers: 4
 
       # Files provider
       files:

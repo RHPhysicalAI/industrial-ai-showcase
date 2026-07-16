@@ -1,0 +1,51 @@
+# This project was developed with assistance from AI tools.
+apiVersion: ogx.io/v1beta1
+kind: OGXServer
+metadata:
+  name: ogx-hil
+  namespace: agentic-ops
+  labels:
+    app.kubernetes.io/name: ogx-hil
+    app.kubernetes.io/part-of: agentic-orchestrator
+    app.kubernetes.io/component: governance
+    phase: "3"
+    milestone: "3"
+  annotations:
+    description: "OGX (Open GenAI Stack) governance layer for HIL approval, guardrails, and safety checks (ADR-019)"
+spec:
+  # Distribution - use starter distribution
+  distribution:
+    name: starter
+
+  # Override configuration via ConfigMap
+  baseConfig:
+    name: ogx-config
+    key: config.yaml
+
+  # Workload configuration
+  workload:
+    replicas: 1
+    workers: 1
+
+    # Storage for OGX data
+    storage:
+      size: "5Gi"
+      mountPath: "/.ogx"
+
+    # Environment overrides
+    overrides:
+      env:
+        # vLLM inference backend
+        - name: VLLM_URL
+          value: 'http://vllm-agent-brain.agentic-ops.svc.cluster.local:8000'
+        - name: VLLM_API_TOKEN
+          value: 'fake'
+
+  # Network configuration
+  network:
+    externalAccess:
+      enabled: false  # Internal only, no Route
+
+  # Pod disruption budget for HA
+  podDisruptionBudget:
+    maxUnavailable: 1
