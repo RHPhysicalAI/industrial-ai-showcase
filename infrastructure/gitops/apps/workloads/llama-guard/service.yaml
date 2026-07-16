@@ -1,0 +1,19 @@
+# This project was developed with assistance from AI tools.
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama-guard
+  namespace: agentic-ops
+  labels:
+    app.kubernetes.io/name: llama-guard
+    app.kubernetes.io/part-of: agentic-orchestrator
+    app.kubernetes.io/component: safety
+spec:
+  selector:
+    app.kubernetes.io/name: llama-guard
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP

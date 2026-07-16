@@ -36,6 +36,8 @@ spec:
       env:
         - name: VLLM_URL
           value: "http://vllm-agent-brain.agentic-ops.svc.cluster.local:8000"
+        - name: LLAMA_GUARD_URL
+          value: "http://llama-guard.agentic-ops.svc.cluster.local:8000/v1/moderations"
 
   # Network configuration
   network:

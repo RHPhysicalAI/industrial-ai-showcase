@@ -1,0 +1,96 @@
+# This project was developed with assistance from AI tools.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-guard
+  namespace: agentic-ops
+  labels:
+    app.kubernetes.io/name: llama-guard
+    app.kubernetes.io/part-of: agentic-orchestrator
+    app.kubernetes.io/component: safety
+    phase: "3"
+    milestone: "3"
+  annotations:
+    description: "Llama Guard 3-8B for content moderation (ADR-019 guardrails)"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: llama-guard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: llama-guard
+    spec:
+      # Pin to L40S GPU class (L4s not available in cluster)
+      nodeSelector:
+        nvidia.com/gpu.product: NVIDIA-L40S
+      # Tolerate GPU node taints
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:v0.6.3.post1
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+          env:
+            - name: MODEL_NAME
+              value: "meta-llama/Llama-Guard-3-8B"
+            - name: MAX_MODEL_LEN
+              value: "4096"
+            - name: GPU_MEMORY_UTILIZATION
+              value: "0.9"
+            - name: DTYPE
+              value: "auto"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+            - name: HF_HOME
+              value: "/tmp/hf-cache"
+          volumeMounts:
+            - name: cache
+              mountPath: /tmp/hf-cache
+          command:
+            - python3
+            - -m
+            - vllm.entrypoints.openai.api_server
+            - --model
+            - $(MODEL_NAME)
+            - --max-model-len
+            - $(MAX_MODEL_LEN)
+            - --gpu-memory-utilization
+            - $(GPU_MEMORY_UTILIZATION)
+            - --dtype
+            - $(DTYPE)
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+              memory: 16Gi
+              cpu: "4"
+            requests:
+              nvidia.com/gpu: 1
+              memory: 8Gi
+              cpu: "2"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 300
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 120
+            periodSeconds: 10
+            timeoutSeconds: 5
+      volumes:
+        - name: cache
+          emptyDir: {}

@@ -14,10 +14,11 @@ data:
     image_name: rh
 
     # APIs for OGX
-    # Testing: tool_runtime with MCP providers
+    # Phase 3: inference + tool_runtime + responses (with guardrails)
     apis:
       - inference
       - tool_runtime
+      - responses
 
     providers:
       inference:
@@ -45,6 +46,20 @@ data:
           provider_type: remote::model-context-protocol
           config:
             url: http://mcp-fleet-server.agentic-ops.svc.cluster.local:8080
+
+      responses:
+        - provider_id: builtin
+          provider_type: inline::builtin
+          config:
+            moderation_endpoint: ${env.LLAMA_GUARD_URL:=http://llama-guard.agentic-ops.svc.cluster.local:8000/v1/moderations}
+            moderation_headers:
+              Content-Type: application/json
+
+      vector_io:
+        - provider_id: default
+          provider_type: inline::faiss
+          config:
+            storage_path: /.ogx/vectors
 
     models:
       - metadata:
