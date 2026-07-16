@@ -88,36 +88,14 @@ class ModerationResponse(BaseModel):
 
 def build_llama_guard_prompt(text: str) -> List[Dict[str, str]]:
     """
-    Build Llama Guard 3 chat messages using official format.
+    Build Llama Guard 3 chat messages using built-in template.
 
-    Llama Guard chat template doesn't support system role - must use user only.
-    Conversation roles must alternate user/assistant/user/assistant.
+    Llama Guard 3's built-in chat template handles all formatting.
+    We only send the raw user message and let the template add categories/instructions.
     """
-    # Build category list
-    category_list = "\n".join(
-        f"{cat['code']}: {cat['name']}"
-        for cat in LLAMA_GUARD_CATEGORIES.values()
-    )
-
-    user_message = f"""Task: Check if there is unsafe content in 'User' messages in conversations according our safety policy with the below categories.
-
-<BEGIN UNSAFE CONTENT CATEGORIES>
-{category_list}
-<END UNSAFE CONTENT CATEGORIES>
-
-<BEGIN CONVERSATION>
-
-User: {text}
-
-<END CONVERSATION>
-
-Provide your safety assessment for User in the above conversation:
-- First line must read 'safe' or 'unsafe'.
-- If unsafe, a second line must include a comma-separated list of violated categories."""
-
-    # Llama Guard template requires user/assistant alternation - use single user message
+    # Send only the raw user message - Llama Guard template handles the rest
     return [
-        {"role": "user", "content": user_message}
+        {"role": "user", "content": text}
     ]
 
 
