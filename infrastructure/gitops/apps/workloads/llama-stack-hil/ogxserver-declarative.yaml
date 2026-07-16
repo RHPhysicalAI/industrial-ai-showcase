@@ -1,0 +1,80 @@
+# This project was developed with assistance from AI tools.
+# OGXServer with declarative provider configuration (testing additional APIs)
+apiVersion: ogx.io/v1beta1
+kind: OGXServer
+metadata:
+  name: ogx-hil
+  namespace: agentic-ops
+  labels:
+    app.kubernetes.io/name: ogx-hil
+    app.kubernetes.io/part-of: agentic-orchestrator
+    app.kubernetes.io/component: governance
+    phase: "3"
+    milestone: "3"
+  annotations:
+    description: "OGX with declarative providers - testing Responses API and Tool Runtime"
+spec:
+  # Distribution
+  distribution:
+    name: rh
+
+  # Declarative provider configuration (instead of overrideConfig)
+  providers:
+    # Inference provider - vLLM
+    inference:
+      remote:
+        vllm:
+          - id: vllm-inference
+            endpoint: http://vllm-agent-brain.agentic-ops.svc.cluster.local:8000
+            maxTokens: 4096
+            refreshModels: false
+            network:
+              tls:
+                verify: false
+              timeout:
+                connect: 1200
+                read: 1200
+
+    # Responses provider - OpenAI-compatible API with function calling
+    responses:
+      inline:
+        builtin: {}
+
+    # Tool Runtime - for MCP tool execution
+    toolRuntime:
+      inline:
+        custom:
+          - id: mcp-tools
+            type: inline::builtin
+            settings: {}
+
+  # Models
+  resources:
+    models:
+      - name: llama3-8b
+        metadata:
+          llm_type: llm
+          model_id: meta-llama/Meta-Llama-3-8B-Instruct
+          provider_id: vllm-inference
+
+  # Note: Storage backends use default SQLite (no config needed for declarative mode)
+
+  # Workload configuration
+  workload:
+    replicas: 1
+
+    # Storage for OGX data
+    storage:
+      size: "5Gi"
+      mountPath: "/.ogx"
+
+    # Environment variables
+    overrides:
+      env:
+        - name: VLLM_URL
+          value: "http://vllm-agent-brain.agentic-ops.svc.cluster.local:8000"
+
+  # Network configuration
+  network:
+    externalAccess:
+      enabled: false

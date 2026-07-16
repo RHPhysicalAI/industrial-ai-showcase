@@ -13,8 +13,11 @@ data:
     version: "2"
     image_name: rh
 
+    # APIs for OGX
+    # Testing: tool_runtime with MCP providers
     apis:
       - inference
+      - tool_runtime
 
     providers:
       inference:
@@ -32,6 +35,16 @@ data:
               timeout:
                 connect: 1200
                 read: 1200
+
+      tool_runtime:
+        - provider_id: mcp-mlflow
+          provider_type: remote::model-context-protocol
+          config:
+            url: http://mcp-mlflow-server.agentic-ops.svc.cluster.local:8080
+        - provider_id: mcp-fleet
+          provider_type: remote::model-context-protocol
+          config:
+            url: http://mcp-fleet-server.agentic-ops.svc.cluster.local:8080
 
     models:
       - metadata:
