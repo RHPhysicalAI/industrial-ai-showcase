@@ -35,6 +35,9 @@ spec:
           jsonPointers:
             - /spec/template/spec/containers/0/image
       syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
