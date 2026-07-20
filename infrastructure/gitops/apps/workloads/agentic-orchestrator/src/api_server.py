@@ -481,18 +481,38 @@ async def resume_after_approval(approval_id: int, request: ApprovalResumeRequest
                     from github_client import get_github_client
                     github = get_github_client()
                     merge_result = github.merge_pr(pr_number, merge_method="squash")
-                    print(f"Auto-merged PR #{pr_number}: {merge_result.get('message')}")
 
-                    # Publish Kafka event to update console UI immediately
-                    publish_policy_promoted_event(
-                        factory=factory,
-                        version=model_version,
-                        trace_id=f"pr-{pr_number}"
-                    )
+                    if merge_result.get("merged"):
+                        print(f"✅ Auto-merged PR #{pr_number}: {merge_result.get('message')}")
+
+                        # Publish Kafka event to update console UI immediately
+                        publish_policy_promoted_event(
+                            factory=factory,
+                            version=model_version,
+                            trace_id=f"pr-{pr_number}"
+                        )
+                    else:
+                        # Merge failed - mark approval as merge_failed
+                        print(f"❌ PR #{pr_number} merge failed: {merge_result.get('error')}")
+
+                        # Call audit service to mark as merge_failed
+                        try:
+                            client.post(
+                                f"{AUDIT_SERVICE_URL}/audit/merge-failed/{approval_id}",
+                                json={
+                                    "error": merge_result.get("error", "Unknown error"),
+                                    "error_type": merge_result.get("error_type", "unknown"),
+                                    "status_code": merge_result.get("status_code"),
+                                    "pr_number": pr_number
+                                }
+                            )
+                        except Exception as mark_error:
+                            print(f"Warning: Failed to mark approval as merge_failed: {mark_error}")
+
                 except Exception as e:
-                    # Log error but don't fail - PR is created, operator can merge manually
-                    print(f"Warning: Failed to auto-merge PR #{pr_number}: {e}")
-                    merge_result = {"error": str(e)}
+                    # Unexpected exception during merge attempt
+                    print(f"⚠️  Exception during auto-merge of PR #{pr_number}: {e}")
+                    merge_result = {"merged": False, "error": str(e), "error_type": "unknown"}
 
                 # Update audit record with result (including PR URL and merge status)
                 try:
@@ -508,15 +528,29 @@ async def resume_after_approval(approval_id: int, request: ApprovalResumeRequest
                     print(f"Warning: Failed to update audit result: {e}")
 
                 # Response message based on merge success
-                if merge_result and not merge_result.get("error"):
+                if merge_result and merge_result.get("merged"):
                     return ApprovalResumeResponse(
                         response=f"✅ Approved and merged: PR #{pr_number} merged for {factory} → {model_version}. Argo CD will sync shortly. PR URL: {pr_url}",
                         status="approved"
                     )
                 else:
+                    # Merge failed - provide detailed error message
+                    error_type = merge_result.get("error_type", "unknown") if merge_result else "unknown"
+                    error_msg = merge_result.get("error", "Unknown error") if merge_result else "Unknown error"
+
+                    # User-friendly error messages
+                    friendly_messages = {
+                        "conflict": "Merge conflict detected. Manual resolution required.",
+                        "not_mergeable": "PR is not in a mergeable state. Check branch protection rules or required checks.",
+                        "checks_failed": "Required status checks have not passed. Check CI/CD pipeline.",
+                        "unknown": f"Merge failed: {error_msg}"
+                    }
+
+                    friendly_msg = friendly_messages.get(error_type, friendly_messages["unknown"])
+
                     return ApprovalResumeResponse(
-                        response=f"✅ Approved and executed: PR #{pr_number} created for {factory} → {model_version}. Manual merge required. PR URL: {pr_url}",
-                        status="approved"
+                        response=f"⚠️  Approved but merge failed: PR #{pr_number} for {factory} → {model_version}. {friendly_msg} PR URL: {pr_url}",
+                        status="merge_failed"
                     )
 
             else:

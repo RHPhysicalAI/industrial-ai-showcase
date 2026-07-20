@@ -90,6 +90,13 @@ class RejectRequest(BaseModel):
     reason: str
 
 
+class MergeFailedRequest(BaseModel):
+    error: str
+    error_type: str  # "conflict", "not_mergeable", "checks_failed", "unknown"
+    status_code: Optional[int] = None
+    pr_number: Optional[int] = None
+
+
 class AuditHistoryResponse(BaseModel):
     history: List[dict]
 
@@ -307,6 +314,63 @@ async def reject_request(approval_id: int, request: RejectRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to reject request: {str(e)}")
+
+
+@app.post("/audit/merge-failed/{approval_id}")
+async def mark_merge_failed(approval_id: int, request: MergeFailedRequest):
+    """
+    Mark an approved request as merge_failed when PR merge fails.
+
+    Updates approval_status to 'merge_failed' and stores error details.
+    This allows retries and provides troubleshooting information.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        merge_error_data = {
+            "error": request.error,
+            "error_type": request.error_type,
+            "status_code": request.status_code,
+            "pr_number": request.pr_number,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+        cursor.execute(
+            """
+            UPDATE hil_audit
+            SET approval_status = 'merge_failed',
+                merge_error = %s
+            WHERE id = %s AND approval_status = 'approved'
+            RETURNING id
+            """,
+            (Json(merge_error_data), approval_id)
+        )
+
+        result = cursor.fetchone()
+
+        if result is None:
+            conn.close()
+            raise HTTPException(
+                status_code=404,
+                detail=f"Approved request {approval_id} not found (may have already been processed)"
+            )
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return {
+            "status": "merge_failed",
+            "id": approval_id,
+            "error": request.error,
+            "error_type": request.error_type
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to mark merge failed: {str(e)}")
 
 
 @app.post("/audit/moderation/{approval_id}")

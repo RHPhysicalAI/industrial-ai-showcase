@@ -28,6 +28,8 @@ import {
   Spinner,
   CodeBlock,
   CodeBlockCode,
+  Alert,
+  AlertActionLink,
 } from "@patternfly/react-core";
 import { CheckCircleIcon, TimesCircleIcon } from "@patternfly/react-icons";
 import type { PendingApproval } from "./api.js";
@@ -495,6 +497,69 @@ export function HILDrawer({
                     </Stack>
                   </CardBody>
                 </Card>
+              </StackItem>
+            )}
+
+            {/* Merge Error Alert (if PR merge failed) */}
+            {approval.approval_status === "merge_failed" && approval.merge_error && (
+              <StackItem>
+                <Alert
+                  variant="danger"
+                  isInline
+                  title="PR Merge Failed"
+                  actionLinks={
+                    approval.pr_url ? (
+                      <AlertActionLink
+                        onClick={() => window.open(approval.pr_url, "_blank")}
+                      >
+                        View PR #{approval.merge_error.pr_number}
+                      </AlertActionLink>
+                    ) : undefined
+                  }
+                >
+                  <Stack hasGutter>
+                    <StackItem>
+                      <strong>Error Type:</strong> {approval.merge_error.error_type}
+                    </StackItem>
+                    <StackItem>
+                      <strong>Details:</strong> {approval.merge_error.error}
+                    </StackItem>
+                    <StackItem>
+                      <div style={{ fontSize: "0.875rem", marginTop: 8 }}>
+                        {approval.merge_error.error_type === "conflict" && (
+                          <div>
+                            <strong>Next Steps:</strong>
+                            <ol style={{ marginTop: 4, marginLeft: 20 }}>
+                              <li>Click the PR link above to view the conflict</li>
+                              <li>Resolve conflicts in GitHub or locally</li>
+                              <li>Merge the PR manually once conflicts are resolved</li>
+                            </ol>
+                          </div>
+                        )}
+                        {approval.merge_error.error_type === "checks_failed" && (
+                          <div>
+                            <strong>Next Steps:</strong>
+                            <ol style={{ marginTop: 4, marginLeft: 20 }}>
+                              <li>Click the PR link to view failing checks</li>
+                              <li>Fix the issues causing check failures</li>
+                              <li>Wait for checks to pass, then merge manually</li>
+                            </ol>
+                          </div>
+                        )}
+                        {approval.merge_error.error_type === "not_mergeable" && (
+                          <div>
+                            <strong>Next Steps:</strong>
+                            <ol style={{ marginTop: 4, marginLeft: 20 }}>
+                              <li>Review branch protection rules</li>
+                              <li>Ensure required reviews are approved</li>
+                              <li>Merge manually once requirements are met</li>
+                            </ol>
+                          </div>
+                        )}
+                      </div>
+                    </StackItem>
+                  </Stack>
+                </Alert>
               </StackItem>
             )}
 

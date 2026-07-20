@@ -135,13 +135,21 @@ export interface ToolCallTraceEntry {
   success: boolean;
 }
 
+export interface MergeError {
+  error: string;
+  error_type: "conflict" | "not_mergeable" | "checks_failed" | "unknown";
+  status_code?: number;
+  pr_number?: number;
+  timestamp: string;
+}
+
 export interface PendingApproval {
   id: number;
   session_id: string;
   user_identity: string;
   tool_name: string;
   tool_arguments: Record<string, unknown>;
-  approval_status: string;
+  approval_status: string;  // "pending" | "approved" | "rejected" | "merge_failed"
   timestamp: string;
   git_diff?: string;  // Git diff preview for promote_policy_version
   summary?: string;   // Human-readable summary for promote_policy_version
@@ -149,6 +157,7 @@ export interface PendingApproval {
   moderation_results?: ModerationResults;  // Input/output safety checks (Milestone 4)
   tool_call_trace?: ToolCallTraceEntry[];  // Read-only tool calls before approval (Milestone 4)
   pr_url?: string;    // PR URL if already created (for approved requests)
+  merge_error?: MergeError;  // PR merge failure details (Task #33)
 }
 
 export interface ApprovalResult {

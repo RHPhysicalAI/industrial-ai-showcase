@@ -248,21 +248,53 @@ Co-Authored-by: Claude Sonnet 4.5 <noreply@anthropic.com>"""
             merge_method: Merge method ("merge", "squash", or "rebase"). Default: "squash"
 
         Returns:
-            Merge result with SHA
-
-        Raises:
-            httpx.HTTPStatusError: If merge fails (e.g., conflicts, checks not passed)
+            Merge result dict with:
+            - merged: bool - True if merge succeeded
+            - sha: str - Merge commit SHA (if successful)
+            - message: str - Success/error message
+            - error: str - Error details (if failed)
+            - error_type: str - Type of error (if failed): "conflict", "not_mergeable", "checks_failed", "unknown"
 
         Example:
             >>> client.merge_pr(pr_number=42, merge_method="squash")
             {'sha': 'abc123...', 'merged': True, 'message': 'Pull Request successfully merged'}
         """
-        resp = self.client.put(
-            f"{self.api_base}/repos/{self.repo}/pulls/{pr_number}/merge",
-            json={"merge_method": merge_method}
-        )
-        resp.raise_for_status()
-        return resp.json()
+        try:
+            resp = self.client.put(
+                f"{self.api_base}/repos/{self.repo}/pulls/{pr_number}/merge",
+                json={"merge_method": merge_method}
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as e:
+            # Parse GitHub's error response
+            error_data = {}
+            try:
+                error_data = e.response.json()
+            except:
+                pass
+
+            error_message = error_data.get("message", str(e))
+
+            # Classify error type
+            error_type = "unknown"
+            if e.response.status_code == 405:
+                # Not mergeable (usually means conflicts or not ready)
+                error_type = "not_mergeable"
+            elif e.response.status_code == 409:
+                # Merge conflict
+                error_type = "conflict"
+            elif "required status check" in error_message.lower():
+                error_type = "checks_failed"
+            elif "not in a mergeable state" in error_message.lower():
+                error_type = "not_mergeable"
+
+            return {
+                "merged": False,
+                "error": error_message,
+                "error_type": error_type,
+                "status_code": e.response.status_code
+            }
 
     def close(self):
         """Close HTTP client."""
