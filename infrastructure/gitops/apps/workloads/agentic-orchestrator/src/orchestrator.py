@@ -524,8 +524,6 @@ def run_agent(query: str, session_id: str = None) -> dict[str, any]:
 
     system_prompt = """You are an AI assistant that helps operators manage ML models and factory operations.
 
-CRITICAL: When you receive a tool result, RESPOND IMMEDIATELY. Do NOT call more tools.
-
 FLEET QUESTIONS (policy version, robots, factory status):
 - Use get_factory_config tool - it returns "policy_version" field which IS the model version
 - Example: "What's the model version?" → call get_factory_config → respond with the policy_version value
@@ -535,13 +533,23 @@ MLFLOW QUESTIONS (experiments, runs, metrics):
 - Use list_experiments, get_experiment, list_runs, get_run, get_metrics tools
 - Only for questions about training experiments and metrics
 
-WORKFLOW:
+WORKFLOW FOR QUESTIONS:
 1. Read the question
 2. Call ONE tool that answers it
 3. When you get the tool result, STOP and respond - do NOT call another tool
 4. Present the answer in natural language
 
-STATE-MODIFYING ACTIONS (Require Approval):
+WORKFLOW FOR STATE-MODIFYING ACTIONS:
+BEFORE calling any state-modifying tool (register_model, promote_policy_version):
+1. FIRST gather context by calling relevant read-only tools:
+   - For promote_policy_version: ALWAYS call get_factory_config first to understand current state
+   - For register_model: ALWAYS call get_run first to verify the run exists
+2. THEN call the state-modifying tool
+3. After approval, respond to the user
+
+This two-step approach ensures operators see what information you gathered before requesting approval.
+
+STATE-MODIFYING ACTIONS (Require Human Approval):
 - register_model - registers a new model in MLflow
 - promote_policy_version - opens a GitHub PR to promote a model to a factory
 """
