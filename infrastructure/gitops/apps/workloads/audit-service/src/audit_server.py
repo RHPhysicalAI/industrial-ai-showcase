@@ -62,6 +62,7 @@ class CreateApprovalRequest(BaseModel):
     git_diff: Optional[str] = None  # For promote_policy_version (Milestone 3)
     summary: Optional[str] = None   # For promote_policy_version (Milestone 3)
     blast_radius: Optional[dict] = None  # For promote_policy_version (Milestone 4)
+    tool_call_trace: Optional[list] = None  # Read-only tool calls before approval (Milestone 4)
 
 
 class ApprovalRequest(BaseModel):
@@ -76,6 +77,7 @@ class ApprovalRequest(BaseModel):
     summary: Optional[str] = None   # For promote_policy_version
     blast_radius: Optional[dict] = None  # For promote_policy_version (Milestone 4)
     moderation_results: Optional[dict] = None  # Input/output moderation (Milestone 4)
+    tool_call_trace: Optional[list] = None  # Read-only tool calls before approval (Milestone 4)
     pr_url: Optional[str] = None    # After approval creates PR
 
 
@@ -132,11 +134,11 @@ async def create_pending_approval(request: CreateApprovalRequest):
             """
             INSERT INTO hil_audit (
                 session_id, user_identity, tool_name, tool_arguments, approval_status,
-                git_diff, summary, blast_radius
+                git_diff, summary, blast_radius, tool_call_trace
             )
-            VALUES (%s, %s, %s, %s, 'pending', %s, %s, %s)
+            VALUES (%s, %s, %s, %s, 'pending', %s, %s, %s, %s)
             RETURNING id, timestamp, session_id, user_identity, tool_name,
-                      tool_arguments, approval_status, git_diff, summary, blast_radius, pr_url
+                      tool_arguments, approval_status, git_diff, summary, blast_radius, tool_call_trace, pr_url
             """,
             (
                 request.session_id,
@@ -145,7 +147,8 @@ async def create_pending_approval(request: CreateApprovalRequest):
                 Json(request.tool_arguments),
                 request.git_diff,
                 request.summary,
-                Json(request.blast_radius) if request.blast_radius else None
+                Json(request.blast_radius) if request.blast_radius else None,
+                Json(request.tool_call_trace) if request.tool_call_trace else None
             )
         )
 

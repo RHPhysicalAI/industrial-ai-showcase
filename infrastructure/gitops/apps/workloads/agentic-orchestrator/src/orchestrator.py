@@ -7,6 +7,7 @@ import os
 import json
 from typing import TypedDict, Annotated, Sequence
 from datetime import datetime
+import time
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage
@@ -14,6 +15,8 @@ from langchain_core.tools import tool
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 import httpx
+
+from tool_call_tracer import ToolCallTracer
 
 
 # Environment configuration
@@ -184,6 +187,7 @@ class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], "The messages in the conversation"]
     session_id: str  # Session ID for tracking approval requests
     pending_approval_id: int | None  # ID of pending approval request
+    tool_call_trace: list  # Trace of read-only tool calls for HIL drawer context
 
 
 # Initialize LLM (vLLM endpoint)
@@ -326,6 +330,11 @@ def custom_tool_node(state: AgentState) -> dict:
                 if blast_radius:
                     audit_payload["blast_radius"] = blast_radius
 
+                # Add tool_call_trace (read-only calls before this approval)
+                tool_call_trace = state.get("tool_call_trace", [])
+                if tool_call_trace:
+                    audit_payload["tool_call_trace"] = tool_call_trace
+
                 response = audit_client.post(
                     f"{AUDIT_SERVICE_URL}/audit/pending",
                     json=audit_payload
@@ -367,7 +376,47 @@ def custom_tool_node(state: AgentState) -> dict:
     # IMPORTANT: Only pass read_only_tools to avoid executing state-modifying tools
     from langgraph.prebuilt import ToolNode
     tool_executor = ToolNode(read_only_tools)
-    return tool_executor.invoke(state)
+
+    # Execute tools and capture trace
+    tool_call_trace = state.get("tool_call_trace", [])
+
+    for tool_call in last_message.tool_calls:
+        tool_name = tool_call.get("name")
+        tool_args = tool_call.get("args", {})
+
+        # Record start time
+        start_time_ms = int(time.time() * 1000)
+        timestamp = datetime.now().isoformat()
+
+        # Execute via ToolNode
+        result = tool_executor.invoke(state)
+
+        # Record end time and result
+        end_time_ms = int(time.time() * 1000)
+        duration_ms = end_time_ms - start_time_ms
+
+        # Extract response summary from the ToolMessage
+        tool_messages = result.get("messages", [])
+        response_summary = "No response"
+        if tool_messages:
+            last_tool_msg = tool_messages[-1]
+            if hasattr(last_tool_msg, 'content'):
+                response_summary = str(last_tool_msg.content)[:200]  # First 200 chars
+
+        # Add to trace
+        tool_call_trace.append({
+            "tool_name": tool_name,
+            "arguments": tool_args,
+            "timestamp": timestamp,
+            "duration_ms": duration_ms,
+            "response_summary": response_summary,
+            "success": True  # If we got here, no exception
+        })
+
+        # Update state with trace
+        state["tool_call_trace"] = tool_call_trace
+
+    return result
 
 
 # Conditional edge - should we continue or end?
@@ -503,7 +552,8 @@ STATE-MODIFYING ACTIONS (Require Approval):
             HumanMessage(content=query)
         ],
         "session_id": session_id,
-        "pending_approval_id": None
+        "pending_approval_id": None,
+        "tool_call_trace": []  # Initialize trace for this session
     }
 
     # Run the graph with recursion limit = 15 (agent → tools → agent = 3 steps per cycle)

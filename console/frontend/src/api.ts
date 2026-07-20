@@ -126,6 +126,15 @@ export interface ModerationResults {
   output: ModerationCheck;
 }
 
+export interface ToolCallTraceEntry {
+  tool_name: string;
+  arguments: Record<string, unknown>;
+  timestamp: string;
+  duration_ms: number;
+  response_summary: string;
+  success: boolean;
+}
+
 export interface PendingApproval {
   id: number;
   session_id: string;
@@ -138,6 +147,7 @@ export interface PendingApproval {
   summary?: string;   // Human-readable summary for promote_policy_version
   blast_radius?: BlastRadius;  // Impact analysis for promote_policy_version (Milestone 4)
   moderation_results?: ModerationResults;  // Input/output safety checks (Milestone 4)
+  tool_call_trace?: ToolCallTraceEntry[];  // Read-only tool calls before approval (Milestone 4)
   pr_url?: string;    // PR URL if already created (for approved requests)
 }
 

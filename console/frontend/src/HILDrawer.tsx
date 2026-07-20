@@ -379,6 +379,58 @@ export function HILDrawer({
               </StackItem>
             )}
 
+            {/* Pane 5.5: Context Trail - Tool Call Trace */}
+            {approval.tool_call_trace && approval.tool_call_trace.length > 0 && (
+              <StackItem>
+                <Card>
+                  <CardTitle>Context Trail</CardTitle>
+                  <CardBody>
+                    <div style={{ fontSize: "0.875rem", marginBottom: 8, color: "#6a6e73" }}>
+                      Read-only tool calls the agent made before requesting approval:
+                    </div>
+                    <Stack hasGutter>
+                      {approval.tool_call_trace.map((call, idx) => (
+                        <StackItem key={idx}>
+                          <div
+                            style={{
+                              padding: 12,
+                              background: "#f5f5f5",
+                              borderRadius: 4,
+                              borderLeft: call.success ? "3px solid #3e8635" : "3px solid #c9190b",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+                              <span style={{ fontWeight: 600, color: "#151515", marginRight: 8 }}>
+                                {idx + 1}. {call.tool_name}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: "0.75rem",
+                                  color: "#6a6e73",
+                                  marginLeft: "auto",
+                                }}
+                              >
+                                {call.duration_ms}ms
+                              </span>
+                            </div>
+                            {Object.keys(call.arguments).length > 0 && (
+                              <div style={{ fontSize: "0.813rem", color: "#6a6e73", marginBottom: 4 }}>
+                                <strong>Args:</strong>{" "}
+                                {JSON.stringify(call.arguments, null, 0)}
+                              </div>
+                            )}
+                            <div style={{ fontSize: "0.813rem", color: "#151515", fontFamily: "monospace" }}>
+                              → {call.response_summary}
+                            </div>
+                          </div>
+                        </StackItem>
+                      ))}
+                    </Stack>
+                  </CardBody>
+                </Card>
+              </StackItem>
+            )}
+
             {/* Pane 6: Proposed Git Changes (only for promote_policy_version) */}
             {approval.tool_name === "promote_policy_version" && approval.git_diff && (
               <StackItem>
