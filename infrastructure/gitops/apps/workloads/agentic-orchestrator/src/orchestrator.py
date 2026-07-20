@@ -273,6 +273,8 @@ def custom_tool_node(state: AgentState) -> dict:
                     # Call MCP Fleet to get git_diff and summary (but don't execute yet)
                     # We'll use the tool's implementation to get this data
                     import sys
+                    import time
+                    from datetime import datetime
                     sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
                     from kustomize_generator import generate_promotion_git_diff, generate_promotion_summary
 
@@ -284,7 +286,23 @@ def custom_tool_node(state: AgentState) -> dict:
                     # Get factory namespace (K8s-compliant, e.g., "factory-b")
                     # factory might be display name with spaces (e.g., "Factory B")
                     # Call MCP Fleet directly to get the dict, not the LangChain tool wrapper
+                    # Capture this in tool_call_trace for HIL drawer context
+                    start_time_ms = int(time.time() * 1000)
                     factory_config_result = mcp_fleet_client.invoke_tool("get_factory_config", {"factory": factory})
+                    end_time_ms = int(time.time() * 1000)
+
+                    # Add to trace - this shows what context we gathered before requesting approval
+                    tool_call_trace = state.get("tool_call_trace", [])
+                    tool_call_trace.append({
+                        "tool_name": "get_factory_config",
+                        "arguments": {"factory": factory},
+                        "timestamp": datetime.now().isoformat(),
+                        "duration_ms": end_time_ms - start_time_ms,
+                        "response_summary": f"Factory: {factory_config_result.get('name', factory)}, Robots: {factory_config_result.get('robot_count', 0)}, Current version: {factory_config_result.get('policy_version', 'unknown')}",
+                        "success": True
+                    })
+                    state["tool_call_trace"] = tool_call_trace
+
                     factory_namespace = factory_config_result.get("namespace", factory.lower().replace(" ", "-"))
 
                     git_diff = generate_promotion_git_diff(
