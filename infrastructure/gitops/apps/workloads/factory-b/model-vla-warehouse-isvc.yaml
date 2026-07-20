@@ -8,7 +8,7 @@ spec:
     model:
       modelFormat:
         name: vllm
-      storageUri: s3://mlflow/models/vla-warehouse/v1.5
+      storageUri: s3://mlflow/models/vla-warehouse/v1.4
       resources:
         limits:
           nvidia.com/gpu: '1'
