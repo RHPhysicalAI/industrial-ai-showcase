@@ -173,7 +173,11 @@ def _promote_policy_version_impl(factory: str, model_version: str) -> str:
 
 @tool
 def promote_policy_version(factory: str, model_version: str) -> str:
-    """Promote model policy version to factory (opens GitHub PR - requires approval)"""
+    """Promote model policy version to factory (opens GitHub PR - requires approval).
+
+    IMPORTANT: You MUST call get_factory_config(factory=...) FIRST to verify the current
+    policy version before calling this tool. This gives the operator context about what
+    version is currently deployed."""
     # This will be intercepted by custom_tool_node before execution
     return _promote_policy_version_impl(factory, model_version)
 
