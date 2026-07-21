@@ -26,6 +26,16 @@ export interface StatusLogEntry {
   message: string;
 }
 
+export interface RollbackAnalysis {
+  timestamp: string;
+  factory: string;
+  from_version: string;
+  to_version: string;
+  trigger: string;
+  agent_analysis: string;
+  session_id: string;
+}
+
 interface FactoryState {
   policyVersion: string;
   argoSyncStatus: ArgoSyncStatus;
@@ -51,6 +61,7 @@ export class DemoState {
   };
   anomalyHistory: AnomalyPoint[] = [];
   statusLog: StatusLogEntry[] = [];
+  rollbackAnalyses: RollbackAnalysis[] = [];
   private timers: ReturnType<typeof setTimeout>[] = [];
   private promotedVersion: string = BASELINE_VERSION;
   argoSync: ArgoSync | null = null;
@@ -131,6 +142,15 @@ export class DemoState {
     }
   }
 
+  recordRollbackAnalysis(analysis: RollbackAnalysis): void {
+    this.rollbackAnalyses.push(analysis);
+    // Keep only last 5 analyses
+    if (this.rollbackAnalyses.length > 5) {
+      this.rollbackAnalyses.shift();
+    }
+    this.addLog(`🔍 Agent analysis complete: ${analysis.factory} rollback`);
+  }
+
   reset(): void {
     for (const timer of this.timers) clearTimeout(timer);
     this.timers = [];
@@ -151,6 +171,7 @@ export class DemoState {
     };
     this.anomalyHistory = [];
     this.statusLog = [];
+    this.rollbackAnalyses = [];
 
     if (this.argoSync?.enabled) {
       void this.realArgoReset();

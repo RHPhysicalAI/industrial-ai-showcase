@@ -117,9 +117,24 @@ export class FleetStream extends EventEmitter {
           }
           if (msg.topic === "fleet.events" && msg.payload && typeof msg.payload === "object") {
             const p = msg.payload as Record<string, unknown>;
+            const eventType = p["type"] as string | undefined;
             const ec = p["event_class"] as string | undefined;
             const payload = (p["payload"] ?? {}) as Record<string, unknown>;
-            if (ec === "policy.promoted") {
+
+            // Handle new-style events (type field)
+            if (eventType === "rollback.analysis") {
+              this.demoState.recordRollbackAnalysis({
+                timestamp: (p["timestamp"] as string) ?? new Date().toISOString(),
+                factory: (p["factory"] as string) ?? "unknown",
+                from_version: (p["from_version"] as string) ?? "unknown",
+                to_version: (p["to_version"] as string) ?? "unknown",
+                trigger: (p["trigger"] as string) ?? "unknown",
+                agent_analysis: (p["agent_analysis"] as string) ?? "",
+                session_id: (p["session_id"] as string) ?? "",
+              });
+            }
+            // Handle legacy event_class events
+            else if (ec === "policy.promoted") {
               this.demoState.promotePolicy(
                 (payload["factory"] as string) ?? "factory-a",
                 (payload["version"] as string) ?? "vla-warehouse-v1.4",

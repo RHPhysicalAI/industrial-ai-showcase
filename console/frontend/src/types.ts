@@ -57,10 +57,21 @@ export interface StatusLogEntry {
   message: string;
 }
 
+export interface RollbackAnalysis {
+  timestamp: string;
+  factory: string;
+  from_version: string;
+  to_version: string;
+  trigger: string;
+  agent_analysis: string;
+  session_id: string;
+}
+
 export interface FleetStatus {
   demoPhase: string;
   anomalyHistory: AnomalyPoint[];
   statusLog: StatusLogEntry[];
+  rollbackAnalyses: RollbackAnalysis[];
   links: DemoLinks | null;
   factories: FactoryStatus[];
 }

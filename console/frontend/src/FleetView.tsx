@@ -18,6 +18,7 @@ import {
   StackItem,
 } from "@patternfly/react-core";
 import { HILDrawer } from "./HILDrawer.js";
+import { RollbackAnalysisDrawer } from "./RollbackAnalysisDrawer.js";
 import { approveRequest, rejectRequest } from "./api.js";
 import type {
   ArgoAppStatus,
@@ -564,6 +565,7 @@ export function FleetView({
   const [argo, setArgo] = useState<ArgoAppStatus | null>(null);
   const [auditHistory, setAuditHistory] = useState<any[]>([]);
   const [pendingApprovalId, setPendingApprovalId] = useState<number | null>(null);
+  const [showRollbackAnalysis, setShowRollbackAnalysis] = useState(false);
   const [toast, setToast] = useState<{ message: string; variant: "success" | "danger" | "info" } | null>(null);
 
   const refresh = useCallback(() => {
@@ -589,6 +591,29 @@ export function FleetView({
     );
     if (hasFleetEvent) refresh();
   }, [events, refresh]);
+
+  // Watch for rollback analysis events and show toast
+  useEffect(() => {
+    if (!fleet || fleet.rollbackAnalyses.length === 0) return;
+
+    const latest = fleet.rollbackAnalyses[fleet.rollbackAnalyses.length - 1];
+
+    // Check if this is a new analysis (within last 10 seconds)
+    const analysisTime = new Date(latest.timestamp).getTime();
+    const now = Date.now();
+    if (now - analysisTime < 10000) {
+      setToast({
+        message: `⚠️ Auto-rollback detected: ${latest.factory} ${latest.from_version} → ${latest.to_version}. Click to view agent analysis.`,
+        variant: "info"
+      });
+
+      // Auto-open drawer to show analysis
+      setShowRollbackAnalysis(true);
+
+      // Clear toast after 8 seconds
+      setTimeout(() => setToast(null), 8000);
+    }
+  }, [fleet]);
 
   const handleApprove = async () => {
     if (!pendingApprovalId) return;
@@ -792,6 +817,19 @@ export function FleetView({
       </StackItem>
     </Stack>
   );
+
+  // Wrap with rollback analysis drawer if showing rollback analysis
+  if (showRollbackAnalysis && fleet && fleet.rollbackAnalyses.length > 0) {
+    const latestAnalysis = fleet.rollbackAnalyses[fleet.rollbackAnalyses.length - 1];
+    return (
+      <RollbackAnalysisDrawer
+        analysis={latestAnalysis}
+        onClose={() => setShowRollbackAnalysis(false)}
+      >
+        {fleetContent}
+      </RollbackAnalysisDrawer>
+    );
+  }
 
   // Wrap with HIL drawer if there's a pending approval
   if (pendingApprovalId !== null) {
