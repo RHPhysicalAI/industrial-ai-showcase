@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 # Use full orchestrator with HIL gate (Milestone 2)
 from orchestrator import run_agent, mcp_client
 
+# Kafka for events
+from kafka import KafkaProducer
+
 # Llama Stack integration (Milestone 3 - Phase 3)
 from llama_stack_adapter import get_llama_stack_adapter, is_llama_stack_enabled
 
@@ -106,6 +109,15 @@ async def startup_event():
     else:
         print("Running in passthrough mode (custom HIL in orchestrator.py)")
 
+    # Start fleet event listener for rollback analysis (Phase 3 Item #8)
+    try:
+        from event_listener import start_event_listener
+        start_event_listener(on_rollback_callback=handle_rollback_event)
+        print("Fleet event listener started (listening for rollbacks)")
+    except Exception as e:
+        print(f"Warning: Fleet event listener failed to start: {e}")
+        print("Rollback analysis will not be available")
+
 
 def publish_policy_promoted_event(factory: str, version: str, trace_id: str = None):
     """
@@ -161,6 +173,93 @@ def publish_policy_promoted_event(factory: str, version: str, trace_id: str = No
     except Exception as e:
         # Log error but don't fail the approval - the PR is already merged
         print(f"Warning: Failed to publish Kafka event: {e}")
+
+
+async def handle_rollback_event(event: dict):
+    """
+    Handle fleet rollback event by triggering agent investigation.
+
+    Called by event_listener when policy.rollback event is received.
+    Agent investigates what happened (read-only) and generates analysis.
+
+    Args:
+        event: Rollback event from Kafka fleet.events topic
+    """
+    factory = event.get('factory', 'unknown')
+    from_version = event.get('from_version', 'unknown')
+    to_version = event.get('to_version', 'unknown')
+    trigger = event.get('trigger', 'unknown')
+
+    logger.info(
+        f"🔍 Rollback event received: {factory} {from_version} → {to_version} "
+        f"(trigger: {trigger})"
+    )
+
+    # Build investigation query for agent
+    query = f"""
+A policy rollback just occurred in {factory}:
+- Rolled back FROM: {from_version}
+- Rolled back TO: {to_version}
+- Trigger: {trigger}
+
+Please investigate what happened and provide analysis:
+1. When was {from_version} promoted? (check recent promotion history)
+2. What is the current factory status?
+3. What were the training characteristics of {from_version}?
+4. What hypothesis can you form about why the rollback occurred?
+
+Provide a concise analysis with evidence, hypothesis, and recommendations.
+"""
+
+    try:
+        # Trigger agent investigation (read-only, no HIL needed)
+        session_id = f"rollback-analysis-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
+
+        logger.info(f"Triggering agent investigation (session: {session_id})")
+
+        # Run agent investigation
+        result = run_agent(query, session_id=session_id)
+        agent_response = result.get("response", "No response from agent")
+
+        logger.info(f"✅ Agent analysis complete:")
+        logger.info(f"   Factory: {factory}")
+        logger.info(f"   Rollback: {from_version} → {to_version}")
+        logger.info(f"   Analysis preview: {agent_response[:200]}...")
+
+        # TODO (Day 3-4): Store analysis and publish to Console UI
+        # For now, just log it - UI integration comes next
+
+        # Publish analysis event to Console (simple version for Day 2)
+        try:
+            from kafka import KafkaProducer
+
+            analysis_event = {
+                "type": "rollback.analysis",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "factory": factory,
+                "from_version": from_version,
+                "to_version": to_version,
+                "trigger": trigger,
+                "agent_analysis": agent_response,
+                "session_id": session_id
+            }
+
+            producer = KafkaProducer(
+                bootstrap_servers=KAFKA_BOOTSTRAP,
+                value_serializer=lambda v: json.dumps(v).encode("utf-8")
+            )
+
+            producer.send("fleet.events", value=analysis_event)
+            producer.flush(timeout=5)
+            producer.close()
+
+            logger.info("Published rollback.analysis event to Kafka")
+
+        except Exception as e:
+            logger.error(f"Failed to publish analysis event: {e}")
+
+    except Exception as e:
+        logger.error(f"Agent investigation failed: {e}", exc_info=True)
 
 
 class QueryRequest(BaseModel):
