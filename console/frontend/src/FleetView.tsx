@@ -597,6 +597,7 @@ export function FleetView({
     if (!fleet || fleet.rollbackAnalyses.length === 0) return;
 
     const latest = fleet.rollbackAnalyses[fleet.rollbackAnalyses.length - 1];
+    if (!latest) return;
 
     // Check if this is a new analysis (within last 10 seconds)
     const analysisTime = new Date(latest.timestamp).getTime();
@@ -821,14 +822,16 @@ export function FleetView({
   // Wrap with rollback analysis drawer if showing rollback analysis
   if (showRollbackAnalysis && fleet && fleet.rollbackAnalyses.length > 0) {
     const latestAnalysis = fleet.rollbackAnalyses[fleet.rollbackAnalyses.length - 1];
-    return (
-      <RollbackAnalysisDrawer
-        analysis={latestAnalysis}
-        onClose={() => setShowRollbackAnalysis(false)}
-      >
-        {fleetContent}
-      </RollbackAnalysisDrawer>
-    );
+    if (latestAnalysis) {
+      return (
+        <RollbackAnalysisDrawer
+          analysis={latestAnalysis}
+          onClose={() => setShowRollbackAnalysis(false)}
+        >
+          {fleetContent}
+        </RollbackAnalysisDrawer>
+      );
+    }
   }
 
   // Wrap with HIL drawer if there's a pending approval
