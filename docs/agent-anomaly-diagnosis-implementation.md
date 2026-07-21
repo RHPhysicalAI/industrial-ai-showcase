@@ -71,13 +71,15 @@ Click toast → Drawer opens with full agent analysis
 
 ---
 
-### Day 3-4: UI Integration
+### Day 3-4: UI Integration (COMPLETE)
 
-**To Build**:
-- [ ] Console backend: proxy rollback events to frontend
-- [ ] Frontend: toast notification on rollback
-- [ ] HILDrawer: new "Fleet Analysis" pane
-- [ ] Display agent's evidence, hypothesis, recommendation
+**Built**:
+- ✅ Console backend: Store rollback.analysis events in demoState
+- ✅ Backend: Expose rollbackAnalyses in /api/fleet response
+- ✅ Frontend: RollbackAnalysisDrawer component (dedicated drawer)
+- ✅ Frontend: Toast notification on new rollback analysis
+- ✅ Frontend: Auto-open drawer when analysis arrives
+- ✅ Display: Event summary, agent findings, investigation details
 
 ---
 
@@ -230,5 +232,5 @@ python scripts/demo-trigger-rollback.py
 ---
 
 **Implementation started**: 2026-07-21  
-**Day 1-2 complete**: 2026-07-21  
-**Target completion**: 2026-07-24 (3-4 days)
+**Implementation complete**: 2026-07-21  
+**Duration**: 1 day (faster than planned 3-4 days)
