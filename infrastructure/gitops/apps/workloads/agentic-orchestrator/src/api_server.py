@@ -200,18 +200,33 @@ async def handle_rollback_event(event: dict):
 
     # Build investigation query for agent
     query = f"""
+IMPORTANT: This is a READ-ONLY post-mortem investigation. Do NOT take any actions.
+The rollback has ALREADY happened automatically. Your job is to analyze WHY.
+
 A policy rollback just occurred in {factory}:
 - Rolled back FROM: {from_version}
 - Rolled back TO: {to_version}
 - Trigger: {trigger}
 
-Please investigate what happened and provide analysis:
-1. When was {from_version} promoted? (check recent promotion history)
-2. What is the current factory status?
-3. What were the training characteristics of {from_version}?
-4. What hypothesis can you form about why the rollback occurred?
+Investigate what happened using ONLY read-only tools (get_factory_config, list_experiments, etc.):
 
-Provide a concise analysis with evidence, hypothesis, and recommendations.
+1. Query recent promotion history - when was {from_version} deployed?
+2. Check current factory configuration and status
+3. Look up training data for {from_version} in MLflow
+4. Form a hypothesis about why the rollback was triggered
+
+Provide your analysis in this format:
+
+EVIDENCE:
+- [List factual findings from your investigation]
+
+HYPOTHESIS:
+- [Your theory about why the rollback occurred]
+
+RECOMMENDATIONS:
+- [Actionable next steps for operators]
+
+DO NOT attempt to promote, rollback, or modify any policies. This is analysis only.
 """
 
     # Initialize variables
