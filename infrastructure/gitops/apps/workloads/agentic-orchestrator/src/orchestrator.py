@@ -273,8 +273,6 @@ def custom_tool_node(state: AgentState) -> dict:
                     # Call MCP Fleet to get git_diff and summary (but don't execute yet)
                     # We'll use the tool's implementation to get this data
                     import sys
-                    import time
-                    from datetime import datetime
                     sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
                     from kustomize_generator import generate_promotion_git_diff, generate_promotion_summary
 
