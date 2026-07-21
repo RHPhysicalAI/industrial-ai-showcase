@@ -22,9 +22,6 @@ logger = logging.getLogger(__name__)
 # Use full orchestrator with HIL gate (Milestone 2)
 from orchestrator import run_agent, mcp_client
 
-# Kafka for events
-from kafka import KafkaProducer
-
 # Llama Stack integration (Milestone 3 - Phase 3)
 from llama_stack_adapter import get_llama_stack_adapter, is_llama_stack_enabled
 
