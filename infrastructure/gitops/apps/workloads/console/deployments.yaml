@@ -38,6 +38,8 @@ spec:
               value: info
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: grid-kafka-kafka-bootstrap.grid-ops-infra.svc.cluster.local:9092
+            - name: KAFKA_TOPICS
+              value: fleet.events
             - name: WMS_STUB_BASE_URL
               value: http://wms-stub.fleet-ops.svc:8082
             - name: MJPEG_URL
