@@ -595,8 +595,11 @@ STATE-MODIFYING ACTIONS (Require Human Approval):
         # If we hit recursion limit, extract the last message before failing
         if "Recursion limit" in str(e):
             print(f"DEBUG [run_agent]: HIT RECURSION LIMIT after {len(initial_state['messages'])} steps")
-            # Return a fallback response
-            return "I apologize, but I encountered an issue processing your request. The system made too many tool calls. Please try rephrasing your question more specifically."
+            # Return a fallback response in consistent dict format
+            return {
+                "response": "I apologize, but I encountered an issue processing your request. The system made too many tool calls. Please try rephrasing your question more specifically.",
+                "pending_approval_id": None
+            }
         raise
 
     # Extract final response and approval ID
