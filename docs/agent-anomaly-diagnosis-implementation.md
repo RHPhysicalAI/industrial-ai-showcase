@@ -51,29 +51,23 @@ Click toast → Drawer opens with full agent analysis
 
 ## Implementation Timeline
 
-### Day 1: Event Trigger + Listener (TODAY)
+### Day 1: Event Trigger + Listener (COMPLETE)
 
 **Created**:
 - ✅ `scripts/demo-trigger-rollback.py` - Synthetic event generator
 - ✅ `event_listener.py` - Kafka consumer for fleet events
 
-**Next**:
-- [ ] Integrate event_listener into api_server.py startup
-- [ ] Add rollback callback function
-- [ ] Test end-to-end: script → Kafka → orchestrator logs
-
 ---
 
-### Day 2: Agent Investigation Logic
+### Day 2: Agent Investigation Logic (COMPLETE)
 
-**To Build**:
-- [ ] Add rollback investigation query to orchestrator.py
-- [ ] Agent tool sequence:
-  1. Query hil_audit for recent promotions
-  2. Call get_factory_config(factory)
-  3. Call get_run(mlflow_run_id) for v1.4
-  4. Generate structured analysis
-- [ ] Log analysis to orchestrator (verify it works)
+**Built**:
+- ✅ Integrated event_listener into api_server.py startup
+- ✅ Added `handle_rollback_event()` async callback
+- ✅ Agent investigation query with structured prompt
+- ✅ Agent tool sequence (queries hil_audit, factory config, MLflow)
+- ✅ Publish rollback.analysis event to Kafka
+- ✅ Full logging for verification
 
 ---
 
@@ -211,14 +205,30 @@ This is the differentiation. Not AI making safety decisions - AI explaining fail
 
 ---
 
-## Next Session TODO
+## Next Session TODO (Day 3-4)
 
-- [ ] Integrate event_listener into api_server startup
-- [ ] Add rollback callback to trigger agent investigation
-- [ ] Test Kafka event flow end-to-end
-- [ ] Build agent investigation query logic
+- [ ] Console backend: proxy rollback.analysis events to frontend
+- [ ] Frontend: toast notification on rollback
+- [ ] HILDrawer: new "Fleet Analysis" pane
+- [ ] Test end-to-end demo flow
+
+**Testing the agent logic (Day 2 verification)**:
+```bash
+# Terminal 1: Watch orchestrator logs
+oc logs -f -n agentic-ops deployment/agentic-orchestrator
+
+# Terminal 2: Trigger rollback event
+python scripts/demo-trigger-rollback.py
+
+# Expected in logs:
+# - "🔍 Rollback event received: Factory B v1.4 → v1.3"
+# - "Triggering agent investigation (session: rollback-analysis-...)"
+# - "✅ Agent analysis complete"
+# - "Published rollback.analysis event to Kafka"
+```
 
 ---
 
 **Implementation started**: 2026-07-21  
+**Day 1-2 complete**: 2026-07-21  
 **Target completion**: 2026-07-24 (3-4 days)
