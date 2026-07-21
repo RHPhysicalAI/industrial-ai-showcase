@@ -108,9 +108,15 @@ async def startup_event():
 
     # Start fleet event listener for rollback analysis (Phase 3 Item #8)
     try:
+        # Import here to avoid module-level kafka import issues
         from event_listener import start_event_listener
         start_event_listener(on_rollback_callback=handle_rollback_event)
         print("Fleet event listener started (listening for rollbacks)")
+    except ModuleNotFoundError as e:
+        # kafka-python dependency issue - this is a known problem with kafka-python 2.0.2
+        # Rollback analysis feature will be disabled but orchestrator still works
+        print(f"Warning: Fleet event listener failed to start: {e}")
+        print("Rollback analysis will not be available (kafka-python dependency issue)")
     except Exception as e:
         print(f"Warning: Fleet event listener failed to start: {e}")
         print("Rollback analysis will not be available")
@@ -208,10 +214,11 @@ Please investigate what happened and provide analysis:
 Provide a concise analysis with evidence, hypothesis, and recommendations.
 """
 
-    try:
-        # Trigger agent investigation (read-only, no HIL needed)
-        session_id = f"rollback-analysis-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
+    # Initialize variables
+    session_id = f"rollback-analysis-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
+    agent_response = None
 
+    try:
         logger.info(f"Triggering agent investigation (session: {session_id})")
 
         # Run agent investigation
@@ -223,10 +230,13 @@ Provide a concise analysis with evidence, hypothesis, and recommendations.
         logger.info(f"   Rollback: {from_version} → {to_version}")
         logger.info(f"   Analysis preview: {agent_response[:200]}...")
 
-        # TODO (Day 3-4): Store analysis and publish to Console UI
-        # For now, just log it - UI integration comes next
+    except Exception as e:
+        logger.error(f"Agent investigation failed: {e}", exc_info=True)
+        # Fallback: create a simple error message
+        agent_response = f"⚠️ Agent investigation error\\n\\nThe automated investigation encountered a technical issue.\\n\\nError: {str(e)[:150]}\\n\\nPlease investigate manually:\\n- Check promotion history in HIL audit log\\n- Review Factory {factory} status\\n- Examine {from_version} training metrics in MLflow"
 
-        # Publish analysis event to Console (simple version for Day 2)
+    # Always publish analysis (success or fallback)
+    if agent_response:
         try:
             from kafka import KafkaProducer
 
@@ -254,9 +264,6 @@ Provide a concise analysis with evidence, hypothesis, and recommendations.
 
         except Exception as e:
             logger.error(f"Failed to publish analysis event: {e}")
-
-    except Exception as e:
-        logger.error(f"Agent investigation failed: {e}", exc_info=True)
 
 
 class QueryRequest(BaseModel):
