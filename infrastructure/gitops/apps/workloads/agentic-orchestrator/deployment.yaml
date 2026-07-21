@@ -43,6 +43,9 @@ spec:
               key: token
         - name: GITHUB_REPO
           value: "RHPhysicalAI/industrial-ai-showcase"
+        # Kafka for fleet events (Phase 3 Item #8)
+        - name: KAFKA_BOOTSTRAP
+          value: "grid-kafka-kafka-bootstrap.grid-ops-infra.svc.cluster.local:9092"
         # Llama Stack integration (Phase 3)
         - name: HIL_MODE
           value: "passthrough"  # Options: "passthrough" (default) | "llama_stack"
