@@ -14,7 +14,7 @@ The VLA (Vision-Language-Action) models used by factory InferenceServices can op
 The InferenceServices in `factory-b` and `robot-edge` are configured to use **Hugging Face placeholder models** for instant startup:
 
 ```yaml
-storageUri: hf://microsoft/Phi-3-mini-4k-instruct
+storageUri: hf://meta-llama/Llama-3.2-3B-Instruct
 ```
 
 **Why:**
@@ -184,11 +184,11 @@ spec:
 
 | Aspect | Showcase Mode | Production Mode |
 |--------|---------------|-----------------|
-| **Model Source** | Hugging Face (`hf://microsoft/Phi-3-mini-4k-instruct`) | MLflow/MinIO (`s3://mlflow/models/vla-warehouse/vX.Y`) |
+| **Model Source** | Hugging Face (`hf://meta-llama/Llama-3.2-3B-Instruct`) | MLflow/MinIO (`s3://mlflow/models/vla-warehouse/vX.Y`) |
 | **Startup Time** | ~2-5 minutes (HF download + vLLM load) | ~2-5 minutes (MinIO download + vLLM load) |
 | **Prerequisites** | Internet access to Hugging Face | Training pipeline has run, models in MLflow |
 | **Use Case** | Sales demos, partner showcases, quick deployments | Real production deployments, customer sites |
-| **Model Quality** | Generic Phi-3 (not task-specific) | Fine-tuned GR00T VLA (warehouse-specific) |
+| **Model Quality** | Generic Llama 3.2 (not task-specific) | Fine-tuned GR00T VLA (warehouse-specific) |
 | **Training Required** | No | Yes (60-90 min on L40S) |
 
 ## References

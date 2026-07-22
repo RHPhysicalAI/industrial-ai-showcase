@@ -34,6 +34,18 @@ FLEET_MANAGER_URL = os.getenv("FLEET_MANAGER_URL", "http://fleet-manager.fleet-o
 CONSOLE_BACKEND_URL = os.getenv("CONSOLE_BACKEND_URL", "http://showcase-console-backend.fleet-ops.svc.cluster.local:8090")
 GITHUB_BASE_BRANCH = os.getenv("GITHUB_BASE_BRANCH", "phase3")  # Target branch for PRs (phase3 during development, main for production)
 
+# Showcase mode: use HF models instead of MLflow/MinIO
+# Set SHOWCASE_MODE=false for production deployments with real training pipeline
+SHOWCASE_MODE = os.getenv("SHOWCASE_MODE", "true").lower() == "true"
+
+# HF model version mapping for showcase mode
+# Maps version strings to HF model URIs
+HF_MODEL_VERSIONS = {
+    "v1.4": "hf://meta-llama/Llama-3.2-3B-Instruct",
+    "v1.5": "hf://meta-llama/Llama-3.1-8B-Instruct",
+    "v1.6": "hf://Qwen/Qwen2.5-7B-Instruct",
+}
+
 
 # ========== READ-ONLY TOOLS ==========
 
@@ -268,8 +280,13 @@ async def promote_policy_version(factory: str, model_version: str):
     except HTTPException as e:
         raise HTTPException(status_code=400, detail=f"Invalid factory: {e.detail}")
 
-    # 2. Construct model URI (assumes MLflow storage structure)
-    model_uri = f"s3://mlflow/models/{model_name}/{model_version}"
+    # 2. Construct model URI
+    # Showcase mode: use HF models (no training required)
+    # Production mode: use MLflow S3 storage (requires training pipeline)
+    if SHOWCASE_MODE:
+        model_uri = HF_MODEL_VERSIONS.get(model_version, HF_MODEL_VERSIONS["v1.4"])
+    else:
+        model_uri = f"s3://mlflow/models/{model_name}/{model_version}"
 
     # 3. Generate Kustomize overlay (use namespace, not display name with spaces)
     # factory_namespace is valid Kubernetes namespace (e.g., "factory-b")
