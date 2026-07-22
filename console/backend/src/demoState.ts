@@ -45,6 +45,7 @@ const BASELINE_VERSION = "vla-warehouse-v1.3";
 const ANOMALY_RING_SIZE = 60;
 const ARGO_POLL_MS = 3000;
 const ARGO_FALLBACK_MS = 4000;
+const ARGO_MAX_POLLS = 20;
 
 export class DemoState {
   phase: DemoPhase = "idle";

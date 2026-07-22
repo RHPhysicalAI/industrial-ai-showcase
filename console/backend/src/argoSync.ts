@@ -291,7 +291,7 @@ export class ArgoSync {
         };
       }
 
-      const app: ArgoApplicationCR = await resp.json();
+      const app = await resp.json() as ArgoApplicationCR;
       return {
         syncStatus: app.status?.sync?.status ?? "Unknown",
         healthStatus: app.status?.health?.status ?? "Unknown",
