@@ -2,9 +2,15 @@
 
 This directory contains SQL migrations for the `hil_audit` table in the `mlflow` database.
 
-## Applying Migrations
+## Automatic Migrations
 
-Migrations must be applied manually via `psql` from the CloudNativePG cluster pod.
+**Migrations are applied automatically** when the audit service starts. The `init_db.py` script runs all `.sql` files in this directory in alphanumeric order (001_*, 002_*, etc.).
+
+No manual intervention is required on new cluster deployments.
+
+## Manual Migration (Fallback)
+
+If you need to apply migrations manually, use `psql` from the CloudNativePG cluster pod.
 
 ### Step 1: Get the CloudNativePG primary pod
 
@@ -37,6 +43,10 @@ oc exec -n mlflow $PRIMARY_POD -- rm /tmp/migration.sql
 - **001_create_hil_audit.sql** - Initial table creation (Milestone 2)
 - **002_add_git_diff_summary.sql** - Add git_diff, summary, pr_url fields (Milestone 3)
 - **003_add_blast_radius.sql** - Add blast_radius field for impact analysis (Milestone 4)
+- **004_add_moderation_results.sql** - Add moderation_results field for Llama Guard (Milestone 4)
+- **005_add_tool_call_trace.sql** - Add tool_call_trace field for MCP context (Milestone 4)
+- **006_add_merge_failure_tracking.sql** - Add merge error tracking (Task #33)
+- **007_add_reasoning_summary.sql** - Add reasoning_summary field for agent explanation (Task #40)
 
 ## Rollback
 
