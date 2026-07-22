@@ -135,9 +135,11 @@ export class FleetStream extends EventEmitter {
             }
             // Handle legacy event_class events
             else if (ec === "policy.promoted") {
+              // skipGitCommit=true because PR was already merged by orchestrator
               this.demoState.promotePolicy(
                 (payload["factory"] as string) ?? "factory-a",
                 (payload["version"] as string) ?? "vla-warehouse-v1.4",
+                true, // skipGitCommit - PR already merged by orchestrator
               );
             } else if (ec === "lineage.advance") {
               this.demoState.advanceLineage((payload["phase"] as string) ?? "training-running");

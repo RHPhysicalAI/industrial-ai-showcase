@@ -7,6 +7,15 @@ const FLEET_MANAGER_DEPLOY_PATH =
 const ARGO_APP_NAME = "workloads-fleet-manager";
 const ARGO_NAMESPACE = "openshift-gitops";
 
+// Map factory names to Argo application names
+const FACTORY_ARGO_APP_MAP: Record<string, string> = {
+  "factory-a": "workloads-robot-edge", // Factory A uses robot-edge namespace
+  "factory-b": "workloads-factory-b",
+  "robot-edge": "workloads-robot-edge", // Alias
+  "Factory A": "workloads-robot-edge",
+  "Factory B": "workloads-factory-b",
+};
+
 export interface ArgoResourceStatus {
   kind: string;
   name: string;
@@ -246,6 +255,106 @@ export class ArgoSync {
         "argoSync: failed to get app status",
       );
       return empty;
+    }
+  }
+
+  async getFactoryArgoSyncStatus(factory: string): Promise<{
+    syncStatus: string;
+    healthStatus: string;
+    operationPhase: string;
+  }> {
+    const argoAppName = FACTORY_ARGO_APP_MAP[factory];
+    if (!argoAppName) {
+      this.log.warn({ factory }, "argoSync: unknown factory, cannot determine Argo app");
+      return {
+        syncStatus: "Unknown",
+        healthStatus: "Unknown",
+        operationPhase: "Unknown",
+      };
+    }
+
+    try {
+      const resp = await fetch(
+        `${this.k8sApiBase}/apis/argoproj.io/v1alpha1/namespaces/${ARGO_NAMESPACE}/applications/${argoAppName}`,
+        { headers: { Authorization: `Bearer ${this.k8sToken}` } },
+      );
+
+      if (!resp.ok) {
+        this.log.warn(
+          { status: resp.status, factory, argoApp: argoAppName },
+          "argoSync: failed to get factory app status",
+        );
+        return {
+          syncStatus: "Unknown",
+          healthStatus: "Unknown",
+          operationPhase: "Unknown",
+        };
+      }
+
+      const app: ArgoApplicationCR = await resp.json();
+      return {
+        syncStatus: app.status?.sync?.status ?? "Unknown",
+        healthStatus: app.status?.health?.status ?? "Unknown",
+        operationPhase: app.status?.operationState?.phase ?? "Unknown",
+      };
+    } catch (err) {
+      this.log.error(
+        { err: (err as Error).message, factory, argoApp: argoAppName },
+        "argoSync: failed to get factory app status",
+      );
+      return {
+        syncStatus: "Unknown",
+        healthStatus: "Unknown",
+        operationPhase: "Unknown",
+      };
+    }
+  }
+
+  async triggerFactorySync(factory: string): Promise<boolean> {
+    const argoAppName = FACTORY_ARGO_APP_MAP[factory];
+    if (!argoAppName) {
+      this.log.warn({ factory }, "argoSync: unknown factory, cannot trigger sync");
+      return false;
+    }
+
+    try {
+      const body = JSON.stringify({
+        operation: {
+          initiatedBy: { username: "showcase-console" },
+          sync: {
+            syncOptions: ["CreateNamespace=true", "ServerSideApply=true"],
+          },
+        },
+      });
+
+      const resp = await fetch(
+        `${this.k8sApiBase}/apis/argoproj.io/v1alpha1/namespaces/${ARGO_NAMESPACE}/applications/${argoAppName}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${this.k8sToken}`,
+            "Content-Type": "application/merge-patch+json",
+          },
+          body,
+        },
+      );
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        this.log.warn(
+          { status: resp.status, body: text.slice(0, 200), factory, argoApp: argoAppName },
+          "argoSync: factory sync trigger failed",
+        );
+        return false;
+      }
+      this.log.info({ factory, argoApp: argoAppName }, "argoSync: factory sync triggered");
+      return true;
+    } catch (err) {
+      this.log.error(
+        { err: (err as Error).message, factory, argoApp: argoAppName },
+        "argoSync: factory sync trigger error",
+      );
+      return false;
     }
   }
 
