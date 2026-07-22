@@ -105,6 +105,7 @@ class FleetTelemetry(BaseModel):
     pose: dict[str, float] = Field(default_factory=dict, description="x,y,z,roll,pitch,yaw.")
     battery_pct: float | None = Field(default=None, ge=0.0, le=100.0)
     anomaly_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    policy_version: str | None = Field(default=None, description="VLA policy version running on this robot.")
     emitted_at: datetime = Field(default_factory=_now)
 
 

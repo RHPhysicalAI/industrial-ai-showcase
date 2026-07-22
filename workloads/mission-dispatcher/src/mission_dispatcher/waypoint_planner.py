@@ -124,6 +124,7 @@ async def execute_route(
     producer: JsonProducer,
     telemetry_topic: str,
     hz: float,
+    policy_version: str,
     log: BoundLogger,
 ) -> bool:
     """Drive a robot along waypoints, pausing at approach-points.
@@ -153,6 +154,7 @@ async def execute_route(
                 robot_id=execution.robot_id,
                 mission_id=execution.mission_id,
                 pose={"x": wp.x, "y": wp.y, "z": wp.z, "yaw": wp.yaw},
+                policy_version=policy_version,
             ),
         )
         producer.flush(timeout=0.0)
