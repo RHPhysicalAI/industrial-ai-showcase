@@ -1,12 +1,28 @@
 // This project was developed with assistance from AI tools.
 import Fastify from "fastify";
 import fastifyCors from "@fastify/cors";
+import { KubeConfig, CoreV1Api } from "@kubernetes/client-node";
 
 import { loadConfig } from "./config.js";
 import { FleetStream, type FleetMessage } from "./kafkaStream.js";
 import { registerStreamRoutes } from "./stream.js";
 import { ArgoSync } from "./argoSync.js";
 import { getGovernanceStatus } from "./governance.js";
+
+// Initialize Kubernetes client
+const kc = new KubeConfig();
+kc.loadFromDefault();
+const k8sApi = kc.makeApiClient(CoreV1Api);
+
+// Helper to read policy version from ConfigMap
+async function getPolicyVersion(namespace: string): Promise<string> {
+  try {
+    const cm = await k8sApi.readNamespacedConfigMap("policy-version", namespace);
+    return cm.body.data?.["version"] ?? "vla-warehouse-v1.3";
+  } catch {
+    return "vla-warehouse-v1.3";
+  }
+}
 
 const config = loadConfig();
 const fastify = Fastify({
@@ -101,6 +117,13 @@ fastify.get("/api/fleet", async () => {
         argoConsole: `https://openshift-gitops-server-openshift-gitops.${d}/applications/openshift-gitops/workloads-console`,
       }
     : null;
+
+  // Read policy versions directly from ConfigMaps (updated dynamically on promotion)
+  const [factoryAPolicyVersion, factoryBPolicyVersion] = await Promise.all([
+    getPolicyVersion("robot-edge"),
+    getPolicyVersion("factory-b"),
+  ]);
+
   return {
     demoPhase: ds.phase,
     anomalyHistory: ds.anomalyHistory,
@@ -111,7 +134,7 @@ fastify.get("/api/fleet", async () => {
       {
         name: "Factory A",
         namespace: "robot-edge",
-        policyVersion: telemetry["fl-07"]?.policyVersion ?? "vla-warehouse-v1.3",
+        policyVersion: factoryAPolicyVersion,
         robotId: "fl-07",
         robotStatus: telemetry["fl-07"]?.robotStatus ?? "idle",
         anomalyScore: telemetry["fl-07"]?.anomalyScore ?? 0.05,
@@ -121,7 +144,7 @@ fastify.get("/api/fleet", async () => {
       {
         name: "Factory B",
         namespace: "factory-b",
-        policyVersion: fb?.policyVersion ?? telemetry["fl-08"]?.policyVersion ?? "vla-warehouse-v1.3",
+        policyVersion: factoryBPolicyVersion,
         robotId: "fl-08",
         robotStatus: telemetry["fl-08"]?.robotStatus ?? "idle",
         anomalyScore: telemetry["fl-08"]?.anomalyScore ?? 0.03,
