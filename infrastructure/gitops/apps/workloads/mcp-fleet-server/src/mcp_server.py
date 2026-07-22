@@ -39,11 +39,11 @@ GITHUB_BASE_BRANCH = os.getenv("GITHUB_BASE_BRANCH", "phase3")  # Target branch 
 SHOWCASE_MODE = os.getenv("SHOWCASE_MODE", "true").lower() == "true"
 
 # HF model version mapping for showcase mode
-# Maps version strings to HF model URIs
+# Maps version strings to HF model URIs (using ungated models that don't require auth)
 HF_MODEL_VERSIONS = {
-    "v1.4": "hf://meta-llama/Llama-3.2-3B-Instruct",
-    "v1.5": "hf://meta-llama/Llama-3.1-8B-Instruct",
-    "v1.6": "hf://Qwen/Qwen2.5-7B-Instruct",
+    "v1.4": "hf://Qwen/Qwen2.5-3B-Instruct",
+    "v1.5": "hf://Qwen/Qwen2.5-7B-Instruct",
+    "v1.6": "hf://microsoft/Phi-3.5-mini-instruct",
 }
 
 

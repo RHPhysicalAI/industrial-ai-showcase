@@ -19,7 +19,7 @@ spec:
         name: vllm
       # Showcase mode: HF placeholder (fast startup, no training required)
       # Production mode: s3://mlflow/models/vla-warehouse/v1.4
-      storageUri: hf://meta-llama/Llama-3.2-3B-Instruct
+      storageUri: hf://Qwen/Qwen2.5-3B-Instruct
       resources:
         limits:
           nvidia.com/gpu: '1'
