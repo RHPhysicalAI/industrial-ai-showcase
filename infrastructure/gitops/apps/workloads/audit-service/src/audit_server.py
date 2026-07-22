@@ -522,6 +522,16 @@ async def query_audit_history(limit: int = 10, session_id: Optional[str] = None)
 
 
 if __name__ == "__main__":
+    # Run database migrations on startup
+    try:
+        from init_db import run_migrations
+        print("Running database migrations...")
+        run_migrations()
+        print("Database ready")
+    except Exception as e:
+        print(f"Warning: Database migration failed: {e}")
+        print("Service will start anyway - migrations can be run manually if needed")
+
     uvicorn.run(
         app,
         host="0.0.0.0",
