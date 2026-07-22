@@ -63,6 +63,7 @@ class CreateApprovalRequest(BaseModel):
     summary: Optional[str] = None   # For promote_policy_version (Milestone 3)
     blast_radius: Optional[dict] = None  # For promote_policy_version (Milestone 4)
     tool_call_trace: Optional[list] = None  # Read-only tool calls before approval (Milestone 4)
+    reasoning_summary: Optional[str] = None  # Agent's explanation of WHY (Milestone 4)
 
 
 class ApprovalRequest(BaseModel):
@@ -78,6 +79,7 @@ class ApprovalRequest(BaseModel):
     blast_radius: Optional[dict] = None  # For promote_policy_version (Milestone 4)
     moderation_results: Optional[dict] = None  # Input/output moderation (Milestone 4)
     tool_call_trace: Optional[list] = None  # Read-only tool calls before approval (Milestone 4)
+    reasoning_summary: Optional[str] = None  # Agent's explanation of WHY (Milestone 4)
     pr_url: Optional[str] = None    # After approval creates PR
 
 
@@ -141,11 +143,12 @@ async def create_pending_approval(request: CreateApprovalRequest):
             """
             INSERT INTO hil_audit (
                 session_id, user_identity, tool_name, tool_arguments, approval_status,
-                git_diff, summary, blast_radius, tool_call_trace
+                git_diff, summary, blast_radius, tool_call_trace, reasoning_summary
             )
-            VALUES (%s, %s, %s, %s, 'pending', %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, 'pending', %s, %s, %s, %s, %s)
             RETURNING id, timestamp, session_id, user_identity, tool_name,
-                      tool_arguments, approval_status, git_diff, summary, blast_radius, tool_call_trace, pr_url
+                      tool_arguments, approval_status, git_diff, summary, blast_radius,
+                      tool_call_trace, reasoning_summary, pr_url
             """,
             (
                 request.session_id,
@@ -155,7 +158,8 @@ async def create_pending_approval(request: CreateApprovalRequest):
                 request.git_diff,
                 request.summary,
                 Json(request.blast_radius) if request.blast_radius else None,
-                Json(request.tool_call_trace) if request.tool_call_trace else None
+                Json(request.tool_call_trace) if request.tool_call_trace else None,
+                request.reasoning_summary
             )
         )
 
@@ -171,7 +175,8 @@ async def create_pending_approval(request: CreateApprovalRequest):
             "user_identity": result["user_identity"],
             "tool_name": result["tool_name"],
             "tool_arguments": result["tool_arguments"],
-            "approval_status": result["approval_status"]
+            "approval_status": result["approval_status"],
+            "reasoning_summary": result.get("reasoning_summary")
         }
 
     except Exception as e:

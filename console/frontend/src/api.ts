@@ -156,6 +156,7 @@ export interface PendingApproval {
   blast_radius?: BlastRadius;  // Impact analysis for promote_policy_version (Milestone 4)
   moderation_results?: ModerationResults;  // Input/output safety checks (Milestone 4)
   tool_call_trace?: ToolCallTraceEntry[];  // Read-only tool calls before approval (Milestone 4)
+  reasoning_summary?: string;  // Agent's explanation of WHY (Milestone 4)
   pr_url?: string;    // PR URL if already created (for approved requests)
   merge_error?: MergeError;  // PR merge failure details (Task #33)
 }

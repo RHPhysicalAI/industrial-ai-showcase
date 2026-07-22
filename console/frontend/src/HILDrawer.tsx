@@ -126,28 +126,54 @@ export function HILDrawer({
               <Card>
                 <CardTitle>Proposed Action</CardTitle>
                 <CardBody>
-                  <DescriptionList isHorizontal isCompact>
-                    <DescriptionListGroup>
-                      <DescriptionListTerm>Tool</DescriptionListTerm>
-                      <DescriptionListDescription>
-                        <code>{approval.tool_name}</code>
-                      </DescriptionListDescription>
-                    </DescriptionListGroup>
-                    <DescriptionListGroup>
-                      <DescriptionListTerm>Arguments</DescriptionListTerm>
-                      <DescriptionListDescription>
-                        <pre style={{ fontSize: "0.875rem", margin: 0 }}>
-                          {JSON.stringify(approval.tool_arguments, null, 2)}
-                        </pre>
-                      </DescriptionListDescription>
-                    </DescriptionListGroup>
-                    <DescriptionListGroup>
-                      <DescriptionListTerm>Session</DescriptionListTerm>
-                      <DescriptionListDescription>
-                        {approval.session_id}
-                      </DescriptionListDescription>
-                    </DescriptionListGroup>
-                  </DescriptionList>
+                  <Stack hasGutter>
+                    {/* Agent's Reasoning (if available) */}
+                    {approval.reasoning_summary && (
+                      <StackItem>
+                        <div style={{
+                          padding: "12px 16px",
+                          backgroundColor: "#f0f8ff",
+                          borderLeft: "4px solid #0066cc",
+                          borderRadius: "4px",
+                          fontSize: "0.9375rem",
+                          lineHeight: 1.6
+                        }}>
+                          <div style={{ fontWeight: 600, marginBottom: "8px", color: "#0066cc" }}>
+                            Agent Proposes:
+                          </div>
+                          <div style={{ whiteSpace: "pre-wrap" }}>
+                            {approval.reasoning_summary}
+                          </div>
+                        </div>
+                      </StackItem>
+                    )}
+
+                    {/* Technical Details */}
+                    <StackItem>
+                      <DescriptionList isHorizontal isCompact>
+                        <DescriptionListGroup>
+                          <DescriptionListTerm>Tool</DescriptionListTerm>
+                          <DescriptionListDescription>
+                            <code>{approval.tool_name}</code>
+                          </DescriptionListDescription>
+                        </DescriptionListGroup>
+                        <DescriptionListGroup>
+                          <DescriptionListTerm>Arguments</DescriptionListTerm>
+                          <DescriptionListDescription>
+                            <pre style={{ fontSize: "0.875rem", margin: 0 }}>
+                              {JSON.stringify(approval.tool_arguments, null, 2)}
+                            </pre>
+                          </DescriptionListDescription>
+                        </DescriptionListGroup>
+                        <DescriptionListGroup>
+                          <DescriptionListTerm>Session</DescriptionListTerm>
+                          <DescriptionListDescription>
+                            {approval.session_id}
+                          </DescriptionListDescription>
+                        </DescriptionListGroup>
+                      </DescriptionList>
+                    </StackItem>
+                  </Stack>
                 </CardBody>
               </Card>
             </StackItem>

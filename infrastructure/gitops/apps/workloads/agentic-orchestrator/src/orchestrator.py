@@ -334,6 +334,18 @@ def custom_tool_node(state: AgentState) -> dict:
                 except Exception as e:
                     print(f"Warning: Failed to generate git_diff/summary/blast_radius: {e}")
 
+            # Extract agent's reasoning from the last AIMessage before tool call
+            reasoning_summary = None
+            if hasattr(last_message, 'content') and last_message.content:
+                reasoning_summary = last_message.content
+
+            # If no content in AIMessage (tool-only response), try to find previous AIMessage
+            if not reasoning_summary:
+                for msg in reversed(messages[:-1]):  # Skip last message (current tool call)
+                    if isinstance(msg, AIMessage) and msg.content:
+                        reasoning_summary = msg.content
+                        break
+
             audit_client = httpx.Client(timeout=30.0)
             try:
                 audit_payload = {
@@ -342,6 +354,9 @@ def custom_tool_node(state: AgentState) -> dict:
                     "tool_name": tool_name,
                     "tool_arguments": tool_args
                 }
+                # Add agent reasoning if available
+                if reasoning_summary:
+                    audit_payload["reasoning_summary"] = reasoning_summary
                 # Add git_diff, summary, and blast_radius if available
                 if git_diff:
                     audit_payload["git_diff"] = git_diff
