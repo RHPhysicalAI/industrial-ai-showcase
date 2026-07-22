@@ -27,7 +27,7 @@ spec:
       containers:
         - name: backend
           image: showcase-console-backend:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8090
               name: http
@@ -116,7 +116,7 @@ spec:
       containers:
         - name: frontend
           image: showcase-console-frontend:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
               name: http

@@ -24,6 +24,7 @@ spec:
       containers:
       - name: audit-service
         image: image-registry.openshift-image-registry.svc:5000/agentic-ops/audit-service:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8090
           name: http
