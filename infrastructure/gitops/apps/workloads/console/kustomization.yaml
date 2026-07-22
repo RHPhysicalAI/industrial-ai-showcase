@@ -10,3 +10,4 @@ resources:
   - route.yaml
   - networkpolicies.yaml
   - argo-rbac.yaml
+  - rbac-configmap-reader.yaml
