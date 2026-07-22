@@ -3,22 +3,11 @@ kind: InferenceService
 metadata:
   name: vla-warehouse
   namespace: robot-edge
-  annotations:
-    # NOTE: Using HF placeholder model for showcase demos.
-    # Production uses s3://mlflow/models/vla-warehouse/vX.Y from training pipeline.
 spec:
   predictor:
-    serviceAccountName: vla-warehouse-sa
-    tolerations:
-    - key: nvidia.com/gpu
-      operator: Equal
-      value: L40S_SHARED
-      effect: NoSchedule
     model:
       modelFormat:
         name: vllm
-      # Showcase mode: HF placeholder (fast startup, no training required)
-      # Production mode: s3://mlflow/models/vla-warehouse/v1.4
       storageUri: hf://Qwen/Qwen2.5-3B-Instruct
       resources:
         limits:
