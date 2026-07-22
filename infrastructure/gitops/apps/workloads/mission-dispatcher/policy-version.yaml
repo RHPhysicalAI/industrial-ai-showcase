@@ -7,6 +7,6 @@ metadata:
     app.kubernetes.io/part-of: robot-edge
     showcase.redhat.com/component: policy-version
 data:
-  version: "vla-warehouse-v1.3"
-  model-uri: ""
-  promoted-at: ""
+  version: "vla-warehouse-v1.4"
+  model-uri: "hf://Qwen/Qwen2.5-3B-Instruct"
+  promoted-at: "2026-07-22T18:34:33Z"

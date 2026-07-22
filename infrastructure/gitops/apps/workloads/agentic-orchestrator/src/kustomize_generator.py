@@ -29,9 +29,10 @@ class KustomizeGenerator:
         """
         Generate Kustomize overlay files for model promotion.
 
-        Creates two files:
+        Creates three files:
         1. InferenceService patch (updates storageUri)
-        2. kustomization.yaml (references the patch)
+        2. policy-version ConfigMap (updates version displayed in UI)
+        3. kustomization.yaml (references both resources)
 
         Returns:
             Dict of {file_path: yaml_content}
@@ -56,12 +57,20 @@ class KustomizeGenerator:
         # Generate InferenceService (full resource, not patch)
         isvc = self._generate_isvc_patch(promotion, namespace)  # Reuse same structure
 
+        # Generate policy-version ConfigMap (for UI display)
+        policy_configmap = self._generate_policy_version_configmap(promotion, namespace)
+
         # Generate kustomization.yaml
         kustomization = self._generate_kustomization(promotion, namespace)
 
         return {
             f"{base_path}/model-{promotion.model_name}-isvc.yaml": yaml.dump(
                 isvc,
+                default_flow_style=False,
+                sort_keys=False
+            ),
+            f"{base_path}/policy-version.yaml": yaml.dump(
+                policy_configmap,
                 default_flow_style=False,
                 sort_keys=False
             ),
@@ -107,11 +116,41 @@ class KustomizeGenerator:
             }
         }
 
+    def _generate_policy_version_configmap(self, promotion: ModelPromotion, namespace: str) -> dict:
+        """
+        Generate policy-version ConfigMap YAML.
+
+        This ConfigMap is read by the console backend to display the current
+        policy version in the Fleet view UI.
+        """
+        from datetime import datetime, timezone
+
+        # Format version as "model-name-version" (e.g., "vla-warehouse-v1.4")
+        policy_version = f"{promotion.model_name}-{promotion.model_version}"
+
+        return {
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": {
+                "name": "policy-version",
+                "namespace": namespace,
+                "labels": {
+                    "app.kubernetes.io/part-of": namespace,
+                    "showcase.redhat.com/component": "policy-version"
+                }
+            },
+            "data": {
+                "version": policy_version,
+                "model-uri": promotion.model_uri,
+                "promoted-at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+
     def _generate_kustomization(self, promotion: ModelPromotion, namespace: str) -> dict:
         """
-        Generate kustomization.yaml with InferenceService resource.
+        Generate kustomization.yaml with InferenceService and policy-version ConfigMap.
 
-        For now, creates standalone InferenceService (not a patch).
+        For now, creates standalone resources (not patches).
         TODO: Once base vla-inference exists, switch to patch-based approach.
         """
         return {
@@ -119,7 +158,8 @@ class KustomizeGenerator:
             "kind": "Kustomization",
             "namespace": namespace,
             "resources": [
-                f"model-{promotion.model_name}-isvc.yaml"
+                f"model-{promotion.model_name}-isvc.yaml",
+                "policy-version.yaml"
             ]
         }
 
