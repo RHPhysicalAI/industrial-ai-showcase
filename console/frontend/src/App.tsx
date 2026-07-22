@@ -307,7 +307,7 @@ function TopologyCard(){
 }
 
 function CameraFeedCard({ cameraTick }: { cameraTick: number }){
-  const [imgError, setImgError] = React.useState(false);
+  const [imgError, setImgError] = useState(false);
 
   return (
     <Card isFullHeight>
