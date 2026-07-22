@@ -39,7 +39,7 @@ spec:
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: grid-kafka-kafka-bootstrap.grid-ops-infra.svc.cluster.local:9092
             - name: KAFKA_TOPICS
-              value: fleet.events
+              value: fleet.events,fleet.missions,fleet.ops.events,fleet.telemetry,fleet.safety.alerts,warehouse.cameras.aisle3,factory-b.telemetry,factory-b.missions,factory-b.ops.events,mes.orders
             - name: WMS_STUB_BASE_URL
               value: http://wms-stub.fleet-ops.svc:8082
             - name: MJPEG_URL
