@@ -22,6 +22,6 @@ spec:
       dockerfilePath: workloads/vla-serving-host/container/Containerfile
       buildArgs:
       - name: BASE_FLAVOR
-        value: rocm
+        value: cuda
   triggers:
   - type: ConfigChange

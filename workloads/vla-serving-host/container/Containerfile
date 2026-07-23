@@ -1,26 +1,24 @@
 # This project was developed with assistance from AI tools.
 # Phase 1 host-native VLA server. Two build modes:
 #
-# MOCK (default; fast; no ROCm; no model download): ~300 MB image.
+# MOCK (default; fast; no GPU; no model download): ~300 MB image.
 #   podman build -f workloads/vla-serving-host/container/Containerfile \
 #     -t localhost/openvla-server:dev .
 #
-# REAL (with ROCm + PyTorch, for running actual OpenVLA-7B):
+# REAL (with CUDA + PyTorch, for running actual OpenVLA-7B on NVIDIA GPUs):
 #   podman build -f workloads/vla-serving-host/container/Containerfile \
-#     --build-arg=BASE_FLAVOR=rocm \
-#     -t localhost/openvla-server:rocm .
+#     --build-arg=BASE_FLAVOR=cuda \
+#     -t localhost/openvla-server:cuda .
 #
 # Swap the Quadlet Image= to the tag you want. Use :dev for wiring verification,
-# :rocm once you're ready for real inference. Per ADR-026.
+# :cuda once you're ready for real inference.
 ARG BASE_FLAVOR=slim
 
 FROM registry.access.redhat.com/ubi9/python-312:latest AS slim
 
-FROM docker.io/rocm/pytorch:rocm7.2.2_ubuntu24.04_py3.12_pytorch_release_2.10.0 AS rocm
-# ROCm 7.2.2 + PyTorch 2.10 + Python 3.12 pre-installed. NVIDIA publishes
-# this combo verified against current AMD hardware including gfx1151
-# (Strix Halo). Avoids the pip-install-torch-from-wheel path that previously
-# landed us on ROCm 6.2 wheels and crashed during bf16 weight load.
+FROM nvcr.io/nvidia/pytorch:24.07-py3 AS cuda
+# NVIDIA PyTorch 2.4 + CUDA 12.5 + Python 3.10 pre-installed.
+# Optimized for NVIDIA GPUs (L40S, L4).
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 ENV PIP_ROOT_USER_ACTION=ignore
 
@@ -48,7 +46,7 @@ RUN pip3 install --no-cache-dir \
     && pip3 install --no-cache-dir --no-deps /opt/app/vla-serving-host \
     && chown -R 1001:0 /opt/app
 
-# Real-model deps only land in the :rocm image.
+# Real-model deps only land in the :cuda image.
 # transformers pinned to 4.40.x — OpenVLA's trust_remote_code registrations
 # target the pre-5.0 API (AutoModelForVision2Seq, LlamaTokenizer behaviors).
 # accelerate + timm versions pinned compatibly with transformers 4.40.
