@@ -29,10 +29,9 @@ class KustomizeGenerator:
         """
         Generate Kustomize overlay files for model promotion.
 
-        Creates three files:
-        1. InferenceService patch (updates storageUri)
-        2. policy-version ConfigMap (updates version displayed in UI)
-        3. kustomization.yaml (references both resources)
+        Creates only policy-version ConfigMap (updates version displayed in UI).
+        The actual VLA model deployment (openvla-server) is already deployed
+        and doesn't need to be regenerated on version changes.
 
         Returns:
             Dict of {file_path: yaml_content}
@@ -42,7 +41,7 @@ class KustomizeGenerator:
             >>> promotion = ModelPromotion(
             ...     model_name="vla-warehouse",
             ...     model_version="v1.4",
-            ...     model_uri="s3://mlflow/models/vla-warehouse/v1.4",
+            ...     model_uri="hf://openvla/openvla-7b",
             ...     factory="factory-a"
             ... )
             >>> overlay = gen.generate_overlay(promotion)
@@ -54,28 +53,12 @@ class KustomizeGenerator:
         namespace = promotion.namespace or promotion.factory
         base_path = f"infrastructure/gitops/apps/workloads/{namespace}"
 
-        # Generate InferenceService (full resource, not patch)
-        isvc = self._generate_isvc_patch(promotion, namespace)  # Reuse same structure
-
         # Generate policy-version ConfigMap (for UI display)
         policy_configmap = self._generate_policy_version_configmap(promotion, namespace)
 
-        # Generate kustomization.yaml
-        kustomization = self._generate_kustomization(promotion, namespace)
-
         return {
-            f"{base_path}/model-{promotion.model_name}-isvc.yaml": yaml.dump(
-                isvc,
-                default_flow_style=False,
-                sort_keys=False
-            ),
             f"{base_path}/policy-version.yaml": yaml.dump(
                 policy_configmap,
-                default_flow_style=False,
-                sort_keys=False
-            ),
-            f"{base_path}/kustomization.yaml": yaml.dump(
-                kustomization,
                 default_flow_style=False,
                 sort_keys=False
             )
@@ -148,17 +131,14 @@ class KustomizeGenerator:
 
     def _generate_kustomization(self, promotion: ModelPromotion, namespace: str) -> dict:
         """
-        Generate kustomization.yaml with InferenceService and policy-version ConfigMap.
-
-        For now, creates standalone resources (not patches).
-        TODO: Once base vla-inference exists, switch to patch-based approach.
+        NOTE: Not used anymore. Policy-version ConfigMap is already in kustomization.yaml.
+        Keeping this method for backward compatibility but it's not called.
         """
         return {
             "apiVersion": "kustomize.config.k8s.io/v1beta1",
             "kind": "Kustomization",
             "namespace": namespace,
             "resources": [
-                f"model-{promotion.model_name}-isvc.yaml",
                 "policy-version.yaml"
             ]
         }
@@ -202,18 +182,17 @@ class KustomizeGenerator:
 - **Model**: {promotion.model_name}
 - **New Version**: {promotion.model_version}
 - **Model URI**: `{promotion.model_uri}`
-- **Runtime**: {promotion.runtime}
 
 ### What will change
 
-This promotion will update the InferenceService `{promotion.model_name}`
-in namespace `{promotion.namespace or promotion.factory}` to serve the new model version.
+This promotion will update the policy-version ConfigMap in namespace `{promotion.namespace or promotion.factory}`.
+The VLA model (`openvla-server`) is already deployed and serving `{promotion.model_uri}`.
 
 ### Impact
 
-- **Deployment**: KServe will create new predictor pod with updated model
-- **Rollout**: Zero-downtime (canary deployment via Knative)
-- **Rollback**: Revert this PR if issues detected
+- **UI Display**: Console will show updated version ({promotion.model_version})
+- **Deployment**: No pod restarts (VLA server already running)
+- **Rollback**: Revert this PR if needed
 """
 
 
