@@ -279,7 +279,19 @@ def custom_tool_node(state: AgentState) -> dict:
                     factory = tool_args.get("factory")
                     model_version = tool_args.get("model_version")
                     model_name = "vla-warehouse"  # Default model name
-                    model_uri = f"s3://mlflow/models/{model_name}/{model_version}"
+
+                    # Showcase mode: use HF models instead of MLflow/MinIO
+                    SHOWCASE_MODE = os.getenv("SHOWCASE_MODE", "true").lower() == "true"
+                    HF_MODEL_VERSIONS = {
+                        "v1.4": "hf://Qwen/Qwen2.5-3B-Instruct",
+                        "v1.5": "hf://Qwen/Qwen2.5-7B-Instruct",
+                        "v1.6": "hf://microsoft/Phi-3.5-mini-instruct",
+                    }
+
+                    if SHOWCASE_MODE:
+                        model_uri = HF_MODEL_VERSIONS.get(model_version, HF_MODEL_VERSIONS["v1.4"])
+                    else:
+                        model_uri = f"s3://mlflow/models/{model_name}/{model_version}"
 
                     # Get factory namespace (K8s-compliant, e.g., "factory-b")
                     # factory might be display name with spaces (e.g., "Factory B")
