@@ -10,7 +10,6 @@ data:
   # Companion SNO would use: fleet-kafka-bootstrap-fleet-ops.apps.<domain>:443 with SSL
   kafka.bootstrap.servers: "fleet-kafka-bootstrap.fleet-ops.svc:9092"
   kafka.security.protocol: "PLAINTEXT"
-  # Host VLA endpoint per ADR-026. Companion Fedora host has a macvlan-bridged
-  # podman container at 10.0.0.74:8000 running openvla-server. macvtap-direct
-  # VMs (our SNO) can reach macvlan-sibling containers on the same parent.
-  vla.endpoint.url: "http://10.0.0.74:8000/act"
+  # KServe VLA endpoint - running on hub cluster (no companion)
+  # Using vLLM OpenAI-compatible API format
+  vla.endpoint.url: "http://vla-warehouse-predictor.robot-edge.svc.cluster.local/v1/chat/completions"

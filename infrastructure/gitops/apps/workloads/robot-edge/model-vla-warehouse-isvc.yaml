@@ -7,9 +7,8 @@ metadata:
     serving.knative.dev/rollout-duration: "0"
 spec:
   predictor:
-    minReplicas: 0
+    minReplicas: 1
     maxReplicas: 1
-    scaleTarget: 0
     tolerations:
     - key: nvidia.com/gpu
       operator: Exists
@@ -17,7 +16,7 @@ spec:
     model:
       modelFormat:
         name: vllm
-      storageUri: hf://Qwen/Qwen2.5-7B-Instruct
+      storageUri: hf://openvla/openvla-7b
       resources:
         limits:
           nvidia.com/gpu: '1'
