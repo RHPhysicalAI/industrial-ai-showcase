@@ -34,6 +34,8 @@ spec:
           value: "8000"
         - name: OPENVLA_WEIGHTS
           value: "openvla/openvla-7b"
+        - name: HF_HOME
+          value: "/tmp/hf_cache"
         ports:
         - containerPort: 8000
           name: http
