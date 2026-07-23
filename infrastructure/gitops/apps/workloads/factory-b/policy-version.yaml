@@ -7,6 +7,6 @@ metadata:
     app.kubernetes.io/part-of: factory-b
     showcase.redhat.com/component: policy-version
 data:
-  version: "vla-warehouse-v1.4"
-  model-uri: "hf://Qwen/Qwen2.5-3B-Instruct"
-  promoted-at: "2026-07-22T18:34:33Z"
+  version: "vla-warehouse-v1.5"
+  model-uri: "hf://Qwen/Qwen2.5-7B-Instruct"
+  promoted-at: "2026-07-23T14:02:34Z"

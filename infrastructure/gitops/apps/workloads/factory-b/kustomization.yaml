@@ -3,3 +3,10 @@ kind: Kustomization
 namespace: factory-b
 resources:
 - model-vla-warehouse-isvc.yaml
+- policy-version.yaml
+- mission-dispatcher-b-serviceaccount.yaml
+- mission-dispatcher-b-imagestream.yaml
+- mission-dispatcher-b-buildconfig.yaml
+- mission-dispatcher-b-configmap.yaml
+- mission-dispatcher-b-deployment.yaml
+- mission-dispatcher-b-service.yaml
