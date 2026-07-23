@@ -16,8 +16,8 @@ ARG BASE_FLAVOR=slim
 
 FROM registry.access.redhat.com/ubi9/python-312:latest AS slim
 
-FROM nvcr.io/nvidia/pytorch:24.07-py3 AS cuda
-# NVIDIA PyTorch 2.4 + CUDA 12.5 + Python 3.10 pre-installed.
+FROM nvcr.io/nvidia/pytorch:24.12-py3 AS cuda
+# NVIDIA PyTorch 2.6 + CUDA 12.6 + Python 3.12 pre-installed.
 # Optimized for NVIDIA GPUs (L40S, L4).
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 ENV PIP_ROOT_USER_ACTION=ignore
