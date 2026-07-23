@@ -3,3 +3,4 @@ kind: Kustomization
 namespace: robot-edge
 resources:
 - model-vla-warehouse-isvc.yaml
+- vllm-servingruntime.yaml
