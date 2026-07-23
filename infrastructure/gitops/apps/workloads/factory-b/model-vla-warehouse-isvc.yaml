@@ -3,6 +3,8 @@ kind: InferenceService
 metadata:
   name: vla-warehouse
   namespace: factory-b
+  annotations:
+    serving.knative.dev/rollout-duration: "0"
 spec:
   predictor:
     model:
