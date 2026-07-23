@@ -280,12 +280,12 @@ def custom_tool_node(state: AgentState) -> dict:
                     model_version = tool_args.get("model_version")
                     model_name = "vla-warehouse"  # Default model name
 
-                    # Showcase mode: use HF models instead of MLflow/MinIO
+                    # Showcase mode: use HF VLA models instead of MLflow/MinIO
                     SHOWCASE_MODE = os.getenv("SHOWCASE_MODE", "true").lower() == "true"
                     HF_MODEL_VERSIONS = {
-                        "v1.4": "hf://Qwen/Qwen2.5-3B-Instruct",
-                        "v1.5": "hf://Qwen/Qwen2.5-7B-Instruct",
-                        "v1.6": "hf://microsoft/Phi-3.5-mini-instruct",
+                        "v1.4": "hf://openvla/openvla-7b",
+                        "v1.5": "hf://openvla/openvla-7b",
+                        "v1.6": "hf://openvla/openvla-7b",
                     }
 
                     if SHOWCASE_MODE:
