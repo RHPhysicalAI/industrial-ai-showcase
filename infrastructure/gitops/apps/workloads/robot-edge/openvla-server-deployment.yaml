@@ -25,7 +25,7 @@ spec:
         imagePullPolicy: Always
         env:
         - name: VLA_MODE
-          value: "mock"
+          value: "openvla"
         - name: SERVICE_NAME
           value: "openvla-server"
         - name: LOG_LEVEL
@@ -40,11 +40,13 @@ spec:
           protocol: TCP
         resources:
           requests:
-            cpu: "1"
-            memory: "2Gi"
-          limits:
             cpu: "2"
-            memory: "4Gi"
+            memory: "8Gi"
+            nvidia.com/gpu: "1"
+          limits:
+            cpu: "4"
+            memory: "16Gi"
+            nvidia.com/gpu: "1"
         livenessProbe:
           httpGet:
             path: /healthz
