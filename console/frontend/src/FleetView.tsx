@@ -330,7 +330,7 @@ function ArgoSyncPanel({
             alignItems={{ default: "alignItemsCenter" }}
             spaceItems={{ default: "spaceItemsSm" }}
           >
-            <FlexItem>Argo CD: fleet-manager</FlexItem>
+            <FlexItem>Argo CD: workloads-fleet-manager</FlexItem>
             <FlexItem>
               <Label color={syncBadgeColor(argo.syncStatus)} isCompact>
                 {argo.syncStatus}
