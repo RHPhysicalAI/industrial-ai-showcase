@@ -21,7 +21,7 @@ spec:
         effect: NoSchedule
       containers:
       - name: openvla-server
-        image: image-registry.openshift-image-registry.svc:5000/robot-edge/openvla-server:latest
+        image: image-registry.openshift-image-registry.svc:5000/factory-b/openvla-server:latest
         imagePullPolicy: Always
         env:
         - name: VLA_MODE
@@ -40,13 +40,11 @@ spec:
           protocol: TCP
         resources:
           requests:
-            cpu: "2"
-            memory: "8Gi"
-            nvidia.com/gpu: "1"
+            cpu: "1"
+            memory: "2Gi"
           limits:
-            cpu: "4"
-            memory: "16Gi"
-            nvidia.com/gpu: "1"
+            cpu: "2"
+            memory: "4Gi"
         livenessProbe:
           httpGet:
             path: /healthz
