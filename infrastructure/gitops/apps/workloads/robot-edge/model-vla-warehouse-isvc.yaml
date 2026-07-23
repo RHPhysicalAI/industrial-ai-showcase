@@ -7,6 +7,9 @@ metadata:
     serving.knative.dev/rollout-duration: "0"
 spec:
   predictor:
+    minReplicas: 0
+    maxReplicas: 1
+    scaleTarget: 0
     tolerations:
     - key: nvidia.com/gpu
       operator: Exists
