@@ -40,8 +40,6 @@ export interface FactoryStatus {
   lastHeartbeat: string;
   links?: {
     argoApp: string;
-    ocpNamespace: string;
-    ocpPods: string;
   };
 }
 
