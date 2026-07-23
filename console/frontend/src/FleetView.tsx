@@ -548,6 +548,25 @@ function FactoryPanel({
               {promoting ? "Preparing..." : `Promote to ${calculateNextVersion()}`}
             </Button>
           </StackItem>
+
+          {factory.links && (
+            <StackItem style={{ marginTop: 12, borderTop: "1px solid #D2D2D2", paddingTop: 12 }}>
+              <div style={{ fontSize: 12, color: "#6A6E73", marginBottom: 6 }}>
+                Quick Links
+              </div>
+              <Flex direction={{ default: "column" }} spaceItems={{ default: "spaceItemsXs" }}>
+                <FlexItem>
+                  <ProofLink href={factory.links.argoApp} label="View in Argo CD" />
+                </FlexItem>
+                <FlexItem>
+                  <ProofLink href={factory.links.ocpPods} label="View Pods" />
+                </FlexItem>
+                <FlexItem>
+                  <ProofLink href={factory.links.ocpNamespace} label="View Namespace" />
+                </FlexItem>
+              </Flex>
+            </StackItem>
+          )}
         </Stack>
       </CardBody>
     </Card>

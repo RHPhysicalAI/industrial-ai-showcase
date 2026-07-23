@@ -140,6 +140,11 @@ fastify.get("/api/fleet", async () => {
         anomalyScore: telemetry["fl-07"]?.anomalyScore ?? 0.05,
         argoSyncStatus: "synced",
         lastHeartbeat: telemetry["fl-07"]?.lastHeartbeat ?? new Date().toISOString(),
+        links: d ? {
+          argoApp: `https://openshift-gitops-server-openshift-gitops.${d}/applications/openshift-gitops/workloads-robot-edge`,
+          ocpNamespace: `https://console-openshift-console.${d}/k8s/cluster/projects/robot-edge`,
+          ocpPods: `https://console-openshift-console.${d}/k8s/ns/robot-edge/pods`,
+        } : undefined,
       },
       {
         name: "Factory B",
@@ -150,6 +155,11 @@ fastify.get("/api/fleet", async () => {
         anomalyScore: telemetry["fl-08"]?.anomalyScore ?? 0.03,
         argoSyncStatus: fb?.argoSyncStatus ?? "synced",
         lastHeartbeat: telemetry["fl-08"]?.lastHeartbeat ?? new Date().toISOString(),
+        links: d ? {
+          argoApp: `https://openshift-gitops-server-openshift-gitops.${d}/applications/openshift-gitops/workloads-factory-b`,
+          ocpNamespace: `https://console-openshift-console.${d}/k8s/cluster/projects/factory-b`,
+          ocpPods: `https://console-openshift-console.${d}/k8s/ns/factory-b/pods`,
+        } : undefined,
       },
     ],
   };

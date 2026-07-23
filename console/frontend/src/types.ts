@@ -38,6 +38,11 @@ export interface FactoryStatus {
   anomalyScore: number;
   argoSyncStatus: "synced" | "syncing" | "reverting";
   lastHeartbeat: string;
+  links?: {
+    argoApp: string;
+    ocpNamespace: string;
+    ocpPods: string;
+  };
 }
 
 export interface AnomalyPoint {
