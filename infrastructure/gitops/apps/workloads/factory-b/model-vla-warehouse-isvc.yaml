@@ -7,6 +7,10 @@ metadata:
     serving.knative.dev/rollout-duration: "0"
 spec:
   predictor:
+    tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
     model:
       modelFormat:
         name: vllm
