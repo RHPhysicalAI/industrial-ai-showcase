@@ -132,7 +132,7 @@ fastify.get("/api/fleet", async () => {
     links,
     factories: [
       {
-        name: "Factory A",
+        name: "workloads-robot-edge",
         namespace: "robot-edge",
         policyVersion: factoryAPolicyVersion,
         robotId: "fl-07",
@@ -145,7 +145,7 @@ fastify.get("/api/fleet", async () => {
         } : undefined,
       },
       {
-        name: "Factory B",
+        name: "workloads-factory-b",
         namespace: "factory-b",
         policyVersion: factoryBPolicyVersion,
         robotId: "fl-08",
