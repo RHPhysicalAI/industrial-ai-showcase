@@ -10,3 +10,7 @@ resources:
 - mission-dispatcher-b-configmap.yaml
 - mission-dispatcher-b-deployment.yaml
 - mission-dispatcher-b-service.yaml
+- openvla-server-imagestream.yaml
+- openvla-server-buildconfig.yaml
+- openvla-server-deployment.yaml
+- openvla-server-service.yaml

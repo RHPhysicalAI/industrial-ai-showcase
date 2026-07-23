@@ -10,6 +10,5 @@ data:
   # Hub-internal Kafka — Factory B runs on the hub, no TLS needed.
   kafka.bootstrap.servers: "fleet-kafka-bootstrap.fleet-ops.svc:9092"
   kafka.security.protocol: "PLAINTEXT"
-  # KServe VLA endpoint - running on hub cluster
-  # Using vLLM OpenAI-compatible API format
-  vla.endpoint.url: "http://vla-warehouse-predictor.factory-b.svc.cluster.local/v1/chat/completions"
+  # OpenVLA server with custom /act endpoint (same as companion host)
+  vla.endpoint.url: "http://openvla-server.factory-b.svc.cluster.local:8000/act"

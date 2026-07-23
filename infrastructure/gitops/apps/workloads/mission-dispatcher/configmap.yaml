@@ -10,6 +10,5 @@ data:
   # Companion SNO would use: fleet-kafka-bootstrap-fleet-ops.apps.<domain>:443 with SSL
   kafka.bootstrap.servers: "fleet-kafka-bootstrap.fleet-ops.svc:9092"
   kafka.security.protocol: "PLAINTEXT"
-  # KServe VLA endpoint - running on hub cluster (no companion)
-  # Using vLLM OpenAI-compatible API format
-  vla.endpoint.url: "http://vla-warehouse-predictor.robot-edge.svc.cluster.local/v1/chat/completions"
+  # OpenVLA server with custom /act endpoint (same as companion host)
+  vla.endpoint.url: "http://openvla-server.robot-edge.svc.cluster.local:8000/act"

@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openvla-server
+  namespace: robot-edge
+  labels:
+    app: openvla-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openvla-server
+  template:
+    metadata:
+      labels:
+        app: openvla-server
+    spec:
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: openvla-server
+        image: image-registry.openshift-image-registry.svc:5000/robot-edge/openvla-server:latest
+        imagePullPolicy: Always
+        env:
+        - name: VLA_MODE
+          value: "mock"
+        - name: SERVICE_NAME
+          value: "openvla-server"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: PORT
+          value: "8000"
+        - name: OPENVLA_WEIGHTS
+          value: "openvla/openvla-7b"
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            cpu: "2"
+            memory: "8Gi"
+            nvidia.com/gpu: "1"
+          limits:
+            cpu: "4"
+            memory: "16Gi"
+            nvidia.com/gpu: "1"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10

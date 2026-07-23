@@ -1,0 +1,27 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: openvla-server
+  namespace: factory-b
+  labels:
+    app: openvla-server
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: openvla-server:latest
+  source:
+    type: Git
+    git:
+      uri: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
+      ref: phase3
+    contextDir: .
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: workloads/vla-serving-host/container/Containerfile
+      buildArgs:
+      - name: BASE_FLAVOR
+        value: slim
+  triggers:
+  - type: ConfigChange

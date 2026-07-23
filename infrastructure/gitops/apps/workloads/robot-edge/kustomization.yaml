@@ -4,3 +4,7 @@ namespace: robot-edge
 resources:
 - model-vla-warehouse-isvc.yaml
 - vllm-servingruntime.yaml
+- openvla-server-imagestream.yaml
+- openvla-server-buildconfig.yaml
+- openvla-server-deployment.yaml
+- openvla-server-service.yaml
