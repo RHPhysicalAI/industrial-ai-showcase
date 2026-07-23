@@ -2,7 +2,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: factory-b
 resources:
-- model-vla-warehouse-isvc.yaml
 - policy-version.yaml
 - mission-dispatcher-b-serviceaccount.yaml
 - mission-dispatcher-b-imagestream.yaml
