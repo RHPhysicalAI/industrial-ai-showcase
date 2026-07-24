@@ -9,7 +9,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/jeremyary/industrial-ai-showcase.git
+    repoURL: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
     targetRevision: main
     path: infrastructure/gitops/clusters/hub
   destination:

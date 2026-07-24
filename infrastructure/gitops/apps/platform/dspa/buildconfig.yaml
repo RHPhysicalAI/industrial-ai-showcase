@@ -10,7 +10,7 @@ spec:
   source:
     type: Git
     git:
-      uri: https://github.com/jeremyary/industrial-ai-showcase.git
+      uri: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
       ref: main
     sourceSecret:
       name: git-source-secret
