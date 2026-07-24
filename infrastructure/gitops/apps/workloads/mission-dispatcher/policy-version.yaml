@@ -8,5 +8,5 @@ metadata:
     showcase.redhat.com/component: policy-version
 data:
   version: "vla-warehouse-v1.4"
-  model-uri: "hf://Qwen/Qwen2.5-3B-Instruct"
-  promoted-at: "2026-07-22T18:34:33Z"
+  model-uri: "hf://openvla/openvla-7b"
+  promoted-at: "2026-07-24T14:00:00Z"
