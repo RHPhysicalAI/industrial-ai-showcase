@@ -7,6 +7,6 @@ metadata:
     app.kubernetes.io/part-of: robot-edge
     showcase.redhat.com/component: policy-version
 data:
-  version: vla-warehouse-v1.6
+  version: vla-warehouse-v1.7
   model-uri: hf://openvla/openvla-7b
-  promoted-at: '2026-07-27T16:44:27.692019+00:00'
+  promoted-at: '2026-07-27T18:52:04.526045+00:00'
