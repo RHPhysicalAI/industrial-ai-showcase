@@ -7,6 +7,6 @@ metadata:
     app.kubernetes.io/part-of: factory-b
     showcase.redhat.com/component: policy-version
 data:
-  version: vla-warehouse-v1.7
+  version: vla-warehouse-v1.8
   model-uri: hf://openvla/openvla-7b
-  promoted-at: '2026-07-27T16:43:31.991119+00:00'
+  promoted-at: '2026-07-28T14:32:00.027228+00:00'
