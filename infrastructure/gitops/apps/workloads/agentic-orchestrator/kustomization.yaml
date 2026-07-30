@@ -6,6 +6,8 @@ namespace: agentic-ops
 
 resources:
   - namespace.yaml
+  - vault-auth.yaml
+  - vault-static-secret-hf.yaml
   - imagestream.yaml
   - buildconfig.yaml
   - deployment.yaml
