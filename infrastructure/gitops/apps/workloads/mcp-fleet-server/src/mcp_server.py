@@ -32,7 +32,7 @@ app = FastAPI(
 # Environment
 FLEET_MANAGER_URL = os.getenv("FLEET_MANAGER_URL", "http://fleet-manager.fleet-ops.svc.cluster.local:8080")
 CONSOLE_BACKEND_URL = os.getenv("CONSOLE_BACKEND_URL", "http://showcase-console-backend.fleet-ops.svc.cluster.local:8090")
-GITHUB_BASE_BRANCH = os.getenv("GITHUB_BASE_BRANCH", "phase3")  # Target branch for PRs (phase3 during development, main for production)
+GITHUB_BASE_BRANCH = os.getenv("GITHUB_BASE_BRANCH", "main")
 
 # Showcase mode: use HF models instead of MLflow/MinIO
 # Set SHOWCASE_MODE=false for production deployments with real training pipeline
