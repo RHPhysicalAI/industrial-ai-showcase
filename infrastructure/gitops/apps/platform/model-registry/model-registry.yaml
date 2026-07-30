@@ -11,7 +11,7 @@ spec:
   grpc:
     port: 9090
   postgres:
-    host: wbc-model-registry-postgres
+    host: wbc-model-registry-postgres-rw
     port: 5432
     database: wbc_model_registry
     username: mlmduser

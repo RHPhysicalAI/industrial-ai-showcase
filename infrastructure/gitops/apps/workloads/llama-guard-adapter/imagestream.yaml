@@ -1,0 +1,13 @@
+# This project was developed with assistance from AI tools.
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: llama-guard-adapter
+  namespace: agentic-ops
+  labels:
+    app.kubernetes.io/name: llama-guard-adapter
+    app.kubernetes.io/part-of: agentic-orchestrator
+    app.kubernetes.io/component: safety
+spec:
+  lookupPolicy:
+    local: true

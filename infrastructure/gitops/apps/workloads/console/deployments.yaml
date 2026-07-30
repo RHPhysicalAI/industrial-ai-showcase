@@ -27,7 +27,7 @@ spec:
       containers:
         - name: backend
           image: showcase-console-backend:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8090
               name: http
@@ -38,14 +38,16 @@ spec:
               value: info
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: fleet-kafka-bootstrap.fleet-ops.svc:9092
+            - name: KAFKA_TOPICS
+              value: fleet.events,fleet.missions,fleet.ops.events,fleet.telemetry,fleet.safety.alerts,warehouse.cameras.aisle3,factory-b.telemetry,factory-b.missions,factory-b.ops.events,mes.orders
             - name: WMS_STUB_BASE_URL
               value: http://wms-stub.fleet-ops.svc:8082
             - name: MJPEG_URL
-              value: https://isaac-sim-mjpeg-isaac-sim.apps.jary-qs-0323.7w5j.p1.openshiftapps.com/stream.mjpg
+              value: https://isaac-sim-mjpeg-isaac-sim.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com/stream.mjpg
             - name: SIGNALING_SERVER
-              value: isaac-sim-signaling-isaac-sim.apps.jary-qs-0323.7w5j.p1.openshiftapps.com
+              value: isaac-sim-signaling-isaac-sim.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
             - name: TURN_URL
-              value: "turns:turn-omni-streaming.apps.jary-qs-0323.7w5j.p1.openshiftapps.com:443?transport=tcp"
+              value: "turns:turn-omni-streaming.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com:443?transport=tcp"
             - name: TURN_USERNAME
               value: kasdemo
             - name: TURN_CREDENTIAL
@@ -59,11 +61,13 @@ spec:
                   name: git-source-secret
                   key: token
             - name: GITHUB_REPO
-              value: jeremyary/industrial-ai-showcase
+              value: RHPhysicalAI/industrial-ai-showcase
             - name: NODE_EXTRA_CA_CERTS
               value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
             - name: CLUSTER_APPS_DOMAIN
-              value: apps.jary-qs-0323.7w5j.p1.openshiftapps.com
+              value: apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
+            - name: AGENTIC_ORCHESTRATOR_URL
+              value: http://agentic-orchestrator.agentic-ops.svc.cluster.local:8080
           resources:
             requests:
               cpu: 100m
@@ -112,7 +116,7 @@ spec:
       containers:
         - name: frontend
           image: showcase-console-frontend:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
               name: http

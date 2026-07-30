@@ -60,7 +60,7 @@ spec:
                   "storages": {
                     "items": [
                       {
-                        "name": "nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com",
+                        "name": "nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com",
                         "provider": { "type": "nucleus" }
                       }
                     ],

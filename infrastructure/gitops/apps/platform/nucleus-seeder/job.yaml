@@ -45,7 +45,7 @@ spec:
             - name: LOCAL_STAGING
               value: /staging
             - name: NUCLEUS_HOST
-              value: nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com
+              value: nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
             - name: NUCLEUS_USER
               value: omniverse
             - name: NUCLEUS_PASS

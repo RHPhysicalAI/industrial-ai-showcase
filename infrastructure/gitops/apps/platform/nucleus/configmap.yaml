@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/part-of: omniverse-nucleus
     app.kubernetes.io/version: "2023.2.9"
 data:
-  SERVER_IP_OR_HOST: "nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com"
+  SERVER_IP_OR_HOST: "nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com"
   INSTANCE_NAME: "my_omniverse"
   ACCEPT_EULA: "1"
   SECURITY_REVIEWED: "1"

@@ -1,0 +1,21 @@
+# This project was developed with assistance from AI tools.
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: github-bot-token
+  namespace: agentic-ops
+spec:
+  vaultAuthRef: vault
+  type: kv-v2
+  mount: kv
+  path: fleet-manager/github
+  destination:
+    name: github-bot-token
+    create: true
+    overwrite: true
+    transformation:
+      excludeRaw: true
+      templates:
+        token:
+          text: '{{ get .Secrets "token" }}'
+  refreshAfter: 1h

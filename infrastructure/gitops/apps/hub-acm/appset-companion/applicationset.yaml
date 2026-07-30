@@ -18,7 +18,7 @@ spec:
                   cluster.open-cluster-management.io/placement: all-companion
               requeueAfterSeconds: 60
           - git:
-              repoURL: https://github.com/jeremyary/industrial-ai-showcase.git
+              repoURL: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
               revision: main
               directories:
                 - path: infrastructure/gitops/apps/companion/*
@@ -36,7 +36,7 @@ spec:
     spec:
       project: default
       source:
-        repoURL: https://github.com/jeremyary/industrial-ai-showcase.git
+        repoURL: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
         targetRevision: main
         path: '{{path}}'
       destination:

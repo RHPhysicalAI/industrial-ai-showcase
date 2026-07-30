@@ -10,6 +10,5 @@ data:
   # Hub-internal Kafka — Factory B runs on the hub, no TLS needed.
   kafka.bootstrap.servers: "fleet-kafka-bootstrap.fleet-ops.svc:9092"
   kafka.security.protocol: "PLAINTEXT"
-  # No VLA endpoint — Factory B is idle during the demo. The dispatcher
-  # stays healthy but doesn't execute manipulation actions.
-  vla.endpoint.url: ""
+  # OpenVLA server with custom /act endpoint (same as companion host)
+  vla.endpoint.url: "http://openvla-server.factory-b.svc.cluster.local:8000/act"

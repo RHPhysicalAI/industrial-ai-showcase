@@ -7,6 +7,10 @@ import {
   CardBody,
   CardHeader,
   CardTitle,
+  Drawer,
+  DrawerContent,
+  DrawerContentBody,
+  DrawerPanelContent,
   Flex,
   FlexItem,
   Label,
@@ -22,12 +26,14 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@patternfly/react-core";
+import { CommentIcon } from "@patternfly/react-icons";
 import type { ButtonDef, FleetMessage, ScenarioDetail, Topology, ViewName } from "./types.js";
 import { executeAction, fetchScenarioDetail, fetchScenarios, fetchTopology, subscribeEvents } from "./api.js";
 import { StageCard } from "./Stage.js";
 import { ArchitectureView } from "./ArchitectureView.js";
 import { FleetView } from "./FleetView.js";
 import { LineageView } from "./LineageView.js";
+import { AgentAssistant } from "./AgentAssistant.js";
 import topologyImg from "./topology.png";
 
 const VIEWS: ViewName[] = ["stage", "lineage", "fleet", "architecture"];
@@ -51,6 +57,7 @@ export function App(){
   const [connected, setConnected] = useState(false);
   const [cameraTick, setCameraTick] = useState(0);
   const [alertActive, setAlertActive] = useState(false);
+  const [isDrawerExpanded, setIsDrawerExpanded] = useState(false);
 
   useEffect(() => {
     fetchTopology().then(setTopology).catch(() => undefined);
@@ -137,8 +144,17 @@ export function App(){
         </Masthead>
       }
     >
-      <PageSection>
-        {currentView === "stage" && (
+      <Drawer isExpanded={isDrawerExpanded}>
+        <DrawerContent
+          panelContent={
+            <DrawerPanelContent widths={{ default: "width_50", xl: "width_33" }}>
+              <AgentAssistant onClose={() => setIsDrawerExpanded(false)} />
+            </DrawerPanelContent>
+          }
+        >
+          <DrawerContentBody>
+            <PageSection>
+              {currentView === "stage" && (
           <Flex spaceItems={{ default: "spaceItemsLg" }} alignItems={{ default: "alignItemsStretch" }}>
             <FlexItem
               flex={{ default: "flex_1" }}
@@ -179,10 +195,39 @@ export function App(){
           </Flex>
         )}
 
-        {currentView === "architecture" && <ArchitectureView />}
-        {currentView === "fleet" && <FleetView events={events} />}
-        {currentView === "lineage" && <LineageView />}
-      </PageSection>
+              {currentView === "architecture" && <ArchitectureView />}
+              {currentView === "fleet" && (
+                <FleetView
+                  events={events}
+                  onOpenAIAssistant={() => setIsDrawerExpanded(true)}
+                />
+              )}
+              {currentView === "lineage" && <LineageView />}
+            </PageSection>
+          </DrawerContentBody>
+        </DrawerContent>
+      </Drawer>
+
+      {/* Floating AI Assistant Button */}
+      {!isDrawerExpanded && (
+        <Button
+          variant="primary"
+          onClick={() => setIsDrawerExpanded(true)}
+          icon={<CommentIcon />}
+          style={{
+            position: "fixed",
+            bottom: "24px",
+            right: "24px",
+            zIndex: 1000,
+            borderRadius: "50%",
+            width: "60px",
+            height: "60px",
+            padding: 0,
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+          }}
+          aria-label="Open AI Assistant"
+        />
+      )}
     </Page>
   );
 }
@@ -262,14 +307,37 @@ function TopologyCard(){
 }
 
 function CameraFeedCard({ cameraTick }: { cameraTick: number }){
+  const [imgError, setImgError] = useState(false);
+
   return (
     <Card isFullHeight>
       <CardHeader><CardTitle>On-Site Camera Reasoning</CardTitle></CardHeader>
       <CardBody className="showcase-camera-body">
-        <img
-          src={`/api/camera/frame?t=${cameraTick}`}
-          alt="Camera feed"
-        />
+        {imgError ? (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            backgroundColor: '#f5f5f5',
+            color: '#666',
+            flexDirection: 'column',
+            gap: '12px'
+          }}>
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            <div>Camera stream offline</div>
+            <div style={{ fontSize: '0.875rem', opacity: 0.7 }}>Isaac Sim viewport not connected</div>
+          </div>
+        ) : (
+          <img
+            src={`/api/camera/frame?t=${cameraTick}`}
+            alt="Camera feed"
+            onError={() => setImgError(true)}
+          />
+        )}
       </CardBody>
     </Card>
   );

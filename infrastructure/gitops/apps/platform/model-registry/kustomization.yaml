@@ -3,4 +3,5 @@ kind: Kustomization
 
 resources:
   - db-secret.yaml
+  - cnpg-cluster.yaml
   - model-registry.yaml

@@ -1,12 +1,28 @@
 // This project was developed with assistance from AI tools.
 import Fastify from "fastify";
 import fastifyCors from "@fastify/cors";
+import { KubeConfig, CoreV1Api } from "@kubernetes/client-node";
 
 import { loadConfig } from "./config.js";
 import { FleetStream, type FleetMessage } from "./kafkaStream.js";
 import { registerStreamRoutes } from "./stream.js";
 import { ArgoSync } from "./argoSync.js";
 import { getGovernanceStatus } from "./governance.js";
+
+// Initialize Kubernetes client
+const kc = new KubeConfig();
+kc.loadFromDefault();
+const k8sApi = kc.makeApiClient(CoreV1Api);
+
+// Helper to read policy version from ConfigMap
+async function getPolicyVersion(namespace: string): Promise<string> {
+  try {
+    const cm = await k8sApi.readNamespacedConfigMap("policy-version", namespace);
+    return cm.body.data?.["version"] ?? "vla-warehouse-v1.3";
+  } catch {
+    return "vla-warehouse-v1.3";
+  }
+}
 
 const config = loadConfig();
 const fastify = Fastify({
@@ -91,7 +107,6 @@ fastify.get("/api/governance", async () => {
 fastify.get("/api/fleet", async () => {
   const telemetry = stream.getLatestTelemetry();
   const ds = stream.demoState;
-  const fa = ds.factories["factory-a"];
   const fb = ds.factories["factory-b"];
   const d = config.clusterAppsDomain;
   const links = d
@@ -102,31 +117,45 @@ fastify.get("/api/fleet", async () => {
         argoConsole: `https://openshift-gitops-server-openshift-gitops.${d}/applications/openshift-gitops/workloads-console`,
       }
     : null;
+
+  // Read policy versions directly from ConfigMaps (updated dynamically on promotion)
+  const [factoryAPolicyVersion, factoryBPolicyVersion] = await Promise.all([
+    getPolicyVersion("robot-edge"),
+    getPolicyVersion("factory-b"),
+  ]);
+
   return {
     demoPhase: ds.phase,
     anomalyHistory: ds.anomalyHistory,
     statusLog: ds.statusLog,
+    rollbackAnalyses: ds.rollbackAnalyses,
     links,
     factories: [
       {
         name: "Factory A",
         namespace: "robot-edge",
-        policyVersion: fa?.policyVersion ?? telemetry["fl-07"]?.policyVersion ?? "vla-warehouse-v1.3",
+        policyVersion: factoryAPolicyVersion,
         robotId: "fl-07",
-        robotStatus: telemetry["fl-07"]?.robotStatus ?? "active",
-        anomalyScore: telemetry["fl-07"]?.anomalyScore ?? 0.12,
-        argoSyncStatus: fa?.argoSyncStatus ?? "synced",
+        robotStatus: telemetry["fl-07"]?.robotStatus ?? "idle",
+        anomalyScore: telemetry["fl-07"]?.anomalyScore ?? 0.05,
+        argoSyncStatus: "synced",
         lastHeartbeat: telemetry["fl-07"]?.lastHeartbeat ?? new Date().toISOString(),
+        links: d ? {
+          argoApp: `https://openshift-gitops-server-openshift-gitops.${d}/applications/openshift-gitops/workloads-robot-edge`,
+        } : undefined,
       },
       {
         name: "Factory B",
         namespace: "factory-b",
-        policyVersion: fb?.policyVersion ?? telemetry["fl-08"]?.policyVersion ?? "vla-warehouse-v1.3",
+        policyVersion: factoryBPolicyVersion,
         robotId: "fl-08",
         robotStatus: telemetry["fl-08"]?.robotStatus ?? "idle",
         anomalyScore: telemetry["fl-08"]?.anomalyScore ?? 0.03,
         argoSyncStatus: fb?.argoSyncStatus ?? "synced",
         lastHeartbeat: telemetry["fl-08"]?.lastHeartbeat ?? new Date().toISOString(),
+        links: d ? {
+          argoApp: `https://openshift-gitops-server-openshift-gitops.${d}/applications/openshift-gitops/workloads-factory-b`,
+        } : undefined,
       },
     ],
   };
@@ -315,6 +344,320 @@ fastify.get("/api/events", async (_request, reply) => {
 
   return reply;
 });
+
+// Agent assistant endpoints
+fastify.post<{ Body: { query: string; sessionId?: string } }>(
+  "/api/agent/query",
+  async (request, reply) => {
+    const { query, sessionId } = request.body;
+
+    if (!query || typeof query !== "string") {
+      reply.code(400).send({ error: "query is required" });
+      return;
+    }
+
+    try {
+      const resp = await fetch(
+        `${config.agenticOrchestratorUrl}/query`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, session_id: sessionId }),
+        }
+      );
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        log.warn({ status: resp.status, error: errorText }, "agent query failed");
+        reply.code(resp.status).send({ error: "Agent query failed" });
+        return;
+      }
+
+      const data = await resp.json() as { query: string; response: string; pending_approval_id?: number };
+      return {
+        query: data.query,
+        response: data.response,
+        pending_approval_id: data.pending_approval_id ?? null,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (err) {
+      log.error({ err }, "agent query error");
+      reply.code(500).send({ error: "Agent service unavailable" });
+    }
+  }
+);
+
+fastify.get("/api/agent/health", async () => {
+  try {
+    const resp = await fetch(`${config.agenticOrchestratorUrl}/health`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (resp.ok) {
+      const data = await resp.json() as { status: string };
+      return { status: "ready", service: data.status };
+    }
+    return { status: "unavailable" };
+  } catch {
+    return { status: "unavailable" };
+  }
+});
+
+fastify.get("/api/agent/suggestions", async () => {
+  const suggestions: Array<{
+    category: string;
+    icon: string;
+    text: string;
+    priority?: number;
+  }> = [];
+
+  try {
+    // Get current fleet state
+    const telemetry = stream.getLatestTelemetry();
+    const ds = stream.demoState;
+    const fb = ds.factories["factory-b"];
+
+    // Factory B suggestions (Factory A removed - doesn't exist in cluster)
+    const factoryBVersion = fb?.policyVersion ?? telemetry["fl-08"]?.policyVersion ?? "v1.3";
+    const nextVersionB = getNextVersion(factoryBVersion);
+    if (nextVersionB) {
+      suggestions.push({
+        category: "upgrade",
+        icon: "🆙",
+        text: `Promote vla-warehouse ${nextVersionB} to Factory B`,
+        priority: 1,
+      });
+    }
+
+    // Robot telemetry (fl-08 is Factory B robot)
+    suggestions.push({
+      category: "telemetry",
+      icon: "🤖",
+      text: "Show me telemetry for robot fl-08",
+      priority: 3,
+    });
+
+    // Anomaly check (Factory B)
+    const factoryBAnomalyScore = telemetry["fl-08"]?.anomalyScore ?? 0.12;
+    if (factoryBAnomalyScore > 0.5) {
+      suggestions.push({
+        category: "anomaly",
+        icon: "⚠️",
+        text: `Check anomaly for Factory B (score: ${factoryBAnomalyScore.toFixed(2)})`,
+        priority: 0, // Highest priority
+      });
+    } else {
+      suggestions.push({
+        category: "anomaly",
+        icon: "📈",
+        text: "Show me anomaly history for Factory B",
+        priority: 4,
+      });
+    }
+
+    // Help
+    suggestions.push({
+      category: "help",
+      icon: "❓",
+      text: "What can you help me with?",
+      priority: 5,
+    });
+
+    // Sort by priority
+    suggestions.sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+
+    return { suggestions: suggestions.slice(0, 5) }; // Return top 5
+  } catch (err) {
+    log.error({ err }, "failed to generate suggestions");
+    // Return static fallbacks
+    return {
+      suggestions: [
+        { category: "help", icon: "❓", text: "What can you help me with?" },
+        { category: "fleet-status", icon: "📊", text: "Show me all factory statuses" },
+        { category: "telemetry", icon: "🤖", text: "Show me telemetry for robot fl-07" },
+      ],
+    };
+  }
+});
+
+// Helper function to get next version
+function getNextVersion(current: string): string | null {
+  const match = current.match(/v(\d+)\.(\d+)/);
+  if (match && match[1] && match[2]) {
+    const major = match[1];
+    const minor = match[2];
+    return `v${major}.${parseInt(minor, 10) + 1}`;
+  }
+  return null;
+}
+
+// HIL Approval endpoints
+fastify.get("/api/approval/pending", async (request, reply) => {
+  try {
+    const resp = await fetch(`${config.auditServiceUrl}/audit/pending`, {
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!resp.ok) {
+      const errorText = await resp.text();
+      log.warn({ status: resp.status, error: errorText }, "failed to fetch pending approvals");
+      reply.code(resp.status).send({ error: "Failed to fetch pending approvals" });
+      return;
+    }
+
+    const data = await resp.json() as { pending: Array<unknown> };
+    return data;
+  } catch (err) {
+    log.error({ err }, "approval pending query error");
+    reply.code(500).send({ error: "Audit service unavailable" });
+  }
+});
+
+fastify.get<{ Querystring: { limit?: string } }>(
+  "/api/audit/history",
+  async (request, reply) => {
+    const limit = parseInt(request.query.limit ?? "10", 10);
+
+    try {
+      const resp = await fetch(
+        `${config.auditServiceUrl}/audit/history?limit=${limit}`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        log.warn({ status: resp.status, error: errorText }, "failed to fetch audit history");
+        reply.code(resp.status).send({ error: "Failed to fetch audit history" });
+        return;
+      }
+
+      const data = await resp.json() as { history: Array<unknown> };
+      return data;
+    } catch (err) {
+      log.error({ err }, "audit history query error");
+      reply.code(500).send({ error: "Audit service unavailable" });
+    }
+  }
+);
+
+
+fastify.post<{ Params: { id: string } }>(
+  "/api/approval/:id/approve",
+  async (request, reply) => {
+    const { id } = request.params;
+
+    try {
+      // Record approval in audit service
+      const auditResp = await fetch(
+        `${config.auditServiceUrl}/audit/approve/${id}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ approver_identity: "demo-operator" }),
+          signal: AbortSignal.timeout(5000),
+        }
+      );
+
+      if (!auditResp.ok) {
+        const errorText = await auditResp.text();
+        log.warn({ status: auditResp.status, error: errorText, id }, "failed to approve request");
+        reply.code(auditResp.status).send({ error: "Failed to approve request" });
+        return;
+      }
+
+      // Resume orchestrator execution
+      const resumeResp = await fetch(
+        `${config.agenticOrchestratorUrl}/approval/${id}/resume`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision: "approved" }),
+          signal: AbortSignal.timeout(30000),
+        }
+      );
+
+      if (!resumeResp.ok) {
+        const errorText = await resumeResp.text();
+        log.warn({ status: resumeResp.status, error: errorText, id }, "failed to resume after approval");
+        reply.code(resumeResp.status).send({ error: "Failed to resume execution" });
+        return;
+      }
+
+      const result = await resumeResp.json() as { response: string };
+      return {
+        status: "approved",
+        id: parseInt(id, 10),
+        result: result.response,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (err) {
+      log.error({ err, id }, "approval error");
+      reply.code(500).send({ error: "Approval service unavailable" });
+    }
+  }
+);
+
+fastify.post<{ Params: { id: string }; Body: { reason: string } }>(
+  "/api/approval/:id/reject",
+  async (request, reply) => {
+    const { id } = request.params;
+    const { reason } = request.body;
+
+    if (!reason || typeof reason !== "string") {
+      reply.code(400).send({ error: "reason is required" });
+      return;
+    }
+
+    try {
+      // Record rejection in audit service
+      const auditResp = await fetch(
+        `${config.auditServiceUrl}/audit/reject/${id}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            approver_identity: "demo-operator",
+            reason,
+          }),
+          signal: AbortSignal.timeout(5000),
+        }
+      );
+
+      if (!auditResp.ok) {
+        const errorText = await auditResp.text();
+        log.warn({ status: auditResp.status, error: errorText, id }, "failed to reject request");
+        reply.code(auditResp.status).send({ error: "Failed to reject request" });
+        return;
+      }
+
+      // Notify orchestrator of rejection
+      const resumeResp = await fetch(
+        `${config.agenticOrchestratorUrl}/approval/${id}/resume`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision: "rejected", reason }),
+          signal: AbortSignal.timeout(5000),
+        }
+      );
+
+      if (!resumeResp.ok) {
+        const errorText = await resumeResp.text();
+        log.warn({ status: resumeResp.status, error: errorText, id }, "failed to notify orchestrator of rejection");
+        // Don't fail - rejection is already recorded in audit service
+      }
+
+      return {
+        status: "rejected",
+        id: parseInt(id, 10),
+        reason,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (err) {
+      log.error({ err, id }, "rejection error");
+      reply.code(500).send({ error: "Approval service unavailable" });
+    }
+  }
+);
 
 await stream.start();
 

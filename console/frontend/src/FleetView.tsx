@@ -1,6 +1,8 @@
 // This project was developed with assistance from AI tools.
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
+  AlertActionCloseButton,
   Button,
   Card,
   CardBody,
@@ -15,6 +17,9 @@ import {
   Stack,
   StackItem,
 } from "@patternfly/react-core";
+import { HILDrawer } from "./HILDrawer.js";
+import { RollbackAnalysisDrawer } from "./RollbackAnalysisDrawer.js";
+import { approveRequest, rejectRequest } from "./api.js";
 import type {
   ArgoAppStatus,
   ArgoResourceStatus,
@@ -325,7 +330,7 @@ function ArgoSyncPanel({
             alignItems={{ default: "alignItemsCenter" }}
             spaceItems={{ default: "spaceItemsSm" }}
           >
-            <FlexItem>Argo CD: fleet-manager</FlexItem>
+            <FlexItem>Argo CD: workloads-fleet-manager</FlexItem>
             <FlexItem>
               <Label color={syncBadgeColor(argo.syncStatus)} isCompact>
                 {argo.syncStatus}
@@ -395,9 +400,18 @@ function ArgoSyncPanel({
   );
 }
 
-function FactoryPanel({ factory }: { factory: FactoryStatus }) {
+function FactoryPanel({
+  factory,
+  onPromotionTriggered,
+  setToast,
+}: {
+  factory: FactoryStatus;
+  onPromotionTriggered?: (approvalId: number) => void;
+  setToast: (toast: { message: string; variant: "success" | "danger" | "info" } | null) => void;
+}) {
   const prevVersion = useRef(factory.policyVersion);
   const [pillClass, setPillClass] = useState("");
+  const [promoting, setPromoting] = useState(false);
 
   useEffect(() => {
     if (prevVersion.current !== factory.policyVersion) {
@@ -412,6 +426,54 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
     }
   }, [factory.policyVersion]);
 
+  const calculateNextVersion = (): string => {
+    const currentVer = factory.policyVersion.match(/v(\d+)\.(\d+)/);
+    if (currentVer && currentVer[1] && currentVer[2]) {
+      const nextMinor = parseInt(currentVer[2], 10) + 1;
+      return `v${currentVer[1]}.${nextMinor}`;
+    }
+    return "v1.4";
+  };
+
+  const handlePromoteClick = async () => {
+    // Calculate next version and start promotion immediately
+    const nextVersion = calculateNextVersion();
+    setPromoting(true);
+
+    try {
+      // Call agent query API with promote command
+      const query = `Promote model ${nextVersion} to ${factory.name}`;
+      const resp = await fetch("/api/agent/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+
+      if (!resp.ok) {
+        console.error("Failed to initiate promotion");
+        setToast({ message: "Failed to initiate promotion. Try via AI Assistant.", variant: "danger" });
+        setPromoting(false);
+        return;
+      }
+
+      // Get response with approval ID
+      const data = await resp.json() as { query: string; response: string; pending_approval_id?: number };
+
+      if (data.pending_approval_id && onPromotionTriggered) {
+        // Got approval ID - open HIL drawer directly!
+        onPromotionTriggered(data.pending_approval_id);
+      } else {
+        setToast({ message: `Promotion pending for ${factory.name} → ${nextVersion}. Check AI Assistant.`, variant: "info" });
+      }
+    } catch (err) {
+      console.error("Promotion error:", err);
+      setToast({ message: "Promotion error. Try via AI Assistant.", variant: "danger" });
+    } finally {
+      setPromoting(false);
+    }
+  };
+
+
   const argoClass =
     factory.argoSyncStatus === "syncing" ||
     factory.argoSyncStatus === "reverting"
@@ -421,17 +483,10 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
   return (
     <Card isFullHeight>
       <CardHeader>
-        <CardTitle>
-          {factory.name}
-          <Label
-            color={statusColor(factory.argoSyncStatus)}
-            isCompact
-            className={argoClass}
-            style={{ marginLeft: 8 }}
-          >
-            {factory.argoSyncStatus}
-          </Label>
-        </CardTitle>
+        <CardTitle>{factory.name}</CardTitle>
+        <div style={{ fontSize: 12, color: "#6A6E73", marginTop: 4 }}>
+          namespace: <code style={{ fontSize: 11 }}>{factory.namespace || "—"}</code>
+        </div>
       </CardHeader>
       <CardBody>
         <Stack hasGutter>
@@ -458,6 +513,17 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
           </StackItem>
 
           <StackItem>
+            <div style={{ fontSize: 13, color: "#6A6E73" }}>Sync status</div>
+            <Label
+              color={statusColor(factory.argoSyncStatus)}
+              isCompact
+              className={argoClass}
+            >
+              {factory.argoSyncStatus}
+            </Label>
+          </StackItem>
+
+          <StackItem>
             <div style={{ fontSize: 13, color: "#6A6E73" }}>Anomaly score</div>
             <AnomalyBar score={factory.anomalyScore} />
           </StackItem>
@@ -467,21 +533,54 @@ function FactoryPanel({ factory }: { factory: FactoryStatus }) {
               Last heartbeat: {factory.lastHeartbeat || "—"}
             </div>
           </StackItem>
+
+          <StackItem>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handlePromoteClick}
+              isLoading={promoting}
+              isDisabled={promoting}
+              style={{ marginTop: 8 }}
+            >
+              {promoting ? "Preparing..." : `Promote to ${calculateNextVersion()}`}
+            </Button>
+          </StackItem>
+
+          {factory.links && (
+            <StackItem style={{ marginTop: 12, borderTop: "1px solid #D2D2D2", paddingTop: 12 }}>
+              <ProofLink href={factory.links.argoApp} label="View in Argo CD ↗" />
+            </StackItem>
+          )}
         </Stack>
       </CardBody>
     </Card>
   );
 }
 
-export function FleetView({ events }: { events: FleetMessage[] }) {
+export function FleetView({
+  events,
+  onOpenAIAssistant,
+}: {
+  events: FleetMessage[];
+  onOpenAIAssistant?: () => void;
+}) {
   const [fleet, setFleet] = useState<FleetStatus | null>(null);
   const [argo, setArgo] = useState<ArgoAppStatus | null>(null);
-  const [scenario, setScenario] = useState<ScenarioDetail | null>(null);
-  const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const [auditHistory, setAuditHistory] = useState<any[]>([]);
+  const [pendingApprovalId, setPendingApprovalId] = useState<number | null>(null);
+  const [showRollbackAnalysis, setShowRollbackAnalysis] = useState(false);
+  const [toast, setToast] = useState<{ message: string; variant: "success" | "danger" | "info" } | null>(null);
 
   const refresh = useCallback(() => {
     fetchFleetStatus().then(setFleet).catch(() => undefined);
     fetchArgoStatus().then(setArgo).catch(() => undefined);
+
+    // Fetch recent audit history
+    fetch("/api/audit/history?limit=5")
+      .then(res => res.json())
+      .then(data => setAuditHistory(data.history || []))
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -491,79 +590,111 @@ export function FleetView({ events }: { events: FleetMessage[] }) {
   }, [refresh]);
 
   useEffect(() => {
-    fetchScenarioDetail("fleet-demo").then(setScenario).catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
     const hasFleetEvent = events.some(
       (e) => e.topic === "fleet.events" || e.topic === "fleet.telemetry",
     );
     if (hasFleetEvent) refresh();
   }, [events, refresh]);
 
-  const onStepAction = useCallback(
-    async (action: string) => {
-      if (!scenario) return;
-      const btn = scenario.buttons.find((b: ButtonDef) => b.action === action);
-      if (!btn) return;
-      setActionBusy(action);
-      try {
-        await executeAction(btn.action, btn.params);
-        setTimeout(refresh, 500);
-      } catch {
-        // action failed — poll will show current state
-      } finally {
-        setActionBusy(null);
-      }
-    },
-    [scenario, refresh],
-  );
+  // Watch for rollback analysis events and show toast
+  useEffect(() => {
+    if (!fleet || fleet.rollbackAnalyses.length === 0) return;
 
-  const demoPhase = fleet?.demoPhase ?? "idle";
-  const currentStepIdx = phaseToStepIndex(demoPhase);
-  const transitioning = isPhaseTransitioning(demoPhase);
+    const latest = fleet.rollbackAnalyses[fleet.rollbackAnalyses.length - 1];
+    if (!latest) return;
 
-  return (
+    // Check if this is a new analysis (within last 10 seconds)
+    const analysisTime = new Date(latest.timestamp).getTime();
+    const now = Date.now();
+    if (now - analysisTime < 10000) {
+      setToast({
+        message: `⚠️ Auto-rollback detected: ${latest.factory} ${latest.from_version} → ${latest.to_version}. Click to view agent analysis.`,
+        variant: "info"
+      });
+
+      // Auto-open drawer to show analysis
+      setShowRollbackAnalysis(true);
+
+      // Clear toast after 8 seconds
+      setTimeout(() => setToast(null), 8000);
+    }
+  }, [fleet]);
+
+  const handleApprove = async () => {
+    if (!pendingApprovalId) return;
+    try {
+      const result = await approveRequest(pendingApprovalId);
+      setPendingApprovalId(null);
+
+      // Show message based on actual result from backend
+      const message = result.result || "✓ Promotion approved and merged! Argo CD will sync shortly.";
+      setToast({
+        message,
+        variant: "success"
+      });
+      refresh(); // Refresh to show updated audit history
+      // Clear toast after 5 seconds
+      setTimeout(() => setToast(null), 5000);
+    } catch (err) {
+      console.error("Approval failed:", err);
+      setToast({
+        message: "Failed to approve request. Please try again.",
+        variant: "danger"
+      });
+    }
+  };
+
+  const handleReject = async (reason: string) => {
+    if (!pendingApprovalId) return;
+    try {
+      await rejectRequest(pendingApprovalId, reason);
+      setPendingApprovalId(null);
+      refresh(); // Refresh to show updated audit history
+    } catch (err) {
+      console.error("Rejection failed:", err);
+      setToast({ message: "Failed to reject request", variant: "danger" });
+    }
+  };
+
+  const fleetContent = (
     <Stack hasGutter>
+      {/* Toast Notification */}
+      {toast && (
+        <StackItem>
+          <Alert
+            variant={toast.variant}
+            title={toast.message}
+            actionClose={<AlertActionCloseButton onClose={() => setToast(null)} />}
+            timeout={5000}
+          />
+        </StackItem>
+      )}
+
+      {/* Header */}
       <StackItem>
         <Card>
           <CardHeader>
-            <CardTitle>Fleet Demo — Policy Promotion & Auto-Rollback</CardTitle>
+            <CardTitle>Fleet Management — AI-Driven Policy Promotion</CardTitle>
           </CardHeader>
           <CardBody>
-            <ProgressStepper>
-              {DEMO_STEPS.map((step, i) => (
-                <ProgressStep
-                  key={step.id}
-                  id={step.id}
-                  titleId={`step-${step.id}`}
-                  variant={stepVariant(i, currentStepIdx, transitioning)}
-                  isCurrent={i === currentStepIdx}
-                  description={
-                    <StepDescription
-                      step={step}
-                      isActive={i === currentStepIdx}
-                      isDone={i < currentStepIdx}
-                      isBusy={actionBusy === step.action}
-                      isTransitioning={i === currentStepIdx && transitioning}
-                      onAction={() => void onStepAction(step.action)}
-                    />
-                  }
-                >
-                  {step.label}
-                </ProgressStep>
-              ))}
-            </ProgressStepper>
-            <ActivityLog entries={fleet?.statusLog ?? []} />
+            <div style={{ color: "#6A6E73", fontSize: 14 }}>
+              Promote VLA models to factories using AI-assisted workflows.
+              All state changes require Human-in-the-Loop approval.
+            </div>
           </CardBody>
         </Card>
       </StackItem>
 
+      {/* Factory Cards */}
       <StackItem>
         <Flex spaceItems={{ default: "spaceItemsLg" }}>
           {fleet?.factories.map((f) => (
             <FlexItem key={f.name} flex={{ default: "flex_1" }}>
-              <FactoryPanel factory={f} />
+              <FactoryPanel
+                factory={f}
+                onPromotionTriggered={(approvalId) => setPendingApprovalId(approvalId)}
+                setToast={setToast}
+              />
             </FlexItem>
           )) ?? (
             <FlexItem>
@@ -577,9 +708,150 @@ export function FleetView({ events }: { events: FleetMessage[] }) {
         </Flex>
       </StackItem>
 
+      {/* Audit Trail */}
       <StackItem>
-        <ArgoSyncPanel argo={argo} links={fleet?.links ?? null} />
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Promotion Activity</CardTitle>
+          </CardHeader>
+          <CardBody>
+            {auditHistory.length === 0 ? (
+              <div style={{ color: "#6A6E73", fontStyle: "italic" }}>
+                No recent promotion activity
+              </div>
+            ) : (
+              <Stack hasGutter>
+                {auditHistory.map((item) => (
+                  <StackItem key={item.id}>
+                    <Flex alignItems={{ default: "alignItemsCenter" }}>
+                      <FlexItem spacer={{ default: "spacerSm" }}>
+                        {item.approval_status === "approved" ? (
+                          <span style={{ color: "#3E8635", fontSize: 18 }}>✓</span>
+                        ) : item.approval_status === "rejected" ? (
+                          <span style={{ color: "#C9190B", fontSize: 18 }}>✗</span>
+                        ) : (
+                          <span style={{ color: "#F0AB00", fontSize: 18 }}>⧗</span>
+                        )}
+                      </FlexItem>
+                      <FlexItem flex={{ default: "flex_1" }}>
+                        <div style={{ fontSize: 14 }}>
+                          <strong>{item.tool_name}</strong>
+                          {item.tool_arguments?.model_version && (
+                            <span style={{ color: "#6A6E73" }}>
+                              {" "}— v{item.tool_arguments.model_version} →{" "}
+                              {item.tool_arguments.factory}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#6A6E73" }}>
+                          {new Date(item.timestamp).toLocaleString()}
+                          {item.pr_url && (
+                            <>
+                              {" "}|{" "}
+                              <a
+                                href={item.pr_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: "#06C" }}
+                              >
+                                PR ↗
+                              </a>
+                            </>
+                          )}
+                        </div>
+                      </FlexItem>
+                      <FlexItem>
+                        <Label
+                          color={
+                            item.approval_status === "approved"
+                              ? "green"
+                              : item.approval_status === "rejected"
+                              ? "red"
+                              : "orange"
+                          }
+                          isCompact
+                        >
+                          {item.approval_status}
+                        </Label>
+                      </FlexItem>
+                    </Flex>
+                  </StackItem>
+                ))}
+              </Stack>
+            )}
+          </CardBody>
+        </Card>
+      </StackItem>
+
+      {/* GitOps Status */}
+      <StackItem>
+        <Card>
+          <CardHeader>
+            <CardTitle>GitOps Pipeline Status</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <Flex spaceItems={{ default: "spaceItemsLg" }}>
+              {fleet?.factories.map((f) => (
+                <FlexItem key={f.name}>
+                  <div style={{ fontSize: 13 }}>
+                    <strong>{f.name}:</strong>{" "}
+                    <Label
+                      color={statusColor(f.argoSyncStatus)}
+                      isCompact
+                      style={{ marginLeft: 4 }}
+                    >
+                      {f.argoSyncStatus}
+                    </Label>
+                  </div>
+                </FlexItem>
+              ))}
+              {fleet?.links?.argoFleetManager && (
+                <FlexItem>
+                  <a
+                    href={fleet.links.argoFleetManager}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: 13, color: "#06C" }}
+                  >
+                    View in Argo CD ↗
+                  </a>
+                </FlexItem>
+              )}
+            </Flex>
+          </CardBody>
+        </Card>
       </StackItem>
     </Stack>
   );
+
+  // Wrap with rollback analysis drawer if showing rollback analysis
+  if (showRollbackAnalysis && fleet && fleet.rollbackAnalyses.length > 0) {
+    const latestAnalysis = fleet.rollbackAnalyses[fleet.rollbackAnalyses.length - 1];
+    if (latestAnalysis) {
+      return (
+        <RollbackAnalysisDrawer
+          analysis={latestAnalysis}
+          onClose={() => setShowRollbackAnalysis(false)}
+        >
+          {fleetContent}
+        </RollbackAnalysisDrawer>
+      );
+    }
+  }
+
+  // Wrap with HIL drawer if there's a pending approval
+  if (pendingApprovalId !== null) {
+    return (
+      <HILDrawer
+        approvalId={pendingApprovalId}
+        onApprove={handleApprove}
+        onReject={handleReject}
+        onClose={() => setPendingApprovalId(null)}
+      >
+        {fleetContent}
+      </HILDrawer>
+    );
+  }
+
+  return fleetContent;
 }

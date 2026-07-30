@@ -39,6 +39,7 @@ console/frontend/*.d.ts
 
 # IDE
 .vscode/
+.idea/
 
 # OS files
 .DS_Store

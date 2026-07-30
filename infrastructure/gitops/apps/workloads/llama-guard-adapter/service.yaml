@@ -1,0 +1,21 @@
+# This project was developed with assistance from AI tools.
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama-guard-adapter
+  namespace: agentic-ops
+  labels:
+    app.kubernetes.io/name: llama-guard-adapter
+    app.kubernetes.io/part-of: agentic-orchestrator
+    app.kubernetes.io/component: safety
+  annotations:
+    description: "Moderation adapter exposing /v1/moderations for OGX"
+spec:
+  selector:
+    app.kubernetes.io/name: llama-guard-adapter
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP

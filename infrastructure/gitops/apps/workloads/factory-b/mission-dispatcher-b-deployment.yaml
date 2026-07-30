@@ -64,6 +64,11 @@ spec:
               value: factory-b.telemetry
             - name: CONSUMER_GROUP_ID
               value: mission-dispatcher-b
+            - name: POLICY_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: policy-version
+                  key: version
           resources:
             requests:
               cpu: 100m

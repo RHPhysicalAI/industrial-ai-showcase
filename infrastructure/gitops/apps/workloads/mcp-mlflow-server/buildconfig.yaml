@@ -1,0 +1,25 @@
+# This project was developed with assistance from AI tools.
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: mcp-mlflow-server
+  namespace: agentic-ops
+  labels:
+    app: mcp-mlflow-server
+    phase: phase-3
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: mcp-mlflow-server:latest
+  source:
+    type: Git
+    git:
+      uri: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
+      ref: main
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: infrastructure/gitops/apps/workloads/mcp-mlflow-server/Dockerfile
+  triggers:
+  - type: ConfigChange

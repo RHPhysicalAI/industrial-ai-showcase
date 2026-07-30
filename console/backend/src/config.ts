@@ -15,6 +15,8 @@ export interface AppConfig {
   githubToken: string;
   githubRepo: string;
   clusterAppsDomain: string;
+  agenticOrchestratorUrl: string;
+  auditServiceUrl: string;
 }
 
 export function loadConfig(): AppConfig {
@@ -37,7 +39,13 @@ export function loadConfig(): AppConfig {
     turnUsername: process.env.TURN_USERNAME ?? "",
     turnCredential: process.env.TURN_CREDENTIAL ?? "",
     githubToken: process.env.GITHUB_TOKEN ?? "",
-    githubRepo: process.env.GITHUB_REPO ?? "jeremyary/industrial-ai-showcase",
+    githubRepo: process.env.GITHUB_REPO ?? "RHPhysicalAI/industrial-ai-showcase",
     clusterAppsDomain: process.env.CLUSTER_APPS_DOMAIN ?? "",
+    agenticOrchestratorUrl:
+      process.env.AGENTIC_ORCHESTRATOR_URL ??
+      "http://agentic-orchestrator.agentic-ops.svc.cluster.local:8080",
+    auditServiceUrl:
+      process.env.AUDIT_SERVICE_URL ??
+      "http://audit-service.agentic-ops.svc.cluster.local:8090",
   };
 }

@@ -1,0 +1,8 @@
+# This project was developed with assistance from AI tools.
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: mcp-mlflow-server
+spec:
+  lookupPolicy:
+    local: true
