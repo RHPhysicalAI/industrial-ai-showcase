@@ -1,0 +1,6 @@
+# MCP MLflow Server Dependencies
+# This project was developed with assistance from AI tools.
+
+fastapi==0.115.5
+uvicorn[standard]==0.34.0
+pydantic==2.10.3

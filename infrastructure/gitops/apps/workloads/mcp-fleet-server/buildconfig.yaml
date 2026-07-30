@@ -1,0 +1,24 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: mcp-fleet-server
+  namespace: agentic-ops
+  labels:
+    app: mcp-fleet-server
+    phase: phase-3
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: mcp-fleet-server:latest
+  source:
+    type: Git
+    git:
+      uri: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
+      ref: main
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: infrastructure/gitops/apps/workloads/mcp-fleet-server/Dockerfile
+  triggers:
+    - type: ConfigChange

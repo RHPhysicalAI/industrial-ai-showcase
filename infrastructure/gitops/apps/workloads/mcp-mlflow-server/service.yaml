@@ -1,0 +1,16 @@
+# This project was developed with assistance from AI tools.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-mlflow-server
+  annotations:
+    description: Mock MCP server for MLflow tools
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: mcp-mlflow-server
