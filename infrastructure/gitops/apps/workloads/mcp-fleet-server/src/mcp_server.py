@@ -262,7 +262,7 @@ async def promote_policy_version(factory: str, model_version: str):
         →
         {
           "status": "pr_created",
-          "pr_url": "https://github.com/jeremyary/industrial-ai-showcase/pull/42",
+          "pr_url": "https://github.com/RHPhysicalAI/industrial-ai-showcase/pull/42",
           "pr_number": 42,
           "branch_name": "agent/promote-model-v1-4-to-factory-a-20260709-143022",
           "factory": "factory-a",

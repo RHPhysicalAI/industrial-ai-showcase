@@ -53,7 +53,7 @@ spec:
                   key: GITHUB_TOKEN
                   optional: true
             - name: GITHUB_REPO
-              value: jeremyary/industrial-ai-showcase
+              value: RHPhysicalAI/industrial-ai-showcase
             - name: GITHUB_BRANCH
               value: main
           resources:

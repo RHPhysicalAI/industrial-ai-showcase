@@ -5,6 +5,7 @@ kind: Kustomization
 namespace: agentic-ops
 
 resources:
+  - namespace.yaml
   - imagestream.yaml
   - buildconfig.yaml
   - deployment.yaml
