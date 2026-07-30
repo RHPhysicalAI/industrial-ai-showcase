@@ -1,0 +1,14 @@
+# This project was developed with assistance from AI tools.
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: audit-service
+  namespace: agentic-ops
+  labels:
+    app: audit-service
+    phase: "3"
+    milestone: "2"
+spec:
+  lookupPolicy:
+    local: true

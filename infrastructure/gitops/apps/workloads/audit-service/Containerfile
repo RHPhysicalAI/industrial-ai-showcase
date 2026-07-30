@@ -1,0 +1,28 @@
+# This project was developed with assistance from AI tools.
+FROM registry.access.redhat.com/ubi9/python-311:latest
+
+USER root
+
+# Install PostgreSQL client libraries
+RUN dnf install -y postgresql-devel gcc && \
+    dnf clean all
+
+USER 1001
+
+WORKDIR /opt/app-root/src
+
+# Copy source code
+COPY infrastructure/gitops/apps/workloads/audit-service/src/audit_server.py .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    fastapi==0.115.0 \
+    uvicorn[standard]==0.32.0 \
+    psycopg2-binary==2.9.9 \
+    pydantic==2.9.2
+
+# Expose port
+EXPOSE 8090
+
+# Run server
+CMD ["python", "audit_server.py"]
