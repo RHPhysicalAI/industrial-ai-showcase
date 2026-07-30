@@ -11,8 +11,10 @@ USER 1001
 
 WORKDIR /opt/app-root/src
 
-# Copy source code
+# Copy source code and migrations
 COPY infrastructure/gitops/apps/workloads/audit-service/src/audit_server.py .
+COPY infrastructure/gitops/apps/workloads/audit-service/src/init_db.py .
+COPY infrastructure/gitops/apps/workloads/audit-service/migrations/ ./migrations/
 
 # Install Python dependencies
 RUN pip install --no-cache-dir \
