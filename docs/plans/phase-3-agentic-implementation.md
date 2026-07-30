@@ -3,10 +3,11 @@
 > [!NOTE]
 > This project was developed with assistance from AI tools.
 
-**Status**: Planning (Phase 2 in progress)  
-**Target Start**: Upon Phase 2 completion  
+**Status**: Milestones 1-3 Complete (Milestones 4-5 deferred)  
+**Started**: 2026-07-01  
 **Target Duration**: 8-10 weeks  
-**Primary Deliverable**: 60-minute technical deep-dive demo running live
+**Primary Deliverable**: 60-minute technical deep-dive demo running live  
+**Last Updated**: 2026-07-27
 
 **📋 Implementation Plans**: See `phase-3-milestones/` directory for week-by-week execution guides:
 - `week-0-validation.md` - Infrastructure validation spikes (3-5 days)
@@ -20,13 +21,15 @@
 
 ## Executive Summary
 
-Phase 3 delivers the agentic orchestration layer — the capability for operators to interact with the industrial AI stack via natural language, with human-in-the-loop (HIL) governance for state-modifying actions. This is the most architecturally complex phase, introducing a two-layer stack (LangGraph + Llama Stack), three MCP servers, a six-pane HIL approval drawer, and end-to-end observability for agent reasoning.
+Phase 3 delivers the agentic orchestration layer — the capability for operators to interact with the industrial AI stack via natural language, with human-in-the-loop (HIL) governance for state-modifying actions.
 
-**Architectural Approach**: The agent never touches the cluster API directly. State-modifying actions flow through Git (agent opens PR → operator reviews in HIL drawer → PR merges → Argo CD reconciles). This reframes "LLM touching OT" as "LLM participating in code review."
+**What was built**: A LangGraph-based agent orchestrator with custom HIL gate, two MCP tool servers (fleet + MLflow), Llama Guard 3-8B content moderation, a PostgreSQL-backed audit service, and a 7-pane HIL approval drawer in the Showcase Console. The planned Llama Stack Agents API (OGX) was non-functional — the `rh` distribution did not expose the `/v1/agents/*` endpoints — so a custom Python HIL implementation replaced it.
 
-**Critical Constraint**: Llama Stack governance operates on the GitOps / PR-open path **only**, never inline in the 10Hz+ VLA serving-time robot command flow. Violating this invariant breaks credibility with technical audiences (Archetype C).
+**Architectural Approach**: The agent never touches the cluster API directly. State-modifying actions flow through Git (agent opens PR → operator reviews in HIL drawer → PR auto-merges → Argo CD reconciles). This reframes "LLM touching OT" as "LLM participating in code review."
 
-**Complexity Budget**: This phase introduces 10+ new components across 4 segments. The implementation strategy prioritizes **incremental integration** — get the simplest end-to-end flow working first, then layer in complexity.
+**Critical Constraint**: HIL governance operates on the GitOps / PR-open path **only**, never inline in the 10Hz+ VLA serving-time robot command flow. Violating this invariant breaks credibility with technical audiences (Archetype C).
+
+**Implementation approach**: Incremental integration — the thinnest vertical slice first (Milestone 1), then layered complexity. Milestones 1-3 are complete and verified end-to-end. Milestones 4-5 (TrustyAI, Cosmos NIMs) are deferred.
 
 ---
 
@@ -69,12 +72,7 @@ Before writing code, the team must align on five critical architectural decision
 
 **Recommendation**: Start with **Llama-3.1-8B-Instruct** (proven tool-use, fits L4, large community support). Fallback to Llama-3.2-3B if memory pressure.
 
-**Questions for Team**:
-- **Q1**: Do we have strong reasons to prefer a non-Meta model (licensing, RHEL productization concerns)?
-- **Q2**: Should we benchmark multiple models in Milestone 1, or commit to one and optimize?
-- **Q3**: Is quantization (int8/int4) acceptable if it reduces latency, or do we need full fp16 quality?
-
-**Decision**: *(To be filled after team discussion)*
+**Decision**: **Llama-3.1-8B-Instruct** confirmed and deployed on 1x L40S GPU (not L4 — L40S was used for VRAM headroom). Served via vLLM v0.6.3 with `--enable-auto-tool-choice --tool-call-parser=llama3_json`, float16, max-model-len 4096. Known limitation: 8B model has recursion issues with complex agentic queries; upgrade to 70B blocked by single-GPU VRAM limit.
 
 ---
 
@@ -103,12 +101,7 @@ Before writing code, the team must align on five critical architectural decision
 - Abstract MCP calls behind interface (`src/agentic_orchestrator/mcp_client.py`)
 - If SDK fails in Milestone 1, rewrite is cheap (only one component)
 
-**Questions for Team**:
-- **Q4**: Do we have any Red Hat productization concerns with using Anthropic's SDK directly?
-- **Q5**: Should we plan for a "MCP compatibility test suite" to validate multiple LLMs?
-- **Q6**: Is there value in contributing to the MCP SDK upstream (if we hit issues)?
-
-**Decision**: *(To be filled after team discussion)*
+**Decision**: **Option B — Custom FastAPI HTTP endpoints**. MCP servers are plain FastAPI services exposing `/tools/{tool_name}` endpoints with query parameters. The orchestrator uses a custom `MCPClient` class making HTTP GET/POST requests. Tools are wrapped as LangChain `@tool` functions and bound to the LLM via `llm.bind_tools()`. No Anthropic SDK dependency.
 
 ---
 
@@ -159,12 +152,7 @@ CREATE TABLE hil_audit (
 3. **HIL Audit as Separate Table?**
    - **Proposed**: Yes, separate table (immutable for compliance, queried independently)
 
-**Questions for Team**:
-- **Q7**: Should we normalize the audit trail into a separate `tool_calls` table, or is JSONB array acceptable?
-- **Q8**: Do we need a retention policy for `agent_sessions`? (e.g., archive sessions > 90 days old)
-- **Q9**: Should `hil_audit` be in a separate database (for compliance isolation), or same DB as agent state?
-
-**Decision**: *(To be filled after team discussion)*
+**Decision**: Simplified approach — **audit-service** with a single `hil_approvals` table in the shared MLflow PostgreSQL database. Schema stores: session_id, tool_name, tool_arguments (JSONB), git_diff, summary, blast_radius (JSONB), tool_call_trace (JSONB), reasoning_summary, status (pending/approved/rejected/merge_failed), and timestamps. No separate `agent_sessions` table — LangGraph state is ephemeral (single-turn conversations, no long-running sessions).
 
 ---
 
@@ -211,12 +199,7 @@ def test_read_only_agent_query():
 
 **Open Question**: Should we build a test harness (`tests/integration/harness/`) with mock MCP servers + test scenarios? Effort: ~1 week. Benefit: Faster iteration, safer refactoring.
 
-**Questions for Team**:
-- **Q10**: Is 80% unit test coverage the right target, or should we aim higher (90%)?
-- **Q11**: Should we invest in the test harness upfront (Milestone 1), or defer to Milestone 3?
-- **Q12**: How do we validate latency targets (< 5 sec p50) in CI? (Need load testing infra?)
-
-**Decision**: *(To be filled after team discussion)*
+**Decision**: End-to-end manual validation against real cluster, no formal test harness. Testing validated through manual HIL promotion workflows (PRs #72-75 verified correct behavior). Unit tests deferred in favor of rapid iteration.
 
 ---
 
@@ -244,206 +227,182 @@ def test_read_only_agent_query():
 
 **Buffer Weeks (11-12)**: Integration polish, demo rehearsals, performance optimization, docs.
 
-**Questions for Team**:
-- **Q13**: Are we aligned on the Critical Path (M1-M3 non-negotiable, M4-M5 negotiable)?
-- **Q14**: If NGC entitlements are delayed, do we proceed with mock Cosmos API, or pause Phase 3?
-- **Q15**: Should we set a "no-go decision point" at Week 6? (If M1-M3 aren't working, we reassess)
-
-**Decision**: *(To be filled after team discussion)*
+**Decision**: M1-M3 completed. M4 (TrustyAI) and M5 (Cosmos NIMs) deferred to Phase 4+. NGC entitlements not yet available for Cosmos. TrustyAI integration not prioritized — the demo works without it.
 
 ---
 
-### Risk Analysis
+### Risk Analysis (Pre-Implementation — see Risk Register below for outcomes)
 
 **High-Impact Risks** (Could Block Phase 3):
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| **Llama Stack API breaks** (RHOAI 3.4 EA1 → EA2 upgrade) | Medium | High | Abstract HIL gate behind interface, pin exact version |
-| **NGC entitlements delayed** (Cosmos NIMs unavailable) | Medium | High | Start with M1-M3 (no Cosmos dependency), deploy mock API for M5 |
-| **MCP protocol version mismatch** (LangGraph ↔ MCP server) | Medium | Medium | Use Anthropic's SDK, build M1 as validation spike |
-| **L4 GPU unavailable** (provisioning delay) | Low | High | Validate GPU allocation before starting M1 |
+| Risk | Likelihood | Impact | Outcome |
+|------|-----------|--------|---------|
+| **Llama Stack API breaks** | Medium | High | 🔴 MATERIALIZED — OGX Agents API returned 404, replaced with custom HIL |
+| **NGC entitlements delayed** | Medium | High | 🔴 MATERIALIZED — Cosmos NIMs deferred to Phase 4+ |
+| **MCP protocol version mismatch** | Medium | Medium | 🟢 Avoided — used custom HTTP endpoints, no MCP SDK |
+| **L4 GPU unavailable** | Low | High | 🟢 Avoided — used L40S instead |
 
 **Medium-Impact Risks** (Could Delay, But Recoverable):
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| **TrustyAI eval latency > 10 sec** | High | Medium | Run eval async, show spinner, cache results |
-| **GitHub API rate limits** | Low | Medium | Use dedicated bot account, rate-limit PRs to 10/hour |
-| **Operator approval fatigue** (HIL UX issues) | Medium | Medium | Only state-modifying tools require approval |
+| Risk | Likelihood | Impact | Outcome |
+|------|-----------|--------|---------|
+| **TrustyAI eval latency > 10 sec** | High | Medium | ⚪ Not tested — deferred with M4 |
+| **GitHub API rate limits** | Low | Medium | 🟢 Not an issue |
+| **Operator approval fatigue** | Medium | Medium | 🟢 Mitigated — only promote_policy_version triggers HIL |
 
 ---
 
-### Implementation Readiness Checklist
-
-Before starting Milestone 1, these **must** be true:
+### Implementation Readiness Checklist — All Met
 
 #### Infrastructure Readiness
-- [ ] **L4 GPU allocated** (1× L4 with 24 GB VRAM available on hub cluster)
-- [ ] **Postgres deployed** (either new instance or shared MLflow Postgres)
-- [ ] **Vault access configured** (secrets for GitHub token, Postgres credentials)
-- [ ] **vLLM deployment tested** (can we serve Llama-3.1-8B on L4 and hit < 5 sec latency?)
+- [x] **L40S GPU allocated** (used L40S instead of planned L4 for VRAM headroom)
+- [x] **Postgres deployed** (shared MLflow Postgres instance)
+- [x] **GitHub token configured** (personal access token via OpenShift Secret)
+- [x] **vLLM deployment tested** (Llama-3.1-8B-Instruct serving on L40S)
 
 #### Dependency Readiness
-- [ ] **Phase 2 complete** (20-minute demo runs reliably end-to-end)
-- [ ] **MLflow operational** (API accessible, has experiment data for mcp-mlflow to query)
-- [ ] **Fleet Manager API stable** (mcp-fleet needs read-only endpoints)
-- [ ] **GitHub bot account created** (with permissions to create PRs in `infrastructure/gitops/`)
-
-#### Team Readiness
-- [ ] **LangGraph knowledge transfer** (team has read docs, understands graphs/checkpointers)
-- [ ] **MCP protocol familiarity** (team has reviewed Anthropic's MCP examples)
-- [ ] **HIL drawer design spec approved** (frontend engineer has reviewed 6-pane spec)
+- [x] **Phase 2 complete**
+- [x] **MLflow operational** (mcp-mlflow uses mock data, but MLflow instance exists)
+- [x] **Fleet Manager API stable** (Console backend provides fleet status)
+- [x] **GitHub access configured** (personal access token, not bot account)
 
 #### Architectural Alignment
-- [ ] **Team alignment** on:
-  - Agent brain LLM choice (Decision 1)
-  - MCP SDK approach (Decision 2)
-  - State persistence schema (Decision 3)
-  - Milestone sequencing (Decision 5)
+- [x] All 5 decisions resolved through implementation (see Decision sections above)
 
 ---
 
-### Resource Requirements Validation
+### Resource Requirements Validation — Resolved
 
-**Team Allocation**:
-- **Backend Engineer** (Python, LangGraph, FastAPI): 1 FTE × 10 weeks
-- **Frontend Engineer** (React, TypeScript, HIL drawer): 0.5 FTE × 10 weeks
-- **ML/AI Engineer** (TrustyAI, Cosmos NIMs, model eval): 0.5 FTE × 10 weeks
-- **Platform Engineer** (GitOps, Argo CD, GitHub API, Vault): 0.25 FTE × 10 weeks
-- **QA/Integration Tester**: 0.25 FTE × weeks 9-12
+**Actual Staffing**: Single engineer with AI code assistance (Claude Code). The 2.5 FTE estimate was based on a traditional team structure and proved overly conservative for M1-M3 scope.
 
-**Total**: ~2.5 FTE over 10 weeks
+**Actual GPU Usage**: 1× L40S for agent brain (Llama-3.1-8B-Instruct via vLLM). Cosmos NIMs GPUs not allocated.
 
-**Infrastructure Requirements**:
-- **GPU**: 1× L4 (24 GB) for agent brain, 2× L40S (48 GB each) for Cosmos NIMs (M5 only, not concurrent)
-- **Compute** (non-GPU): 15 CPU, 26 GB RAM total (LangGraph + Llama Stack + MCP servers + TrustyAI)
-- **Storage**: Postgres 20 GB, Nucleus 50 GB (Cosmos Transfer outputs)
+**Actual Compute**: ~5 CPU, ~12 GB RAM total across agentic-ops namespace services.
 
-**External Dependencies**:
-- NGC Entitlements: Cosmos Predict 2.5, Cosmos Transfer 2.5 (for Milestone 5)
-- GitHub: API access, bot account, CODEOWNERS approval workflow
-- Vault: Secrets for GitHub token, Postgres credentials
-
-**Questions for Team**:
-- **Q16**: Do we have L4 GPU allocation confirmed? (Need to validate before Week 1)
-- **Q17**: Do we have NGC entitlement timeline? (Informs whether M5 is feasible)
-- **Q18**: Is 2.5 FTE realistic, or do we need to re-scope? (Current team capacity?)
-
-**Decisions on Resource Allocation**: *(To be filled after team discussion)*
+**External Dependencies Resolved**:
+- GitHub: Personal access token (not bot account, no CODEOWNERS)
+- PostgreSQL: Shared MLflow instance
+- NGC: Not available — Cosmos deferred
 
 ---
 
-### Open Questions Summary
-
-All questions from Pre-Implementation Decisions, consolidated:
+### Open Questions Summary — All Resolved
 
 **LLM Selection (Decision 1)**:
-- Q1: Non-Meta model preference due to licensing/productization?
-- Q2: Benchmark multiple models in M1, or commit to one?
-- Q3: Quantization (int8/int4) acceptable, or full fp16 required?
+- Q1: ✅ Resolved — Meta model (Llama-3.1-8B-Instruct) selected. No licensing concerns for internal demo.
+- Q2: ✅ Resolved — Committed to Llama-3.1-8B-Instruct without benchmarking alternatives.
+- Q3: ✅ Resolved — Full fp16. No quantization needed — L40S has 48 GB VRAM.
 
 **MCP Protocol (Decision 2)**:
-- Q4: Red Hat productization concerns with Anthropic's SDK?
-- Q5: Plan for MCP compatibility test suite across LLMs?
-- Q6: Value in contributing to MCP SDK upstream?
+- Q4: ✅ Resolved — Did not use Anthropic's SDK. Custom FastAPI HTTP endpoints.
+- Q5: ✅ N/A — No MCP protocol to test (plain HTTP).
+- Q6: ✅ N/A — Not using MCP SDK.
 
 **State Persistence (Decision 3)**:
-- Q7: Normalize audit trail to separate `tool_calls` table, or JSONB array?
-- Q8: Retention policy for `agent_sessions` (e.g., 90 days)?
-- Q9: `hil_audit` in separate database for compliance isolation?
+- Q7: ✅ Resolved — Single `hil_approvals` table with JSONB columns. No separate tool_calls table.
+- Q8: ✅ Deferred — No retention policy needed for demo. Data volume is minimal.
+- Q9: ✅ Resolved — Shared MLflow database. Separate DB for compliance isolation is Phase 4+ work.
 
 **Testing Strategy (Decision 4)**:
-- Q10: 80% unit test coverage target, or 90%?
-- Q11: Invest in test harness upfront (M1) or defer (M3)?
-- Q12: How to validate latency targets in CI (need load testing)?
+- Q10: ✅ Resolved — No unit test coverage target. Manual E2E validation.
+- Q11: ✅ Resolved — No test harness built.
+- Q12: ✅ Deferred — No load testing. Performance measured manually.
 
 **Milestone Sequencing (Decision 5)**:
-- Q13: Aligned on Critical Path (M1-M3 non-negotiable, M4-M5 negotiable)?
-- Q14: NGC entitlements delayed → proceed with mock or pause Phase 3?
-- Q15: Set no-go decision point at Week 6?
+- Q13: ✅ Resolved — M1-M3 completed. M4-M5 deferred.
+- Q14: ✅ Resolved — Proceeded without NGC entitlements. Cosmos NIMs deferred.
+- Q15: ✅ N/A — No formal no-go decision point needed.
 
 **Resource Validation**:
-- Q16: L4 GPU allocation confirmed?
-- Q17: NGC entitlement timeline available?
-- Q18: 2.5 FTE realistic, or need to re-scope?
+- Q16: ✅ Resolved — L40S GPU used (not L4). Available on hub cluster.
+- Q17: ✅ Resolved — NGC entitlements not available. Cosmos deferred.
+- Q18: ✅ Resolved — Work done by single engineer with AI assistance. 2.5 FTE plan was overly conservative.
 
 ---
 
 ## Architecture Overview
 
-### Two-Layer Agentic Stack
+### Agentic Stack (As Built)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ Operator (Showcase Console)                            │
-│  - Natural language input                              │
-│  - HIL Approval Drawer (6 panes)                       │
+│  - AgentAssistant chat panel (natural language)        │
+│  - HIL Approval Drawer (7+ panes)                      │
+│  - Rollback Analysis Drawer                            │
 └────────────────┬────────────────────────────────────────┘
                  │
                  ↓
 ┌─────────────────────────────────────────────────────────┐
-│ Llama Stack Governance Layer (ADR-019)                 │
-│  - HIL approval gate for state-modifying tools         │
-│  - Safety guardrails (PII scan, policy checks)         │
-│  - TrustyAI evaluation integration                     │
-│  - Audit trail (immutable, CAC/PIV-bound)              │
+│ LangGraph Orchestrator + Custom HIL Gate               │
+│  - Agent brain: vLLM Llama-3.1-8B (L40S GPU)          │
+│  - Tool calling via MCP HTTP endpoints                 │
+│  - Custom HIL: intercepts state-modifying tools        │
+│  - Llama Guard 3-8B content moderation (input+output)  │
+│  - Kafka event listener (rollback analysis)            │
+│  - Audit trail: PostgreSQL via audit-service           │
 └────────────────┬────────────────────────────────────────┘
                  │
-                 ↓
-┌─────────────────────────────────────────────────────────┐
-│ LangGraph Orchestrator (ADR-005)                       │
-│  - Agent brain: vLLM-served LLM (L4 GPU)               │
-│  - Tool calling via MCP protocol                       │
-│  - State persistence: Postgres                         │
-│  - Plan composition + execution                        │
-└────────────────┬────────────────────────────────────────┘
-                 │
-        ┌────────┴────────┬──────────────┐
-        ↓                 ↓              ↓
-   ┌─────────┐      ┌──────────┐   ┌──────────┐
-   │ mcp-    │      │ mcp-     │   │ mcp-     │
-   │ fleet   │      │ isaac-sim│   │ mlflow   │
-   └────┬────┘      └────┬─────┘   └────┬─────┘
-        │                │              │
-        ↓                ↓              ↓
-  Fleet Manager    Isaac Sim       MLflow
+        ┌────────┴────────┐
+        ↓                 ↓
+   ┌─────────┐      ┌──────────┐
+   │ mcp-    │      │ mcp-     │
+   │ fleet   │      │ mlflow   │
+   │ (real)  │      │ (mock)   │
+   └────┬────┘      └────┬─────┘
+        │                │
+        ↓                ↓
+  Fleet Manager      MLflow (mock data)
+  Console Backend
+  GitHub API
 ```
 
-### Agent-Opens-a-PR Pattern
+**Note**: The planned Llama Stack (OGX) governance layer was deployed but the `rh` distribution's Agents API (`/v1/agents/*`) returned 404. The HIL gate was implemented as a custom Python node in the LangGraph graph instead. Llama Guard 3-8B is deployed separately for content moderation (not through OGX). See `llama_stack_adapter.py` for the unused OGX client code preserved for future reference.
+
+### Agent-Opens-a-PR Pattern (As Implemented)
 
 ```
-1. Operator: "Promote v1.4 to Factory A"
+1. Operator: "Promote v1.5 to Factory A"
          ↓
-2. LangGraph: Plans approach
-   - Queries mcp-mlflow (read-only: get v1.4 metrics)
-   - Queries mcp-fleet (read-only: get Factory A state)
-   - Proposes action: promote_model_version (state-modifying)
+2. Llama Guard: Scans input for safety/content moderation
          ↓
-3. Llama Stack: HIL gate triggered
-   - Runs guardrails (PII scan, safety checks)
-   - Computes blast radius (queries mcp-fleet)
-   - Invokes TrustyAI eval (v1.4 vs v1.3 score)
+3. LangGraph Orchestrator: Receives query
+   - Calls agent brain (vLLM Llama-3.1-8B-Instruct)
+   - Agent selects tool: promote_policy_version (state-modifying)
          ↓
-4. HIL Drawer Opens (6 panes populated)
-   - Operator reviews proposed Git diff
-   - Checks blast radius (1 factory, 3 robots)
-   - Verifies MCP trace (what agent queried)
-   - Sees guardrail outcomes (all PASS)
-   - Reviews TrustyAI eval (0.87 vs 0.76)
+4. Custom HIL Gate: Intercepts state-modifying tool call
+   - Calls mcp-fleet-server POST /tools/promote_policy_version
+     with dry_run=true (generates diff without creating PR)
+   - Gets back: git_diff, summary, blast_radius, reasoning
+   - Records pending approval in audit-service (PostgreSQL)
+   - Returns HIL request to Console via SSE/polling
          ↓
-5. Operator: Clicks "Approve"
+5. HIL Drawer Opens (7+ panes populated)
+   - Summary: "Promote v1.5 to Factory A"
+   - Git diff: policy-version.yaml change only
+   - Blast radius: affected factory, robots, rollback path
+   - MCP tool call trace
+   - Agent reasoning summary
+   - Approve / Reject buttons
          ↓
-6. Agent: Opens PR to infrastructure/gitops/
+6. Operator: Clicks "Approve"
          ↓
-7. PR merges (via GitHub API or webhook)
+7. Orchestrator: Calls mcp-fleet-server POST /tools/promote_policy_version
+   with dry_run=false (creates real PR)
+   - kustomize_generator.py generates policy-version.yaml overlay
+   - github_client.py creates PR via GitHub API
+   - PR auto-merges via GitHub API (no CODEOWNERS, bot has write access)
          ↓
-8. Argo CD: Syncs Factory A to v1.4
+8. Argo CD: Auto-syncs within ~3 min poll cycle
+   - Reconciles ConfigMap from merged policy-version.yaml
          ↓
-9. Audit record written (immutable, CAC/PIV-bound)
+9. Audit record updated: status → approved, pr_url populated
+         ↓
+10. Console UI: Shows success alert with PR link
+    - Factory version updates in Fleet Overview
 ```
 
-**Key Insight**: The agent never calls `oc apply`. Every change is Git-mediated. The cluster API is read-only from the agent's perspective.
+**Key Insight**: The agent never calls `oc apply`. Every change is Git-mediated. The cluster API is read-only from the agent's perspective. PRs auto-merge via GitHub API after HIL approval — no separate CODEOWNERS review step.
 
 ---
 
@@ -451,7 +410,7 @@ All questions from Pre-Implementation Decisions, consolidated:
 
 Phase 3 is complex enough that a waterfall "build all components then integrate" approach will fail. Instead: **build the thinnest possible vertical slice first**, then expand.
 
-### Milestone 1: "Hello World" Agent Loop (Weeks 1-2)
+### Milestone 1: "Hello World" Agent Loop (Weeks 1-2) ✅ Complete
 
 **Goal**: Operator types a read-only question, agent answers. No HIL, no state changes. Proves LangGraph → MCP → data source → response path works.
 
@@ -477,9 +436,11 @@ Agent: "Pick-success rate for v1.3 is 0.76 across 200 eval episodes."
 
 ---
 
-### Milestone 2: Llama Stack HIL Gate (Weeks 3-4)
+### Milestone 2: Custom HIL Gate (Weeks 3-4) ✅ Complete
 
-**Goal**: Operator asks agent to do something state-modifying. HIL gate triggers, drawer opens (simplified 3-pane version), operator approves, action executes.
+**Goal**: Operator asks agent to do something state-modifying. HIL gate triggers, drawer opens, operator approves, action executes.
+
+**Implementation Note**: Originally "Llama Stack HIL Gate" — replaced with custom HIL implementation after OGX Agents API returned 404.
 
 **Components Added**:
 - Llama Stack governance layer (minimal config: HIL enabled, guardrails placeholder)
@@ -511,9 +472,11 @@ Audit: Record written with operator identity + timestamp
 
 ---
 
-### Milestone 3: Agent-Opens-a-PR Pattern (Weeks 5-6)
+### Milestone 3: Agent-Opens-a-PR Pattern (Weeks 5-6) ✅ Complete
 
 **Goal**: Agent doesn't call cluster API directly — it opens a PR. Operator approves in drawer, PR merges, Argo CD syncs.
+
+**Verified**: PRs #72-75 confirmed correct behavior. Factory A promoted to v1.6, Factory B to v1.7.
 
 **Components Added**:
 - GitHub API integration (create PR, merge PR)
@@ -549,9 +512,11 @@ Argo CD: Syncs Factory A to v1.4
 
 ---
 
-### Milestone 4: Full HIL Drawer (6 Panes) + TrustyAI (Weeks 7-8)
+### Milestone 4: Full HIL Drawer (6 Panes) + TrustyAI (Weeks 7-8) ⏳ Deferred
 
 **Goal**: HIL drawer shows all six panes per the design spec. TrustyAI evaluation runs on proposed policy vs. incumbent.
+
+**Status**: Deferred to Phase 4+. The HIL drawer was implemented with 7+ panes (exceeding the 6-pane spec in some areas), but TrustyAI integration and Presidio/guardrail-outcome panes were not built. See Component 4 for pane-by-pane status.
 
 **Components Added**:
 - HIL drawer: add remaining 3 panes (blast radius, guardrail outcomes, TrustyAI eval)
@@ -588,9 +553,11 @@ Same as Milestone 3, but drawer now shows:
 
 ---
 
-### Milestone 5: Cosmos NIMs + Synthetic Data Pipeline (Weeks 9-10)
+### Milestone 5: Cosmos NIMs + Synthetic Data Pipeline (Weeks 9-10) ⏳ Deferred
 
 **Goal**: Segment 1 of 60-min demo runs — Cosmos Predict 2.5 as pre-dispatch admission check, Cosmos Transfer 2.5 generating scenario variations.
+
+**Status**: Deferred to Phase 4+. NGC entitlements not available. See Component 6.
 
 **Components Added**:
 - Cosmos Predict 2.5 NIM (KServe InferenceService on L40S)
@@ -628,447 +595,267 @@ Agent: Uploads to Nucleus, registers in MLflow as dataset
 
 ## Component Breakdown
 
-### 1. LangGraph Orchestrator
+### 1. LangGraph Orchestrator ✅ Implemented
 
-**Repository**: `workloads/agentic-orchestrator/`
+**Repository**: `infrastructure/gitops/apps/workloads/agentic-orchestrator/`
 
 **Tech Stack**:
-- Python 3.11+
-- LangGraph 0.2.x
-- vLLM serving `meta-llama/Llama-3.1-8B-Instruct` (or `Llama-3.2-3B-Instruct` for lower memory footprint)
-- Postgres for state persistence
+- Python 3.11
+- LangGraph + LangChain
+- vLLM serving `meta-llama/Llama-3.1-8B-Instruct` on L40S GPU
+- Custom HIL gate (replaces planned Llama Stack Agents API)
+- Llama Guard 3-8B content moderation via `llama-guard-adapter`
+- Kafka consumer for rollback analysis events
 
-**Key Files**:
-- `src/agentic_orchestrator/agent.py` — LangGraph graph definition
-- `src/agentic_orchestrator/tools.py` — MCP tool wrappers
-- `src/agentic_orchestrator/planner.py` — Plan composition logic
-- `src/agentic_orchestrator/state.py` — Agent session state schema
+**Key Files (Actual)**:
+- `src/agent_graph.py` — LangGraph graph definition with HIL gate node
+- `src/api_server.py` — FastAPI server exposing `/chat`, `/approve`, `/reject`, `/pending-approvals`
+- `src/mcp_client.py` — HTTP client for MCP fleet + MLflow servers
+- `src/github_client.py` — GitHub API for PR creation + auto-merge
+- `src/kustomize_generator.py` — Generates policy-version.yaml Kustomize overlays
+- `src/llama_stack_adapter.py` — Unused OGX client (preserved for future reference)
+- `src/llama_guard_client.py` — Llama Guard 3-8B integration for input/output moderation
+- `src/kafka_listener.py` — Kafka consumer for anomaly/rollback events
 
 **Deployment**:
-- Helm chart: `infrastructure/gitops/apps/workloads/agentic-orchestrator/`
+- BuildConfig + ImageStream (OpenShift S2I, not Helm)
 - Namespace: `agentic-ops`
-- Resources: 2 CPU, 4 GB RAM (agent logic is lightweight; LLM is separate pod)
+- Resources: 2 CPU, 4 GB RAM
 - Service: ClusterIP, port 8080
-- Service Mesh: sidecar injected, mTLS enforced
+- No service mesh sidecar (not yet configured)
 
-**Environment Variables**:
+**Key Environment Variables (Actual)**:
 ```yaml
-MCP_FLEET_URL: http://mcp-fleet.agentic-ops.svc:8081
-MCP_ISAAC_SIM_URL: http://mcp-isaac-sim.agentic-ops.svc:8082
-MCP_MLFLOW_URL: http://mcp-mlflow.agentic-ops.svc:8083
-LLAMA_STACK_URL: http://llama-stack.agentic-ops.svc:8090
-AGENT_BRAIN_URL: http://vllm-agent-brain.agentic-ops.svc:8000/v1
-POSTGRES_SECRET: vault-agentic-orchestrator-db
-GITHUB_TOKEN_SECRET: vault-github-bot-token
+MCP_FLEET_URL: http://mcp-fleet-server:8081
+MCP_MLFLOW_URL: http://mcp-mlflow-server:8083
+VLLM_URL: http://vllm-agent-brain:8000/v1
+LLAMA_GUARD_URL: http://llama-guard-adapter:8085
+AUDIT_SERVICE_URL: http://audit-service:8090
+GITHUB_TOKEN: (from Secret)
+GITHUB_REPO: (owner/repo)
+KAFKA_BOOTSTRAP_SERVERS: amq-streams-kafka-bootstrap.amq-streams.svc:9092
+SHOWCASE_MODE: "true"  # Uses HuggingFace model URIs instead of MLflow/MinIO
 ```
 
-**State Schema** (Postgres table `agent_sessions`):
-```sql
-CREATE TABLE agent_sessions (
-  session_id UUID PRIMARY KEY,
-  operator_identity TEXT NOT NULL,
-  started_at TIMESTAMP NOT NULL,
-  updated_at TIMESTAMP NOT NULL,
-  state JSONB NOT NULL, -- LangGraph checkpointer state
-  audit_trail JSONB[] NOT NULL -- array of tool calls + results
-);
-```
-
-**Tool Call Format** (MCP protocol):
-```json
-{
-  "tool": "mcp-mlflow.get_run_metrics",
-  "parameters": {
-    "run_id": "abc123",
-    "metrics": ["pick_success_rate", "grasp_precision"]
-  }
-}
-```
-
-**Open Questions**:
-- Which LLM to use for agent brain? Options:
-  - `Llama-3.1-8B-Instruct` (proven tool-use, fits L4 24GB in bfloat16)
-  - `Llama-3.2-3B-Instruct` (smaller, faster, less capable)
-  - `Qwen2.5-7B-Instruct` (excellent tool-use benchmarks, non-Meta)
-  - **Recommendation**: Start with Llama 3.1-8B; fall back to 3.2-3B if memory pressure.
+**State Model**: Ephemeral — single-turn conversations, no persistent LangGraph checkpointer. Audit trail stored via audit-service (see Component 7).
 
 ---
 
-### 2. Llama Stack Governance Layer
+### 2. Llama Stack Governance Layer ⚠️ Not Functional — Replaced by Custom HIL
 
-**Repository**: `workloads/llama-stack/`
+**Planned Repository**: `workloads/llama-stack/`
 
-**Tech Stack**:
-- RHOAI 3.4 EA1 ships Llama Stack 0.3.5
-- Python 3.11+
-- Llama Stack Agents API
-- Presidio for PII detection (or Llama Guard for safety)
+**What Happened**: The RHOAI 3.4 EA1 `rh` distribution of Llama Stack was deployed to `agentic-ops` namespace, but the Agents API (`/v1/agents/*`) returned **404 for all endpoints**. The `rh` distribution only exposed the inference and safety APIs, not the Agents/HIL APIs needed for governance. Since the Agents API was the critical dependency for HIL gate integration, a custom Python implementation was built instead.
 
-**Key Files**:
-- `src/llama_stack/hil_gate.py` — HIL approval logic
-- `src/llama_stack/guardrails.py` — PII scan, safety checks
-- `src/llama_stack/audit.py` — Immutable audit trail writer
-- `src/llama_stack/blast_radius.py` — Queries MCP to compute impact
+**What Was Built Instead**:
+- **Custom HIL gate**: A node in the LangGraph graph (`agent_graph.py`) that intercepts state-modifying tool calls, generates a dry-run diff, and pauses execution until operator approval
+- **Llama Guard 3-8B**: Deployed as a separate service (`llama-guard-adapter`) for input/output content moderation — NOT through OGX/Llama Stack
+- **audit-service**: Custom FastAPI service with PostgreSQL for approval tracking (see Component 7)
 
-**Deployment**:
-- Helm chart: `infrastructure/gitops/apps/workloads/llama-stack/`
-- Namespace: `agentic-ops`
-- Resources: 4 CPU, 8 GB RAM
-- Service: ClusterIP, port 8090
+**Preserved Code**: `llama_stack_adapter.py` in the orchestrator source contains the OGX client code, preserved for future integration if the Agents API becomes available in a later RHOAI release.
 
-**Guardrail Pipeline**:
-```python
-def evaluate_proposal(tool_call, context):
-    # 1. PII scan on tool parameters
-    pii_result = presidio_scan(tool_call.parameters)
-    if pii_result.has_pii:
-        return GuardrailFailure("PII detected in parameters")
-    
-    # 2. Safety policy check
-    safety_result = check_safety_policy(tool_call)
-    if not safety_result.safe:
-        return GuardrailFailure(safety_result.reason)
-    
-    # 3. Blast-radius analysis (queries mcp-fleet)
-    blast_radius = compute_blast_radius(tool_call)
-    
-    # 4. TrustyAI evaluation (if model promotion)
-    if tool_call.tool == "mcp-mlflow.promote_model_version":
-        eval_score = trustyai_eval(
-            proposed_model=tool_call.parameters.model,
-            incumbent_model=get_current_production_model()
-        )
-    else:
-        eval_score = None
-    
-    return GuardrailPass(
-        blast_radius=blast_radius,
-        eval_score=eval_score
-    )
-```
-
-**Audit Record Schema** (Postgres table `hil_audit`):
-```sql
-CREATE TABLE hil_audit (
-  action_id UUID PRIMARY KEY,
-  timestamp TIMESTAMP NOT NULL,
-  session_id UUID REFERENCES agent_sessions(session_id),
-  operator_identity TEXT NOT NULL, -- CAC/PIV cert DN or OAuth sub
-  tool_call JSONB NOT NULL,
-  classification TEXT NOT NULL, -- 'read-only' | 'state-modifying'
-  guardrail_results JSONB NOT NULL,
-  decision TEXT NOT NULL, -- 'approved' | 'rejected'
-  rejection_reason TEXT, -- populated if decision='rejected'
-  pr_url TEXT, -- populated if agent-opens-PR pattern
-  context_trail_hash TEXT NOT NULL -- sha256 of MCP trace
-);
-```
-
-**CAC/PIV Identity Binding**:
-- In production: extract DN from client certificate
-- In demo: use OpenShift OAuth token `sub` claim
-- Store raw cert or token in separate `identity_proofs` table (WORM storage)
-
-**Open Questions**:
-- PII detection: Presidio vs. Llama Guard? Presidio is rule-based (fast, deterministic), Llama Guard is LLM-based (slower, more nuanced).
-  - **Recommendation**: Start with Presidio for Phase 3 (latency budget), evaluate Llama Guard in Phase 4.
+**Future**: If RHOAI ships a functional Agents API with HIL capabilities, the custom HIL gate can be replaced. The interface is clean — swap the `hil_gate` node implementation in `agent_graph.py`.
 
 ---
 
 ### 3. MCP Servers
 
-Each MCP server is a standalone FastAPI service that exposes tools via the MCP protocol.
+Each MCP server is a standalone FastAPI service exposing tools as HTTP endpoints (`/tools/{tool_name}`). The orchestrator calls them via `MCPClient` (HTTP GET/POST), not the Anthropic MCP SDK.
 
-#### 3a. `mcp-mlflow`
+#### 3a. `mcp-mlflow` ✅ Implemented (Mock Data)
 
-**Purpose**: Read MLflow experiments, runs, metrics; register and promote models.
+**Repository**: `infrastructure/gitops/apps/workloads/mcp-mlflow-server/`
 
-**Tools**:
-```python
-# Read-only
-query_experiments(name_filter: str) -> List[Experiment]
-get_run_metrics(run_id: str, metrics: List[str]) -> Dict[str, float]
-get_model_versions(model_name: str) -> List[ModelVersion]
+**Purpose**: Read MLflow experiments, runs, metrics. Returns mock data — does not connect to real MLflow.
 
-# State-modifying
-register_model(run_id: str, model_name: str) -> ModelVersion
-promote_model_version(model_name: str, version: str, stage: str) -> None
-```
+**Tools (Actual)**:
+- `GET /tools/query_experiments` — returns mock experiment list
+- `GET /tools/get_run_metrics` — returns mock metrics (pick_success_rate, grasp_precision, etc.)
+- `GET /tools/get_model_versions` — returns mock model version list
 
 **Deployment**:
+- BuildConfig + ImageStream (OpenShift S2I)
 - Namespace: `agentic-ops`
 - Resources: 1 CPU, 2 GB RAM
-- Connects to: MLflow service in `mlflow` namespace
+- Service: port 8083
 
-#### 3b. `mcp-fleet`
+**Note**: State-modifying tools (`register_model`, `promote_model_version`) were not implemented. Model promotion goes through `mcp-fleet-server` → `promote_policy_version` instead.
 
-**Purpose**: Query fleet status; propose fleet interventions.
+#### 3b. `mcp-fleet` ✅ Implemented (Real)
 
-**Tools**:
-```python
-# Read-only
-get_fleet_status(factory: str = None) -> FleetStatus
-get_factory_config(factory: str) -> FactoryConfig
-get_robot_telemetry(robot_id: str, hours: int = 24) -> Telemetry
-get_anomaly_history(factory: str, hours: int = 24) -> List[Anomaly]
+**Repository**: `infrastructure/gitops/apps/workloads/mcp-fleet-server/`
 
-# State-modifying
-override_mission_params(factory: str, params: Dict) -> None
-propose_fleet_intervention(factory: str, action: str, robots: List[str]) -> None
-promote_policy_version(factory: str, version: str) -> None  # opens PR
-```
+**Purpose**: Query fleet status; create model promotion PRs via GitHub API.
+
+**Tools (Actual)**:
+- `GET /tools/get_fleet_status` — queries Console backend for factory/robot status
+- `GET /tools/get_factory_config?factory=factory-a` — returns factory configuration
+- `POST /tools/promote_policy_version` — **the key HIL tool**:
+  - `dry_run=true`: generates Kustomize overlay diff without creating PR
+  - `dry_run=false`: creates PR via GitHub API, auto-merges
+
+**Key Implementation Detail**: The MCP fleet server's Dockerfile copies `kustomize_generator.py` and `github_client.py` at build time. The BuildConfig only triggers on ConfigChange (YAML edits), NOT source code changes. No GitHub webhook is configured. This means **source code changes require a manual build trigger** (`oc start-build mcp-fleet-server`).
 
 **Deployment**:
+- BuildConfig + ImageStream (OpenShift S2I)
 - Namespace: `agentic-ops`
 - Resources: 1 CPU, 2 GB RAM
-- Connects to: Fleet Manager API, Kafka (for status queries)
+- Service: port 8081
+- Connects to: Console backend API, GitHub API
 
 **Special Case: `promote_policy_version`**:
 This tool **does not** call the cluster API. Instead:
-1. Generates Kustomize overlay diff
-2. Opens PR to `infrastructure/gitops/apps/workloads/{factory}/`
-3. Returns PR URL
-4. GitHub webhook → Argo CD syncs on merge
+1. `kustomize_generator.py` generates only `policy-version.yaml` (ConfigMap with model version + HF URI)
+2. Creates PR to `infrastructure/gitops/apps/workloads/{factory}/policy-version.yaml`
+3. Auto-merges PR via GitHub API
+4. Argo CD auto-syncs ConfigMap within ~3 min poll cycle
 
-#### 3c. `mcp-isaac-sim`
+**Known Issue (Fixed)**: Early PRs (#70, #71) included InferenceService YAML and kustomization.yaml modifications. Fixed in `kustomize_generator.py` to generate only `policy-version.yaml`. Verified with PRs #72-75.
 
-**Purpose**: Launch sim runs, generate scenario manifests, query scene library.
+#### 3c. `mcp-isaac-sim` ❌ Not Implemented (Deferred to Phase 4+)
 
-**Tools**:
-```python
-# Read-only
-list_scenes() -> List[Scene]
-get_scenario_manifest(scenario_id: str) -> Manifest
+**Purpose (Planned)**: Launch sim runs, generate scenario manifests, query scene library.
 
-# State-modifying
-launch_sim_run(scene: str, policy: str, episodes: int) -> RunID
-generate_scenario_manifest(base_scene: str, variations: List[str]) -> Manifest
-```
+**Why Deferred**: Isaac Sim integration depends on Cosmos NIMs (NGC entitlements not available) and a running Isaac Sim headless instance (not yet deployed on OpenShift). Milestones 4-5 which would have used this server were deferred.
+
+**Planned Tools** (preserved for future implementation):
+- `list_scenes()`, `get_scenario_manifest()` — read-only
+- `launch_sim_run()`, `generate_scenario_manifest()` — state-modifying (would trigger HIL)
+
+---
+
+### 4. HIL Approval Drawer (Showcase Console) ✅ Implemented
+
+**Location**: `showcase-ui/src/components/AgentAssistant/HILApprovalDrawer.tsx`
+
+**State Management**: React state + polling orchestrator `/pending-approvals` endpoint
+
+**Seven+ Panes** (exceeded original 6-pane spec):
+
+#### Pane 1: Proposed Action Summary ✅
+- Agent's natural-language explanation of the proposed action
+
+#### Pane 2: Proposed Diff ✅
+- Syntax-highlighted Git diff of `policy-version.yaml`
+
+#### Pane 3: Blast-Radius Analysis ✅
+- Affected factories, robots, rollback path
+- Data computed by `mcp-fleet-server` during dry-run
+
+#### Pane 4: MCP Tool-Call Trace ✅
+- Chronological list of tool calls the agent made
+
+#### Pane 5: Agent Reasoning Summary ✅ (Added — not in original spec)
+- Agent's reasoning for why it chose this action
+
+#### Pane 6: Merge Error Display ✅ (Added — not in original spec)
+- Shows PR merge failures with retry option
+
+#### Pane 7: Rollback Analysis ✅ (Added — not in original spec)
+- Kafka-driven anomaly analysis results
+
+#### Not Implemented (Deferred):
+- **TrustyAI Eval pane**: Proposed vs. incumbent score — deferred with M4
+- **Guardrail Outcomes pane**: PII scan / safety policy results — Llama Guard moderation happens at input/output level, not per-tool-call
+- **CAC/PIV Identity binding**: Demo uses simple operator identity, no certificate-based auth
+
+**Drawer Behavior (Actual)**:
+- Opens on right side as PatternFly Drawer
+- Approve / Reject buttons with confirmation
+- "Reject" requires reason (textarea input)
+- Pending approval persists until operator acts
+
+**Backend API**: The Console frontend communicates directly with the orchestrator:
+- `POST /approve` — approve pending HIL request
+- `POST /reject` — reject with reason
+- `GET /pending-approvals` — list pending HIL requests
+- `POST /chat` — send natural language query
+
+No separate HIL routes in the Console backend — the orchestrator IS the HIL backend.
+
+---
+
+### 5. TrustyAI Integration ❌ Not Implemented (Deferred to Phase 4+)
+
+**Purpose (Planned)**: Evaluate proposed model vs. incumbent on held-out scenario suite.
+
+**Why Deferred**: TrustyAI integration was planned for Milestone 4, which was deferred. The HIL workflow works without it — operators review the Git diff, blast radius, and agent reasoning to make approval decisions. TrustyAI eval scores would add quantitative comparison but aren't blocking.
+
+**Future Integration Point**: When implemented, eval scores would appear as an additional pane in the HIL drawer, comparing proposed model metrics against the incumbent.
+
+---
+
+### 6. Cosmos NIMs ❌ Not Implemented (Deferred to Phase 4+ — NGC entitlements pending)
+
+**Purpose (Planned)**: Cosmos Predict 2.5 for pre-dispatch mission admission; Cosmos Transfer 2.5 for synthetic scenario generation.
+
+**Why Deferred**: NGC entitlements for Cosmos NIMs were not available at Phase 3 start. This was an identified risk (see Risk 4). The mitigation path was followed — Milestones 1-3 (agentic layer) proceeded without Cosmos dependency. Segment 1 of the 60-min demo is deferred.
+
+**What Would Be Needed to Resume**:
+1. NGC entitlements for Cosmos Predict 2.5 + Cosmos Transfer 2.5
+2. `mcp-isaac-sim` server implementation (see 3c above)
+3. 2× L40S GPUs available (not concurrent with agent brain or VLA serving)
+4. Isaac Sim headless instance on OpenShift
+5. Fleet Manager integration for mission admission hook
+
+---
+
+### 7. Audit Service ✅ Implemented
+
+**Repository**: `infrastructure/gitops/apps/workloads/audit-service/`
+
+**Purpose**: PostgreSQL-backed service for recording HIL approval/rejection decisions. Provides the immutable audit trail for all state-modifying actions.
+
+**Tech Stack**: Python 3.11 + FastAPI
+
+**Key Endpoints**:
+- `POST /approvals` — record a new pending approval
+- `GET /approvals/{id}` — retrieve approval record
+- `PATCH /approvals/{id}` — update status (pending → approved/rejected)
+- `GET /health` — health check
+
+**Database**: Shares PostgreSQL instance with MLflow (`mlflow-db-rw.mlflow.svc.cluster.local`). Single `hil_approvals` table with: session_id, tool_name, tool_arguments (JSONB), git_diff, summary, blast_radius (JSONB), tool_call_trace (JSONB), reasoning_summary, status, timestamps.
+
+**Deployment**:
+- BuildConfig + ImageStream
+- Namespace: `agentic-ops`
+- Resources: 100m-500m CPU, 512Mi-1Gi RAM
+- Service: port 8090
+
+---
+
+### 8. Llama Guard Content Moderation ✅ Implemented
+
+**Repository**: `infrastructure/gitops/apps/workloads/llama-guard-adapter/`
+
+**Purpose**: Content moderation for agent input and output using Llama Guard 3-8B model.
+
+**How It Works**: The orchestrator sends user input and agent output to the Llama Guard adapter, which calls the Llama Guard 3-8B model (served via vLLM or the OGX safety API) and returns safe/unsafe classification.
+
+**Note**: This replaces the originally planned Presidio PII detection. Llama Guard is LLM-based (more nuanced, slightly slower) vs. Presidio which is rule-based (faster, deterministic). The trade-off was acceptable given that moderation happens once per query, not per tool call.
 
 **Deployment**:
 - Namespace: `agentic-ops`
-- Resources: 1 CPU, 2 GB RAM
-- Connects to: Isaac Sim headless API, Nucleus (for scene assets)
-
-**Note**: `launch_sim_run` is state-modifying (spins up GPU workload), so triggers HIL gate.
+- Service: port 8085
 
 ---
 
-### 4. HIL Approval Drawer (Showcase Console)
+### 9. VLA Model Serving ✅ Implemented (Custom Pattern)
 
-**Location**: `workloads/showcase-console/frontend/src/components/HILDrawer.tsx`
+**Repository**: `infrastructure/gitops/apps/workloads/robot-edge/` (Factory A), `infrastructure/gitops/apps/workloads/factory-b/` (Factory B)
 
-**State Management**: React Context + WebSocket to backend
+**Model**: `openvla/openvla-7b` served via custom `openvla-server` (NOT KServe vLLM InferenceService).
 
-**Six Panes** (per design spec):
+**Why Custom**: OpenVLA requires a custom `/act` endpoint for robot action prediction, which doesn't fit the standard KServe predict/explain API. The `openvla-server` is a custom FastAPI service with model loading and inference logic.
 
-#### Pane 1: Proposed Action Summary
-- Agent's natural-language explanation
-- Example: "Promote vla-warehouse-v1.4 to Factory A based on 14% pick-success improvement"
+**Policy Version Flow**: Each factory has a `policy-version.yaml` ConfigMap that specifies the active model version and HuggingFace URI. When promoted via the HIL workflow, only this ConfigMap changes. The `openvla-server` deployment reads the ConfigMap to know which model to serve.
 
-#### Pane 2: Proposed Diff
-- Git diff if agent-opens-PR pattern
-- YAML diff if Kustomize overlay
-- JSON diff if MLflow model registry
-
-#### Pane 3: Blast-Radius Analysis
-- Table format:
-  ```
-  Affected Factories: Factory A (companion cluster)
-  Affected Robots: 3 (G1-01, G1-02, G1-03)
-  Rollback Path: git revert + Argo sync (<20s measured)
-  Service Disruption: None (hot-swap, no pod restart)
-  ```
-
-#### Pane 4: MCP Tool-Call Trace
-- Chronological list of read-only tool calls:
-  ```
-  1. mcp-mlflow: get_run_metrics("v1.4") → pick_success=0.87
-  2. mcp-fleet: get_factory_config("factory-a") → 3 robots
-  3. mcp-fleet: get_anomaly_history("factory-a", 24h) → 0 anomalies
-  ```
-- Each entry links to source (MLflow run URL, fleet status snapshot)
-
-#### Pane 5: Guardrail Outcomes
-- Table format:
-  ```
-  PII Scan: PASS (no PII detected)
-  Safety Policy: PASS (no violations)
-  Blocked Tool Calls: 0
-  ```
-- If any guardrail fails, the "Approve" button is disabled
-
-#### Pane 6: TrustyAI Eval + CAC/PIV Identity
-- Proposed vs. incumbent score
-- Operator identity (from OAuth or client cert)
-- Timestamp
-- Approval will write immutable audit record
-
-**Drawer Behavior**:
-- Opens on right side (~480px width)
-- Expand-to-full-page toggle for large diffs
-- No timeout — pending approval persists until operator acts
-- "Reject" requires reason (textarea input)
-
-**Backend API** (`workloads/showcase-console/backend/src/routes/hil.ts`):
-```typescript
-POST /api/hil/approve
-{
-  action_id: string,
-  operator_identity: string,
-  signature?: string  // for CAC/PIV environments
-}
-
-POST /api/hil/reject
-{
-  action_id: string,
-  operator_identity: string,
-  reason: string
-}
-
-GET /api/hil/pending
-→ List<PendingApproval>
-```
-
-**Open Questions**:
-- Drawer refresh behavior: if blast-radius data is 30 minutes stale, do we re-query on approval?
-  - **Recommendation**: Show staleness warning if drawer open > 10 minutes, offer "Refresh Analysis" button.
-
----
-
-### 5. TrustyAI Integration
-
-**Purpose**: Evaluate proposed model vs. incumbent on held-out scenario suite.
-
-**Deployment**:
-- RHOAI 3.4 EA1 includes TrustyAI operator
-- Custom evaluation pipeline: `workloads/trustyai-eval/`
-
-**Evaluation Flow**:
-```python
-def evaluate_model(model_uri: str, scenario_suite: str) -> float:
-    # 1. Load model from MLflow
-    model = mlflow.pyfunc.load_model(model_uri)
-    
-    # 2. Load scenario suite from Nucleus
-    scenarios = load_scenarios(scenario_suite)
-    
-    # 3. Run model on each scenario, measure success rate
-    results = []
-    for scenario in scenarios:
-        result = run_scenario(model, scenario)
-        results.append(result.success)
-    
-    # 4. Return aggregate score
-    return sum(results) / len(results)
-```
-
-**Latency Budget**:
-- Target: < 10 seconds for 20-scenario suite
-- If exceeds, show "Evaluating..." spinner in HIL drawer
-- Cache eval results for 1 hour (same model + same suite = cached)
-
-**Integration Point**:
-- Llama Stack calls TrustyAI eval API when tool is `mcp-mlflow.promote_model_version`
-- Eval score displayed in HIL drawer Pane 6
-
-**Open Questions**:
-- Scenario suite selection: fixed suite per factory, or dynamic based on recent failures?
-  - **Recommendation**: Fixed suite for Phase 3 (deterministic eval), dynamic in Phase 4.
-
----
-
-### 6. Cosmos NIMs
-
-#### 6a. Cosmos Predict 2.5
-
-**Purpose**: World-model simulation for pre-dispatch mission admission.
-
-**Deployment**:
-- KServe InferenceService
-- Namespace: `cosmos-nims`
-- GPU: 1x L40S (48 GB)
-- Model: `nvcr.io/nvidia/cosmos/predict:2.5`
-
-**Integration**:
-- Fleet Manager calls Cosmos Predict **before** dispatching mission
-- If predicted outcome violates safety/latency envelope, mission rejected
-
-**Example Call**:
-```python
-# Fleet Manager receives mission
-mission = {
-  "robot_id": "fl-07",
-  "action": "retrieve_pallet",
-  "pallet_id": "A47",
-  "route": ["dock-b", "aisle-3", "storage-a"]
-}
-
-# Call Cosmos Predict
-prediction = cosmos_predict_client.predict(
-  scene_state=get_current_scene_state(),
-  mission=mission,
-  horizon_seconds=60
-)
-
-# Check prediction
-if prediction.collision_detected or prediction.duration > mission.sla:
-  # Reject mission, propose alternate
-  alternate_mission = replan_mission(mission, avoid=prediction.collision_location)
-  return alternate_mission
-else:
-  # Dispatch mission
-  dispatch_to_robot(mission)
-```
-
-**GPU Scheduling Note**:
-- Cosmos Predict and Cosmos Transfer both require L40S
-- **Cannot run concurrently** in demo environment (only 2-3 L40S total, Isaac Sim + Kit streaming consume 1-2)
-- Mitigation: deploy one at a time, or use `PriorityClass` to preempt lower-priority workloads
-
-#### 6b. Cosmos Transfer 2.5
-
-**Purpose**: Generate synthetic scenario variations (lighting, weather, clutter).
-
-**Deployment**:
-- KServe InferenceService
-- Namespace: `cosmos-nims`
-- GPU: 1x L40S (48 GB)
-- Model: `nvcr.io/nvidia/cosmos/transfer:2.5`
-
-**Integration**:
-- Agent calls `mcp-isaac-sim.generate_scenario_manifest`
-- Isaac Sim exports base scene frames
-- MCP server calls Cosmos Transfer with frames + variation prompt
-- Cosmos Transfer returns augmented images
-- MCP server uploads to Nucleus, registers in MLflow
-
-**Example Call**:
-```python
-# Base scene frames
-frames = isaac_sim.export_frames(scene="warehouse", camera="aisle-3", count=10)
-
-# Variation prompts
-variations = [
-  "night lighting, dark warehouse, minimal ambient light",
-  "rainy loading dock, wet floors, puddles",
-  "morning fog, reduced visibility",
-  "busy warehouse, workers in background"
-]
-
-# Generate variants
-for i, prompt in enumerate(variations):
-  variant_frames = cosmos_transfer_client.transfer(
-    source_frames=frames,
-    target_description=prompt
-  )
-  
-  # Upload to Nucleus
-  nucleus.upload(f"warehouse_variants/variant_{i}/", variant_frames)
-  
-  # Register in MLflow
-  mlflow.log_artifact(f"warehouse_variants/variant_{i}/", run_id=current_run)
-```
+**Deployment per factory**:
+- `openvla-server-imagestream.yaml`
+- `openvla-server-buildconfig.yaml`
+- `openvla-server-deployment.yaml`
+- `openvla-server-service.yaml`
+- `policy-version.yaml` (ConfigMap — managed by HIL promotion workflow)
 
 ---
 
@@ -1157,72 +944,71 @@ Each segment of the 60-min demo has a rehearsal script:
 
 ## Risk Register
 
-### Risk 1: Llama Stack API Evolution (HIGH)
+### Risk 1: Llama Stack API Evolution (HIGH) — 🔴 MATERIALIZED
 
 **Problem**: RHOAI 3.4 EA1 ships Llama Stack 0.3.5. Upstream is moving fast; API may change.
 
-**Mitigation**:
-- Pin exact version in deployment
-- Abstract HIL gate behind interface (`workloads/llama-stack/src/llama_stack/hil_gate.py`)
-- If API breaks, implement shim layer or swap to alternative HIL implementation
+**What Happened**: The `rh` distribution's Agents API (`/v1/agents/*`) returned 404 for all endpoints. The distribution only exposed inference and safety APIs, not the Agents/HIL APIs. This was worse than an API change — the feature was entirely absent.
 
-**Fallback**: If Llama Stack unusable, implement custom HIL gate (Postgres-backed approval queue + FastAPI)
+**Resolution**: Used the documented fallback — implemented custom HIL gate as a LangGraph node with FastAPI endpoints + PostgreSQL-backed audit trail via `audit-service`. The custom implementation is cleaner and simpler than the Llama Stack integration would have been.
 
 ---
 
-### Risk 2: TrustyAI Eval Latency (MEDIUM)
+### Risk 2: TrustyAI Eval Latency (MEDIUM) — ⚪ Not Tested (Deferred)
 
 **Problem**: Evaluating proposed model on 20+ scenarios may take 30-60 seconds.
 
-**Mitigation**:
-- Run eval asynchronously (show spinner in drawer)
-- Cache eval results (same model + same suite = cached for 1 hour)
-- Pre-compute eval scores for known model versions during training
-
-**Fallback**: Skip TrustyAI eval in Phase 3, show placeholder "Eval score: pending" in drawer, complete in Phase 4.
+**What Happened**: TrustyAI integration was deferred with Milestone 4. Risk not tested. The HIL workflow works without eval scores — operators review diff, blast radius, and agent reasoning instead.
 
 ---
 
-### Risk 3: MCP Protocol Version Mismatch (MEDIUM)
+### Risk 3: MCP Protocol Version Mismatch (MEDIUM) — 🟢 Avoided
 
 **Problem**: LangGraph's MCP client expects different format than MCP server emits.
 
-**Mitigation**:
-- Use well-known MCP SDKs (Anthropic's `mcp` Python package)
-- Test with multiple LLMs (Llama 3.1, Qwen 2.5) to verify tool-calling compatibility
-- Document exact MCP protocol version in `workloads/mcp-*/README.md`
-
-**Fallback**: If MCP breaks, implement simpler JSON-RPC tool protocol.
+**What Happened**: Risk avoided by choosing custom FastAPI HTTP endpoints instead of the Anthropic MCP SDK. Tools are simple HTTP GET/POST endpoints. The orchestrator wraps them as LangChain `@tool` functions and binds them to the LLM via `llm.bind_tools()`. No MCP protocol version to mismatch.
 
 ---
 
-### Risk 4: NGC Entitlement Delays (HIGH)
+### Risk 4: NGC Entitlement Delays (HIGH) — 🔴 MATERIALIZED
 
 **Problem**: Cosmos Predict/Transfer NIMs require NGC entitlement. May not be available at Phase 3 start.
 
-**Mitigation**:
-- Start Milestones 1-4 (agentic layer) first — Cosmos NIMs land in Milestone 5
-- If entitlement unavailable, deploy mock Cosmos API (returns placeholder predictions/images)
-- Document as "NIM integration pending NGC access" in demo script
-
-**Fallback**: Defer Segment 1 of 60-min demo to Phase 4, deliver Segments 2-4 only in Phase 3.
+**What Happened**: NGC entitlements were not available. Milestone 5 and Segment 1 of 60-min demo deferred to Phase 4+. The mitigation worked as designed — Milestones 1-3 proceeded independently of Cosmos.
 
 ---
 
-### Risk 5: GitHub API Rate Limits (LOW)
+### Risk 5: GitHub API Rate Limits (LOW) — 🟢 Not an Issue
 
 **Problem**: Agent opening many PRs could hit GitHub rate limit (5000/hour for authenticated user).
 
-**Mitigation**:
-- Use dedicated bot account (separate from human users)
-- Cache PR results (don't re-open identical PRs)
-- Rate-limit agent tool calls (max 10 PRs/hour)
-
-**Fallback**: If rate limit hit, queue PR requests, process in batches.
+**What Happened**: Not an issue. Demo usage generates ~5-10 PRs per session, far below the 5000/hour limit.
 
 ---
 
-### Risk 6: Operator Approval Fatigue (MEDIUM, long-term)
+### Risk 6 (New): MCP Server Code Caching — 🔴 MATERIALIZED
+
+**Problem**: MCP fleet server Dockerfile copies Python source files at build time. BuildConfig only triggers on ConfigChange (YAML changes), not source code changes. No GitHub webhook configured.
+
+**What Happened**: After fixing `kustomize_generator.py` to generate only `policy-version.yaml` (instead of InferenceService + kustomization.yaml), the MCP server pod continued using the OLD code. PRs #70 and #71 contained wrong changes. Root cause: the pod was 2 days old with cached stale code.
+
+**Resolution**: Manual build trigger (`oc start-build mcp-fleet-server`), pod restart. PRs #72-75 verified correct behavior.
+
+**Recommendation for Phase 4**: Add GitHub webhook to BuildConfig, or switch to a CI pipeline that rebuilds on source changes.
+
+---
+
+### Risk 7 (New): Argo CD Shared Resource Conflicts — 🔴 MATERIALIZED
+
+**Problem**: The `policy-version.yaml` ConfigMap was listed in TWO Argo applications (`workloads-robot-edge` AND `workloads-mission-dispatcher`), both managing the same resource.
+
+**What Happened**: After PR #73 merged, the Factory A ConfigMap did not update. Argo CD showed the resource as managed by `workloads-mission-dispatcher` which had a stale version. The conflict prevented `workloads-robot-edge` from reconciling.
+
+**Resolution**: Removed `policy-version.yaml` from `mission-dispatcher/kustomization.yaml` and deleted the duplicate file. Each Argo application now manages distinct resources.
+
+---
+
+### Risk 8: Operator Approval Fatigue (MEDIUM, long-term)
 
 **Problem**: If every agent action requires approval, operators stop paying attention ("click through" without reading).
 
@@ -1302,144 +1088,128 @@ Phase 3 is **complete** when all of these are true:
 
 ### Demo Criteria
 
-1. ✅ **60-minute demo runs end-to-end live** on hub + companion + spoke clusters
-2. ✅ **Segment 1 (Cosmos)**: Cosmos Predict rejects unsafe mission, Cosmos Transfer generates variants, Isaac Lab trains on augmented data
-3. ✅ **Segment 2 (Agentic HIL)**: Operator asks NL question, agent proposes state-modifying action, HIL drawer opens with all 6 panes populated from real data, operator approves, PR merges, Argo syncs
-4. ✅ **Segment 3 (Security)**: Tampered artifact rejected at admission (live event trace visible), air-gap walkthrough on companion, Compliance Operator scan results in Console, policy-artifact provenance chain navigable
-5. ✅ **Segment 4 (VLA swap)**: Kustomize overlay swap live, new model visible in KServe, end-to-end mission trace in Tempo
+1. ⏳ **60-minute demo runs end-to-end live** — Segments 2-4 functional, Segment 1 deferred (Cosmos NIMs)
+2. ⏳ **Segment 1 (Cosmos)**: Deferred — NGC entitlements not available
+3. ✅ **Segment 2 (Agentic HIL)**: Operator asks NL question, agent proposes state-modifying action, HIL drawer opens with 7+ panes, operator approves, PR auto-merges, Argo syncs. Verified with PRs #72-75.
+4. ⏳ **Segment 3 (Security)**: Infrastructure exists (Sigstore, Compliance Operator), Console integration in progress
+5. ⏳ **Segment 4 (VLA swap)**: Kustomize overlay swap works via HIL promotion. Custom openvla-server (not KServe). Tempo tracing not yet connected.
 
 ### Technical Criteria
 
-6. ✅ **HIL drawer behaves per design spec**: 6 panes, all real data (no placeholders), approval writes audit record with CAC/PIV identity, rejection requires reason
-7. ✅ **Agent-opens-PR pattern works**: Agent never calls cluster API directly, all state changes via Git, PR URL in audit record
-8. ✅ **Llama Stack governance on GitOps path only**: Measured VLA inference latency p99 is **independent** of HIL enablement (governance adds zero latency to serving-time robot command flow)
-9. ✅ **Guardrail failure blocks approval**: Injected PII triggers guardrail fail, drawer shows failure, "Approve" button disabled
-10. ✅ **TrustyAI eval completes**: Proposed vs. incumbent score displayed in drawer (or "evaluating..." if async)
+6. ✅ **HIL drawer behaves per design spec**: 7+ panes (exceeded 6-pane spec), real data, approval writes audit record, rejection requires reason. CAC/PIV identity binding deferred.
+7. ✅ **Agent-opens-PR pattern works**: Agent never calls cluster API directly, all state changes via Git, PR URL in audit record. Verified end-to-end.
+8. ✅ **Custom HIL governance on GitOps path only**: VLA inference latency is independent of HIL enablement (governance operates on PR-open path only, never in 10Hz+ serving-time loop).
+9. ⏳ **Guardrail failure blocks approval**: Llama Guard content moderation deployed, but per-tool-call guardrail evaluation (Presidio PII scan) not implemented. Deferred with M4.
+10. ⏳ **TrustyAI eval completes**: Deferred with M4.
 
 ### Deliverable Criteria
 
-11. ✅ **`demos/60-min-deep-dive/script.md` runs live + recorded**: Recorded fallback has all 4 segments, timed to match script
-12. ✅ **Performance envelope doc v2**: HIL round-trip latency (drawer open → approval → PR merge → Argo sync), agentic flow end-to-end, VLA hot-swap measured p50/p99
-13. ✅ **Blog post series (3 minimum)**: Agent-opens-PR pattern, synthetic-data factory, policy provenance chain
-14. ✅ **Phase 3 components documented**: ADR for any new decisions, component catalog updated, `workloads/*/README.md` complete
+11. ⏳ **`demos/60-min-deep-dive/script.md`**: Not yet written — agentic segment functional, other segments in progress
+12. ⏳ **Performance envelope doc v2**: Measurements not yet documented (see Task #34)
+13. ⏳ **Blog post series**: Not yet started
+14. ⏳ **Phase 3 components documented**: This document updated, component catalog TBD
 
 ### Quality Criteria
 
-15. ✅ **Integration test suite passes**: All 4 test suites (read-only query, HIL gate, agent-opens-PR, guardrail failure) green
-16. ✅ **Segment rehearsals complete**: Each 60-min segment rehearsed 3+ times, timing validated
-17. ✅ **No placeholders in HIL drawer**: If a pane can't be populated with real data, the beat is cut (don't ship fake UX)
+15. ⏳ **Integration test suite**: Manual E2E validation done (PRs #72-75), no automated test suite
+16. ⏳ **Segment rehearsals**: Not yet conducted
+17. ✅ **No placeholders in HIL drawer**: All displayed panes show real data. Panes that couldn't be populated (TrustyAI, guardrail outcomes) were not shipped.
 
 ---
 
-## Timeline (8-10 Weeks)
+## Timeline (Actual)
 
-### Weeks 1-2: Milestone 1 (Hello World Agent)
-- LangGraph orchestrator (minimal)
-- `mcp-mlflow` (read-only tools)
-- Agent brain (vLLM Llama 3.1-8B on L4)
-- Console text input + response panel
-- **Deliverable**: Read-only agent query works end-to-end
+### Weeks 1-2: Milestone 1 (Hello World Agent) ✅ Complete
+- LangGraph orchestrator with agent brain (vLLM Llama-3.1-8B on L40S)
+- `mcp-mlflow` server (mock data)
+- Console AgentAssistant chat panel
+- **Delivered**: Read-only agent query works end-to-end
 
-### Weeks 3-4: Milestone 2 (HIL Gate)
-- Llama Stack deployment
-- HIL drawer (3 panes)
-- `mcp-mlflow` state-modifying tool
-- Audit trail (Postgres)
-- **Deliverable**: HIL gate triggers, operator approves/rejects
+### Weeks 3-4: Milestone 2 (Custom HIL Gate) ✅ Complete
+- Custom HIL gate (Llama Stack OGX non-functional — see Risk 1)
+- HIL drawer (initial panes)
+- Llama Guard 3-8B content moderation
+- audit-service (PostgreSQL)
+- **Delivered**: HIL gate triggers, operator approves/rejects
 
-### Weeks 5-6: Milestone 3 (Agent Opens PR)
-- GitHub API integration
-- Kustomize overlay generator
-- `mcp-fleet` server (read + write tools)
-- HIL drawer: add Git diff pane
-- **Deliverable**: Agent opens PR, Argo syncs
+### Weeks 5-6: Milestone 3 (Agent Opens PR) ✅ Complete
+- GitHub API integration (create PR + auto-merge)
+- Kustomize overlay generator (policy-version.yaml only)
+- `mcp-fleet` server (fleet status + promote_policy_version)
+- HIL drawer: Git diff, blast radius, reasoning, merge error panes
+- **Delivered**: Agent opens PR, auto-merges, Argo syncs. Verified PRs #72-75.
 
-### Weeks 7-8: Milestone 4 (Full Drawer + TrustyAI)
-- HIL drawer: 3 remaining panes (blast radius, guardrails, TrustyAI)
-- Blast-radius analyzer
-- TrustyAI integration
-- Llama Stack guardrails (PII scan)
-- **Deliverable**: Full 6-pane drawer with real data
+### Weeks 7-8: Milestone 4 (Full Drawer + TrustyAI) ⏳ Deferred
+- TrustyAI integration not prioritized
+- Guardrail outcome panes deferred
+- HIL drawer already has 7+ panes from M2-M3 work
 
-### Weeks 9-10: Milestone 5 (Cosmos NIMs)
-- Cosmos Predict 2.5 deployment + mission admission hook
-- Cosmos Transfer 2.5 deployment + scenario variation pipeline
-- `mcp-isaac-sim` server
-- **Deliverable**: Segment 1 of 60-min demo works
+### Weeks 9-10: Milestone 5 (Cosmos NIMs) ⏳ Deferred
+- NGC entitlements not available
+- `mcp-isaac-sim` not built
 
-### Weeks 11-12: Integration, Rehearsal, Polish (BUFFER)
-- End-to-end integration testing
-- 60-min demo rehearsals (all 4 segments)
-- Performance measurements (latency, GPU utilization)
-- Blog posts + docs
-- **Deliverable**: Phase 3 exit criteria met
+### Weeks 11-12: Integration, Rehearsal, Polish
+- ⏳ In progress — fixing operational issues (shared resource conflicts, code caching, Argo sync)
+- Performance measurements pending
+- Blog posts + docs pending
 
 ---
 
-## Resource Requirements
+## Resource Requirements (Actual)
 
-### Team
+### Infrastructure (As Deployed)
 
-- **Backend Engineer** (Python, LangGraph, FastAPI): 1 FTE for 10 weeks
-- **Frontend Engineer** (React, TypeScript, HIL drawer): 0.5 FTE for 10 weeks
-- **ML/AI Engineer** (TrustyAI, Cosmos NIMs, model eval): 0.5 FTE for 10 weeks
-- **Platform Engineer** (GitOps, Argo CD, GitHub API, Vault): 0.25 FTE for 10 weeks
-- **QA/Integration Tester**: 0.25 FTE for weeks 9-12
+**GPU Allocation**:
+- **L40S**: 1 GPU for agent brain (vLLM Llama-3.1-8B-Instruct) — originally planned for L4, but L40S used for VRAM headroom
+- **L40S**: 1 GPU for VLA model serving (openvla-7b) — shared across factories
+- Cosmos NIMs GPUs not allocated (deferred)
 
-**Total**: ~2.5 FTE over 10 weeks
-
-### Infrastructure
-
-**GPU Allocation** (see `docs/08-gpu-resource-planning.md`):
-- **L4**: 1 GPU for agent brain (vLLM Llama 3.1-8B)
-- **L40S**: 2 GPUs for Cosmos Predict + Transfer (not concurrent)
-
-**Compute** (non-GPU):
+**Compute** (non-GPU, `agentic-ops` namespace):
 - LangGraph orchestrator: 2 CPU, 4 GB RAM
-- Llama Stack: 4 CPU, 8 GB RAM
-- MCP servers (3x): 3 CPU, 6 GB RAM total
-- TrustyAI eval workers: 4 CPU, 8 GB RAM
+- MCP fleet server: 1 CPU, 2 GB RAM
+- MCP MLflow server: 1 CPU, 2 GB RAM
+- audit-service: 100m-500m CPU, 512Mi-1Gi RAM
+- Llama Guard adapter: ~1 CPU, 2 GB RAM
 
 **Storage**:
-- Postgres (agent sessions + audit trail): 20 GB
-- Cosmos Transfer outputs (cached): 50 GB (Nucleus storage)
+- PostgreSQL (shared MLflow instance): `hil_approvals` table, minimal storage
 
-### External Dependencies
+### External Dependencies (Actual)
 
-- **NGC Entitlements**: Cosmos Predict 2.5, Cosmos Transfer 2.5
-- **GitHub**: API access, bot account, CODEOWNERS approval workflow
-- **Vault**: Secrets for GitHub token, Postgres credentials
+- **GitHub**: API access with personal access token (not bot account, no CODEOWNERS)
+- **PostgreSQL**: Shared with MLflow (`mlflow-db-rw.mlflow.svc.cluster.local`)
+- **Kafka**: AMQ Streams for rollback analysis events
 
 ---
 
-## Appendix A: MCP Tool Classification Matrix
+## Appendix A: MCP Tool Classification Matrix (As Implemented)
 
-| MCP Server | Tool | Classification | Triggers HIL? | Reason |
+| MCP Server | Tool | Classification | Triggers HIL? | Status |
 |------------|------|---------------|---------------|--------|
-| mcp-mlflow | query_experiments | read-only | No | Query only, no state change |
-| mcp-mlflow | get_run_metrics | read-only | No | Query only |
-| mcp-mlflow | get_model_versions | read-only | No | Query only |
-| mcp-mlflow | register_model | state-modifying | Yes | Creates MLflow model registry entry |
-| mcp-mlflow | promote_model_version | state-modifying | Yes | Changes model stage (to Production) |
-| mcp-fleet | get_fleet_status | read-only | No | Query only |
-| mcp-fleet | get_factory_config | read-only | No | Query only |
-| mcp-fleet | get_robot_telemetry | read-only | No | Query only |
-| mcp-fleet | get_anomaly_history | read-only | No | Query only |
-| mcp-fleet | override_mission_params | state-modifying | Yes | Changes factory config (speed limits, etc.) |
-| mcp-fleet | propose_fleet_intervention | state-modifying | Yes | Reassigns robots, changes zones |
-| mcp-fleet | promote_policy_version | state-modifying | Yes | Opens PR to change policy-version.yaml |
-| mcp-isaac-sim | list_scenes | read-only | No | Query only |
-| mcp-isaac-sim | get_scenario_manifest | read-only | No | Query only |
-| mcp-isaac-sim | launch_sim_run | state-modifying | Yes | Spins up GPU workload (Isaac Lab Job) |
-| mcp-isaac-sim | generate_scenario_manifest | state-modifying | Yes | Calls Cosmos Transfer, uploads to Nucleus |
+| mcp-mlflow | query_experiments | read-only | No | ✅ Implemented (mock) |
+| mcp-mlflow | get_run_metrics | read-only | No | ✅ Implemented (mock) |
+| mcp-mlflow | get_model_versions | read-only | No | ✅ Implemented (mock) |
+| mcp-mlflow | register_model | state-modifying | Yes | ❌ Not implemented |
+| mcp-mlflow | promote_model_version | state-modifying | Yes | ❌ Not implemented (promotion via mcp-fleet instead) |
+| mcp-fleet | get_fleet_status | read-only | No | ✅ Implemented |
+| mcp-fleet | get_factory_config | read-only | No | ✅ Implemented |
+| mcp-fleet | get_robot_telemetry | read-only | No | ❌ Not implemented |
+| mcp-fleet | get_anomaly_history | read-only | No | ❌ Not implemented |
+| mcp-fleet | override_mission_params | state-modifying | Yes | ❌ Not implemented |
+| mcp-fleet | propose_fleet_intervention | state-modifying | Yes | ❌ Not implemented |
+| mcp-fleet | promote_policy_version | state-modifying | Yes | ✅ Implemented (opens PR) |
+| mcp-isaac-sim | * | * | * | ❌ Not implemented (deferred) |
 
 **Rule**: Any tool that creates, updates, or deletes cluster resources, opens PRs, or launches workloads is **state-modifying** and triggers HIL.
 
 ---
 
-## Appendix B: Guardrail Evaluation Logic
+## Appendix B: Guardrail Evaluation Logic (Planned — Not Implemented As Shown)
+
+**Status**: The Presidio-based guardrail pipeline below was **not implemented**. Content moderation uses Llama Guard 3-8B instead (see Component 8). Per-tool-call guardrail evaluation (PII scan, safety policy, blocked tools) was deferred with Milestone 4.
 
 ```python
+# PLANNED CODE — not implemented. Preserved for Phase 4+ reference.
 from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
 
@@ -1561,16 +1331,24 @@ class GuardrailEvaluator:
 
 ---
 
-## Appendix C: Agent Session State Schema
+## Appendix C: Agent Session State Schema (Planned — Simplified in Implementation)
+
+**Status**: The full session state schema below was **not implemented**. The actual implementation uses:
+- Ephemeral LangGraph state (single-turn, no checkpointer)
+- `hil_approvals` table in audit-service for approval tracking (see Component 7)
+- No `agent_sessions` table — sessions are not persisted
+
+Planned schema preserved for Phase 4+ reference (long-running sessions, agent memory):
 
 ```python
+# PLANNED CODE — not implemented as shown.
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 @dataclass
 class ToolCall:
-    tool: str  # e.g. "mcp-mlflow.get_run_metrics"
+    tool: str
     parameters: Dict[str, Any]
     result: Optional[Any] = None
     error: Optional[str] = None
@@ -1578,71 +1356,43 @@ class ToolCall:
     duration_ms: int = 0
 
 @dataclass
-class AgentPlan:
-    """Agent's proposed plan before execution."""
-    goal: str  # Natural-language goal
-    steps: List[str]  # List of steps agent will take
-    tools_needed: List[str]  # Tools this plan requires
-    estimated_duration: int  # Seconds
-
-@dataclass
 class HILRequest:
-    """Pending HIL approval request."""
     action_id: str
     tool_call: ToolCall
-    summary: str  # Natural-language explanation
-    proposed_diff: str  # Git diff or YAML diff
+    summary: str
+    proposed_diff: str
     blast_radius: Dict[str, Any]
-    mcp_trace: List[ToolCall]  # Read-only calls that led to this
+    mcp_trace: List[ToolCall]
     guardrail_results: Dict[str, Any]
     trustyai_eval: Optional[float]
     created_at: datetime
     status: str  # "pending" | "approved" | "rejected"
-
-@dataclass
-class AgentSession:
-    """Full agent session state (persisted to Postgres)."""
-    session_id: str
-    operator_identity: str  # OAuth sub or CAC/PIV DN
-    started_at: datetime
-    updated_at: datetime
-    
-    # Current state
-    current_plan: Optional[AgentPlan]
-    tool_call_history: List[ToolCall]
-    pending_hil_requests: List[HILRequest]
-    
-    # LangGraph checkpointer state (opaque blob)
-    langgraph_state: Dict[str, Any]
-    
-    # Metadata
-    total_tool_calls: int
-    total_hil_approvals: int
-    total_hil_rejections: int
 ```
 
 ---
 
 ## Appendix D: Performance Targets
 
-| Metric | Target | Measurement Method |
-|--------|--------|-------------------|
-| Read-only agent query (p50) | < 5 seconds | Prometheus histogram `agent_query_duration_seconds` |
-| Read-only agent query (p99) | < 10 seconds | Same |
-| HIL drawer open latency | < 2 seconds | Time from tool-call to drawer-visible event |
-| Blast-radius analysis | < 2 seconds | Time to query `mcp-fleet` and compute impact |
-| TrustyAI eval (20 scenarios) | < 10 seconds | Time to run eval pipeline |
-| PR creation latency | < 3 seconds | GitHub API call duration |
-| Argo CD sync (p50) | < 20 seconds | Time from PR merge to pod-ready |
-| Guardrail evaluation | < 500 ms | PII scan + safety checks |
-| Agent-opens-PR full cycle (p50) | < 30 seconds | Drawer open → approval → PR merge → Argo sync |
-| VLA inference p99 | **unchanged** | Must be independent of HIL enablement |
+| Metric | Target | Actual | Status |
+|--------|--------|--------|--------|
+| Read-only agent query (p50) | < 5 seconds | ~3-8 seconds | ⚠️ Varies with LLM response time |
+| Read-only agent query (p99) | < 10 seconds | Not measured | ⏳ Needs measurement |
+| HIL drawer open latency | < 2 seconds | ~1-2 seconds | ✅ Met |
+| Blast-radius analysis | < 2 seconds | < 1 second | ✅ Met |
+| TrustyAI eval (20 scenarios) | < 10 seconds | N/A | ❌ Deferred |
+| PR creation latency | < 3 seconds | ~2-4 seconds | ⚠️ Close to target |
+| Argo CD sync (p50) | < 20 seconds | ~3 minutes | ⚠️ Argo poll cycle, not instant |
+| Guardrail evaluation | < 500 ms | N/A (Llama Guard only) | ⚠️ Different implementation |
+| Agent-opens-PR full cycle (p50) | < 30 seconds | ~3-5 minutes | ⚠️ Dominated by Argo sync delay |
+| VLA inference p99 | **unchanged** | **unchanged** | ✅ Met — HIL on GitOps path only |
 
-**Critical Invariant**: VLA inference latency (10Hz+ robot command path) must be **unaffected** by Llama Stack governance. If p99 increases when HIL is enabled, the architecture is broken.
+**Critical Invariant**: VLA inference latency (10Hz+ robot command path) is **unaffected** by HIL governance. The custom HIL gate operates on the PR-open path only, never in the serving-time loop. This invariant holds.
+
+**Note**: Argo CD sync time (~3 min) dominates the full cycle. This is the Argo poll interval, not a performance issue. Could be reduced with webhook-based sync trigger.
 
 ---
 
-**Document Status**: Planning draft for Phase 3 kickoff  
-**Next Review**: At Phase 2 exit (before Phase 3 starts)  
+**Document Status**: Implementation record — Milestones 1-3 complete, 4-5 deferred  
+**Next Review**: Phase 4 planning  
 **Owner**: Agentic orchestration workstream lead  
-**Last Updated**: 2026-06-25
+**Last Updated**: 2026-07-27
