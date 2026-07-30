@@ -403,9 +403,11 @@ function ArgoSyncPanel({
 function FactoryPanel({
   factory,
   onPromotionTriggered,
+  setToast,
 }: {
   factory: FactoryStatus;
   onPromotionTriggered?: (approvalId: number) => void;
+  setToast: (toast: { message: string; variant: "success" | "danger" | "info" } | null) => void;
 }) {
   const prevVersion = useRef(factory.policyVersion);
   const [pillClass, setPillClass] = useState("");
@@ -691,6 +693,7 @@ export function FleetView({
               <FactoryPanel
                 factory={f}
                 onPromotionTriggered={(approvalId) => setPendingApprovalId(approvalId)}
+                setToast={setToast}
               />
             </FlexItem>
           )) ?? (
