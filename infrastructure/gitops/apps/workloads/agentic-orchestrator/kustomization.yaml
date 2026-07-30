@@ -1,0 +1,18 @@
+# This project was developed with assistance from AI tools.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: agentic-ops
+
+resources:
+  - imagestream.yaml
+  - buildconfig.yaml
+  - deployment.yaml
+  - service.yaml
+
+commonLabels:
+  app.kubernetes.io/name: agentic-orchestrator
+  app.kubernetes.io/component: agent-orchestrator
+  app.kubernetes.io/part-of: agentic-orchestrator
+  phase: "3"
+  milestone: "1"

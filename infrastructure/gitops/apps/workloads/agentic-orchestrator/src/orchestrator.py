@@ -7,6 +7,7 @@ import os
 import json
 from typing import TypedDict, Annotated, Sequence
 from datetime import datetime
+import time
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage
@@ -14,6 +15,8 @@ from langchain_core.tools import tool
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 import httpx
+
+from tool_call_tracer import ToolCallTracer
 
 
 # Environment configuration
@@ -145,12 +148,17 @@ def get_fleet_status(factory: str = None) -> str:
 def _get_factory_config_impl(factory: str) -> str:
     """Implementation of get_factory_config - calls MCP Fleet"""
     result = mcp_fleet_client.invoke_tool("get_factory_config", {"factory": factory})
-    return json.dumps(result, indent=2)
+
+    # Add a clear summary at the top so the model knows it has the answer
+    policy_version = result.get("policy_version", "unknown")
+    summary = f"The current model version deployed to {factory} is: {policy_version}\n\nFull configuration:\n"
+
+    return summary + json.dumps(result, indent=2)
 
 
 @tool
 def get_factory_config(factory: str) -> str:
-    """Get configuration for a specific factory (robots, policy version, safety zones)"""
+    """Get configuration for a specific factory including THE CURRENT MODEL VERSION (called policy_version)"""
     return _get_factory_config_impl(factory)
 
 
@@ -165,7 +173,11 @@ def _promote_policy_version_impl(factory: str, model_version: str) -> str:
 
 @tool
 def promote_policy_version(factory: str, model_version: str) -> str:
-    """Promote model policy version to factory (opens GitHub PR - requires approval)"""
+    """Promote model policy version to factory (opens GitHub PR - requires approval).
+
+    IMPORTANT: You MUST call get_factory_config(factory=...) FIRST to verify the current
+    policy version before calling this tool. This gives the operator context about what
+    version is currently deployed."""
     # This will be intercepted by custom_tool_node before execution
     return _promote_policy_version_impl(factory, model_version)
 
@@ -179,6 +191,7 @@ class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], "The messages in the conversation"]
     session_id: str  # Session ID for tracking approval requests
     pending_approval_id: int | None  # ID of pending approval request
+    tool_call_trace: list  # Trace of read-only tool calls for HIL drawer context
 
 
 # Initialize LLM (vLLM endpoint)
@@ -251,9 +264,10 @@ def custom_tool_node(state: AgentState) -> dict:
             # Create approval request instead of executing tool
             session_id = state.get("session_id", "unknown")
 
-            # For promote_policy_version, pre-generate git_diff and summary
+            # For promote_policy_version, pre-generate git_diff, summary, and blast_radius
             git_diff = None
             summary = None
+            blast_radius = None
             if tool_name == "promote_policy_version":
                 try:
                     # Call MCP Fleet to get git_diff and summary (but don't execute yet)
@@ -265,22 +279,84 @@ def custom_tool_node(state: AgentState) -> dict:
                     factory = tool_args.get("factory")
                     model_version = tool_args.get("model_version")
                     model_name = "vla-warehouse"  # Default model name
-                    model_uri = f"s3://mlflow/models/{model_name}/{model_version}"
+
+                    # Showcase mode: use HF VLA models instead of MLflow/MinIO
+                    SHOWCASE_MODE = os.getenv("SHOWCASE_MODE", "true").lower() == "true"
+                    HF_MODEL_VERSIONS = {
+                        "v1.4": "hf://openvla/openvla-7b",
+                        "v1.5": "hf://openvla/openvla-7b",
+                        "v1.6": "hf://openvla/openvla-7b",
+                    }
+
+                    if SHOWCASE_MODE:
+                        model_uri = HF_MODEL_VERSIONS.get(model_version, HF_MODEL_VERSIONS["v1.4"])
+                    else:
+                        model_uri = f"s3://mlflow/models/{model_name}/{model_version}"
+
+                    # Get factory namespace (K8s-compliant, e.g., "factory-b")
+                    # factory might be display name with spaces (e.g., "Factory B")
+                    # Call MCP Fleet directly to get the dict, not the LangChain tool wrapper
+                    # Capture this in tool_call_trace for HIL drawer context
+                    start_time_ms = int(time.time() * 1000)
+                    factory_config_result = mcp_fleet_client.invoke_tool("get_factory_config", {"factory": factory})
+                    end_time_ms = int(time.time() * 1000)
+
+                    # Add to trace - this shows what context we gathered before requesting approval
+                    tool_call_trace = state.get("tool_call_trace", [])
+                    tool_call_trace.append({
+                        "tool_name": "get_factory_config",
+                        "arguments": {"factory": factory},
+                        "timestamp": datetime.now().isoformat(),
+                        "duration_ms": end_time_ms - start_time_ms,
+                        "response_summary": f"Factory: {factory_config_result.get('name', factory)}, Robots: {factory_config_result.get('robot_count', 0)}, Current version: {factory_config_result.get('policy_version', 'unknown')}",
+                        "success": True
+                    })
+                    state["tool_call_trace"] = tool_call_trace
+
+                    factory_namespace = factory_config_result.get("namespace", factory.lower().replace(" ", "-"))
 
                     git_diff = generate_promotion_git_diff(
                         model_name=model_name,
                         model_version=model_version,
                         model_uri=model_uri,
-                        factory=factory
+                        factory=factory_namespace,  # Use namespace for paths
+                        namespace=factory_namespace
                     )
                     summary = generate_promotion_summary(
                         model_name=model_name,
                         model_version=model_version,
                         model_uri=model_uri,
-                        factory=factory
+                        factory=factory,  # Use display name for human-readable summary
+                        namespace=factory_namespace
                     )
+
+                    # Calculate blast radius - which resources will be affected
+                    current_version = factory_config_result.get("policy_version", "unknown")
+                    robot_count = factory_config_result.get("robot_count", 0)
+                    factory_display_name = factory_config_result.get("name", factory)
+
+                    blast_radius = {
+                        "factory": factory_display_name,
+                        "namespace": factory_namespace,
+                        "robot_count": robot_count,
+                        "current_version": current_version,
+                        "target_version": model_version,
+                        "impact_level": "low" if robot_count <= 3 else "medium" if robot_count <= 10 else "high"
+                    }
                 except Exception as e:
-                    print(f"Warning: Failed to generate git_diff/summary: {e}")
+                    print(f"Warning: Failed to generate git_diff/summary/blast_radius: {e}")
+
+            # Extract agent's reasoning from the last AIMessage before tool call
+            reasoning_summary = None
+            if hasattr(last_message, 'content') and last_message.content:
+                reasoning_summary = last_message.content
+
+            # If no content in AIMessage (tool-only response), try to find previous AIMessage
+            if not reasoning_summary:
+                for msg in reversed(messages[:-1]):  # Skip last message (current tool call)
+                    if isinstance(msg, AIMessage) and msg.content:
+                        reasoning_summary = msg.content
+                        break
 
             audit_client = httpx.Client(timeout=30.0)
             try:
@@ -290,11 +366,21 @@ def custom_tool_node(state: AgentState) -> dict:
                     "tool_name": tool_name,
                     "tool_arguments": tool_args
                 }
-                # Add git_diff and summary if available
+                # Add agent reasoning if available
+                if reasoning_summary:
+                    audit_payload["reasoning_summary"] = reasoning_summary
+                # Add git_diff, summary, and blast_radius if available
                 if git_diff:
                     audit_payload["git_diff"] = git_diff
                 if summary:
                     audit_payload["summary"] = summary
+                if blast_radius:
+                    audit_payload["blast_radius"] = blast_radius
+
+                # Add tool_call_trace (read-only calls before this approval)
+                tool_call_trace = state.get("tool_call_trace", [])
+                if tool_call_trace:
+                    audit_payload["tool_call_trace"] = tool_call_trace
 
                 response = audit_client.post(
                     f"{AUDIT_SERVICE_URL}/audit/pending",
@@ -319,7 +405,12 @@ def custom_tool_node(state: AgentState) -> dict:
 
             except Exception as e:
                 print(f"Error creating approval request: {e}")
-                # Fall through - will be executed by ToolNode below
+                error_message = ToolMessage(
+                    content=f"ERROR: Failed to create approval request for {tool_name}: {e}",
+                    tool_call_id=tool_call_id,
+                    name=tool_name
+                )
+                result_messages.append(error_message)
 
         else:
             # Read-only tool - will be executed by ToolNode below
@@ -337,7 +428,47 @@ def custom_tool_node(state: AgentState) -> dict:
     # IMPORTANT: Only pass read_only_tools to avoid executing state-modifying tools
     from langgraph.prebuilt import ToolNode
     tool_executor = ToolNode(read_only_tools)
-    return tool_executor.invoke(state)
+
+    # Execute tools and capture trace
+    tool_call_trace = state.get("tool_call_trace", [])
+
+    for tool_call in last_message.tool_calls:
+        tool_name = tool_call.get("name")
+        tool_args = tool_call.get("args", {})
+
+        # Record start time
+        start_time_ms = int(time.time() * 1000)
+        timestamp = datetime.now().isoformat()
+
+        # Execute via ToolNode
+        result = tool_executor.invoke(state)
+
+        # Record end time and result
+        end_time_ms = int(time.time() * 1000)
+        duration_ms = end_time_ms - start_time_ms
+
+        # Extract response summary from the ToolMessage
+        tool_messages = result.get("messages", [])
+        response_summary = "No response"
+        if tool_messages:
+            last_tool_msg = tool_messages[-1]
+            if hasattr(last_tool_msg, 'content'):
+                response_summary = str(last_tool_msg.content)[:200]  # First 200 chars
+
+        # Add to trace
+        tool_call_trace.append({
+            "tool_name": tool_name,
+            "arguments": tool_args,
+            "timestamp": timestamp,
+            "duration_ms": duration_ms,
+            "response_summary": response_summary,
+            "success": True  # If we got here, no exception
+        })
+
+        # Update state with trace
+        state["tool_call_trace"] = tool_call_trace
+
+    return result
 
 
 # Conditional edge - should we continue or end?
@@ -428,8 +559,15 @@ app = workflow.compile()
 
 
 # Main agent interface
-def run_agent(query: str, session_id: str = None) -> str:
-    """Run the agent with a user query"""
+def run_agent(query: str, session_id: str = None) -> dict[str, any]:
+    """
+    Run the agent with a user query.
+
+    Returns:
+        dict with:
+            - response: str - The agent's response message
+            - pending_approval_id: int | None - ID if HIL approval was created
+    """
     from langchain_core.messages import SystemMessage
     import uuid
 
@@ -438,39 +576,34 @@ def run_agent(query: str, session_id: str = None) -> str:
 
     system_prompt = """You are an AI assistant that helps operators manage ML models and factory operations.
 
-CAPABILITIES:
+FLEET QUESTIONS (policy version, robots, factory status):
+- Use get_factory_config tool - it returns "policy_version" field which IS the model version
+- Example: "What's the model version?" → call get_factory_config → respond with the policy_version value
+- Do NOT call MLflow tools for factory/policy questions
 
-MLflow Operations (Read-Only):
-- Query MLflow experiments using the list_experiments tool
-- Get experiment details using the get_experiment tool
-- List runs for experiments using the list_runs tool
-- Get run details using the get_run tool
-- Get metrics for runs using the get_metrics tool
+MLFLOW QUESTIONS (experiments, runs, metrics):
+- Use list_experiments, get_experiment, list_runs, get_run, get_metrics tools
+- Only for questions about training experiments and metrics
 
-Fleet Operations (Read-Only):
-- Get fleet status using the get_fleet_status tool
-- Get factory configuration using the get_factory_config tool
+WORKFLOW FOR QUESTIONS:
+1. Read the question
+2. Call ONE tool that answers it
+3. When you get the tool result, STOP and respond - do NOT call another tool
+4. Present the answer in natural language
 
-Model Management (Requires Approval):
-- Register models from runs using the register_model tool
-- Promote models to factories using the promote_policy_version tool
+WORKFLOW FOR STATE-MODIFYING ACTIONS:
+BEFORE calling any state-modifying tool (register_model, promote_policy_version):
+1. FIRST gather context by calling relevant read-only tools:
+   - For promote_policy_version: ALWAYS call get_factory_config first to understand current state
+   - For register_model: ALWAYS call get_run first to verify the run exists
+2. THEN call the state-modifying tool
+3. After approval, respond to the user
 
-TOOL USE (CRITICAL RULES):
-- When the user asks about factories, robots, or policy versions, use get_fleet_status or get_factory_config.
-- When the user asks about experiments, runs, or metrics, use the MLflow tools.
-- Call ONE tool to answer the question, then STOP and respond with the result.
-- Do NOT call the same tool multiple times for the same query.
-- Do NOT call additional tools after you have the information needed to answer.
-- After receiving tool results, respond directly with a clear summary - DO NOT call more tools.
+This two-step approach ensures operators see what information you gathered before requesting approval.
 
-STATE-MODIFYING ACTIONS (Require Approval):
+STATE-MODIFYING ACTIONS (Require Human Approval):
 - register_model - registers a new model in MLflow
 - promote_policy_version - opens a GitHub PR to promote a model to a factory
-
-RESPONSE STYLE:
-- Answer concisely and conversationally.
-- Present tool results in natural language, not raw JSON.
-- ONE tool call per question - then respond.
 """
 
     initial_state = {
@@ -479,7 +612,8 @@ RESPONSE STYLE:
             HumanMessage(content=query)
         ],
         "session_id": session_id,
-        "pending_approval_id": None
+        "pending_approval_id": None,
+        "tool_call_trace": []  # Initialize trace for this session
     }
 
     # Run the graph with recursion limit = 15 (agent → tools → agent = 3 steps per cycle)
@@ -493,18 +627,24 @@ RESPONSE STYLE:
         # If we hit recursion limit, extract the last message before failing
         if "Recursion limit" in str(e):
             print(f"DEBUG [run_agent]: HIT RECURSION LIMIT after {len(initial_state['messages'])} steps")
-            # Return a fallback response
-            return "I apologize, but I encountered an issue processing your request. The system made too many tool calls. Please try rephrasing your question more specifically."
+            # Return a fallback response in consistent dict format
+            return {
+                "response": "I apologize, but I encountered an issue processing your request. The system made too many tool calls. Please try rephrasing your question more specifically.",
+                "pending_approval_id": None
+            }
         raise
 
-    # Extract final response
+    # Extract final response and approval ID
     messages = final_state["messages"]
     last_message = messages[-1]
+    pending_approval_id = final_state.get("pending_approval_id")
 
-    if isinstance(last_message, AIMessage):
-        return last_message.content
+    response_text = last_message.content if isinstance(last_message, AIMessage) else str(last_message)
 
-    return str(last_message)
+    return {
+        "response": response_text,
+        "pending_approval_id": pending_approval_id
+    }
 
 
 if __name__ == "__main__":
