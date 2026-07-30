@@ -16,6 +16,7 @@ export interface AppConfig {
   githubRepo: string;
   clusterAppsDomain: string;
   agenticOrchestratorUrl: string;
+  auditServiceUrl: string;
 }
 
 export function loadConfig(): AppConfig {
@@ -43,5 +44,8 @@ export function loadConfig(): AppConfig {
     agenticOrchestratorUrl:
       process.env.AGENTIC_ORCHESTRATOR_URL ??
       "http://agentic-orchestrator.agentic-ops.svc.cluster.local:8080",
+    auditServiceUrl:
+      process.env.AUDIT_SERVICE_URL ??
+      "http://audit-service.agentic-ops.svc.cluster.local:8090",
   };
 }

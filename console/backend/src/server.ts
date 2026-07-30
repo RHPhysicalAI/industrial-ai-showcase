@@ -1,12 +1,28 @@
 // This project was developed with assistance from AI tools.
 import Fastify from "fastify";
 import fastifyCors from "@fastify/cors";
+import { KubeConfig, CoreV1Api } from "@kubernetes/client-node";
 
 import { loadConfig } from "./config.js";
 import { FleetStream, type FleetMessage } from "./kafkaStream.js";
 import { registerStreamRoutes } from "./stream.js";
 import { ArgoSync } from "./argoSync.js";
 import { getGovernanceStatus } from "./governance.js";
+
+// Initialize Kubernetes client
+const kc = new KubeConfig();
+kc.loadFromDefault();
+const k8sApi = kc.makeApiClient(CoreV1Api);
+
+// Helper to read policy version from ConfigMap
+async function getPolicyVersion(namespace: string): Promise<string> {
+  try {
+    const cm = await k8sApi.readNamespacedConfigMap("policy-version", namespace);
+    return cm.body.data?.["version"] ?? "vla-warehouse-v1.3";
+  } catch {
+    return "vla-warehouse-v1.3";
+  }
+}
 
 const config = loadConfig();
 const fastify = Fastify({
@@ -91,7 +107,6 @@ fastify.get("/api/governance", async () => {
 fastify.get("/api/fleet", async () => {
   const telemetry = stream.getLatestTelemetry();
   const ds = stream.demoState;
-  const fa = ds.factories["factory-a"];
   const fb = ds.factories["factory-b"];
   const d = config.clusterAppsDomain;
   const links = d
@@ -102,31 +117,45 @@ fastify.get("/api/fleet", async () => {
         argoConsole: `https://openshift-gitops-server-openshift-gitops.${d}/applications/openshift-gitops/workloads-console`,
       }
     : null;
+
+  // Read policy versions directly from ConfigMaps (updated dynamically on promotion)
+  const [factoryAPolicyVersion, factoryBPolicyVersion] = await Promise.all([
+    getPolicyVersion("robot-edge"),
+    getPolicyVersion("factory-b"),
+  ]);
+
   return {
     demoPhase: ds.phase,
     anomalyHistory: ds.anomalyHistory,
     statusLog: ds.statusLog,
+    rollbackAnalyses: ds.rollbackAnalyses,
     links,
     factories: [
       {
         name: "Factory A",
         namespace: "robot-edge",
-        policyVersion: fa?.policyVersion ?? telemetry["fl-07"]?.policyVersion ?? "vla-warehouse-v1.3",
+        policyVersion: factoryAPolicyVersion,
         robotId: "fl-07",
-        robotStatus: telemetry["fl-07"]?.robotStatus ?? "active",
-        anomalyScore: telemetry["fl-07"]?.anomalyScore ?? 0.12,
-        argoSyncStatus: fa?.argoSyncStatus ?? "synced",
+        robotStatus: telemetry["fl-07"]?.robotStatus ?? "idle",
+        anomalyScore: telemetry["fl-07"]?.anomalyScore ?? 0.05,
+        argoSyncStatus: "synced",
         lastHeartbeat: telemetry["fl-07"]?.lastHeartbeat ?? new Date().toISOString(),
+        links: d ? {
+          argoApp: `https://openshift-gitops-server-openshift-gitops.${d}/applications/openshift-gitops/workloads-robot-edge`,
+        } : undefined,
       },
       {
         name: "Factory B",
         namespace: "factory-b",
-        policyVersion: fb?.policyVersion ?? telemetry["fl-08"]?.policyVersion ?? "vla-warehouse-v1.3",
+        policyVersion: factoryBPolicyVersion,
         robotId: "fl-08",
         robotStatus: telemetry["fl-08"]?.robotStatus ?? "idle",
         anomalyScore: telemetry["fl-08"]?.anomalyScore ?? 0.03,
         argoSyncStatus: fb?.argoSyncStatus ?? "synced",
         lastHeartbeat: telemetry["fl-08"]?.lastHeartbeat ?? new Date().toISOString(),
+        links: d ? {
+          argoApp: `https://openshift-gitops-server-openshift-gitops.${d}/applications/openshift-gitops/workloads-factory-b`,
+        } : undefined,
       },
     ],
   };
@@ -344,10 +373,11 @@ fastify.post<{ Body: { query: string; sessionId?: string } }>(
         return;
       }
 
-      const data = await resp.json() as { query: string; response: string };
+      const data = await resp.json() as { query: string; response: string; pending_approval_id?: number };
       return {
         query: data.query,
         response: data.response,
+        pending_approval_id: data.pending_approval_id ?? null,
         timestamp: new Date().toISOString(),
       };
     } catch (err) {
@@ -384,30 +414,9 @@ fastify.get("/api/agent/suggestions", async () => {
     // Get current fleet state
     const telemetry = stream.getLatestTelemetry();
     const ds = stream.demoState;
-    const fa = ds.factories["factory-a"];
     const fb = ds.factories["factory-b"];
 
-    // Factory A suggestions
-    const factoryAVersion = fa?.policyVersion ?? telemetry["fl-07"]?.policyVersion ?? "v1.3";
-    suggestions.push({
-      category: "fleet-status",
-      icon: "📊",
-      text: `What's the current model version in Factory A?`,
-      priority: 2,
-    });
-
-    // Suggest upgrade (simple increment logic)
-    const nextVersionA = getNextVersion(factoryAVersion);
-    if (nextVersionA) {
-      suggestions.push({
-        category: "upgrade",
-        icon: "🆙",
-        text: `Promote vla-warehouse ${nextVersionA} to Factory A`,
-        priority: 1,
-      });
-    }
-
-    // Factory B suggestions
+    // Factory B suggestions (Factory A removed - doesn't exist in cluster)
     const factoryBVersion = fb?.policyVersion ?? telemetry["fl-08"]?.policyVersion ?? "v1.3";
     const nextVersionB = getNextVersion(factoryBVersion);
     if (nextVersionB) {
@@ -419,28 +428,28 @@ fastify.get("/api/agent/suggestions", async () => {
       });
     }
 
-    // Robot telemetry
+    // Robot telemetry (fl-08 is Factory B robot)
     suggestions.push({
       category: "telemetry",
       icon: "🤖",
-      text: "Show me telemetry for robot fl-07",
+      text: "Show me telemetry for robot fl-08",
       priority: 3,
     });
 
-    // Anomaly check
-    const factoryAAnomalyScore = telemetry["fl-07"]?.anomalyScore ?? 0.12;
-    if (factoryAAnomalyScore > 0.5) {
+    // Anomaly check (Factory B)
+    const factoryBAnomalyScore = telemetry["fl-08"]?.anomalyScore ?? 0.12;
+    if (factoryBAnomalyScore > 0.5) {
       suggestions.push({
         category: "anomaly",
         icon: "⚠️",
-        text: `Check anomaly for Factory A (score: ${factoryAAnomalyScore.toFixed(2)})`,
+        text: `Check anomaly for Factory B (score: ${factoryBAnomalyScore.toFixed(2)})`,
         priority: 0, // Highest priority
       });
     } else {
       suggestions.push({
         category: "anomaly",
         icon: "📈",
-        text: "Show me anomaly history for Factory A",
+        text: "Show me anomaly history for Factory B",
         priority: 4,
       });
     }
@@ -502,6 +511,34 @@ fastify.get("/api/approval/pending", async (request, reply) => {
     reply.code(500).send({ error: "Audit service unavailable" });
   }
 });
+
+fastify.get<{ Querystring: { limit?: string } }>(
+  "/api/audit/history",
+  async (request, reply) => {
+    const limit = parseInt(request.query.limit ?? "10", 10);
+
+    try {
+      const resp = await fetch(
+        `${config.auditServiceUrl}/audit/history?limit=${limit}`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        log.warn({ status: resp.status, error: errorText }, "failed to fetch audit history");
+        reply.code(resp.status).send({ error: "Failed to fetch audit history" });
+        return;
+      }
+
+      const data = await resp.json() as { history: Array<unknown> };
+      return data;
+    } catch (err) {
+      log.error({ err }, "audit history query error");
+      reply.code(500).send({ error: "Audit service unavailable" });
+    }
+  }
+);
+
 
 fastify.post<{ Params: { id: string } }>(
   "/api/approval/:id/approve",

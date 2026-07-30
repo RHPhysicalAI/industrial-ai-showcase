@@ -26,6 +26,16 @@ export interface StatusLogEntry {
   message: string;
 }
 
+export interface RollbackAnalysis {
+  timestamp: string;
+  factory: string;
+  from_version: string;
+  to_version: string;
+  trigger: string;
+  agent_analysis: string;
+  session_id: string;
+}
+
 interface FactoryState {
   policyVersion: string;
   argoSyncStatus: ArgoSyncStatus;
@@ -35,6 +45,7 @@ const BASELINE_VERSION = "vla-warehouse-v1.3";
 const ANOMALY_RING_SIZE = 60;
 const ARGO_POLL_MS = 3000;
 const ARGO_FALLBACK_MS = 4000;
+const ARGO_MAX_POLLS = 20;
 
 export class DemoState {
   phase: DemoPhase = "idle";
@@ -51,6 +62,7 @@ export class DemoState {
   };
   anomalyHistory: AnomalyPoint[] = [];
   statusLog: StatusLogEntry[] = [];
+  rollbackAnalyses: RollbackAnalysis[] = [];
   private timers: ReturnType<typeof setTimeout>[] = [];
   private promotedVersion: string = BASELINE_VERSION;
   argoSync: ArgoSync | null = null;
@@ -78,7 +90,7 @@ export class DemoState {
     if (this.statusLog.length > 20) this.statusLog.shift();
   }
 
-  promotePolicy(factory: string, version: string): void {
+  promotePolicy(factory: string, version: string, skipGitCommit: boolean = true): void {
     const f = this.factories[factory];
     if (!f) return;
     this.promotedVersion = version;
@@ -87,8 +99,31 @@ export class DemoState {
     this.statusLog = [];
     this.addLog(`Starting promotion of ${factory} to ${version}`);
 
-    if (this.argoSync?.enabled) {
+    if (this.argoSync?.enabled && !skipGitCommit) {
+      // Legacy path: console makes the Git commit (used by direct UI promotions, not HIL)
       void this.realArgoPromote(factory, version);
+    } else if (this.argoSync?.enabled && skipGitCommit) {
+      // HIL path: PR already merged by orchestrator, just watch Argo sync
+      this.addLog("PR already merged — waiting for Argo CD sync");
+
+      // Trigger factory-specific Argo sync
+      void this.argoSync.triggerFactorySync(factory).then((triggered) => {
+        if (triggered) {
+          this.addLog("Argo CD factory sync triggered");
+        } else {
+          this.addLog("Argo sync trigger failed — will poll for natural sync");
+        }
+      });
+
+      this.pollFactoryArgoUntilSynced(factory, () => {
+        if (f) {
+          f.policyVersion = version;
+          f.argoSyncStatus = "synced";
+        }
+        this.phase = "promoted";
+        this.addLog("Argo CD sync complete — promotion finished");
+        this.log?.info({ factory, version }, "argoSync: promotion complete (HIL path)");
+      });
     } else {
       this.addLog("Argo CD not configured — simulating sync");
       this.scheduleSettle(factory, "synced", () => {
@@ -131,6 +166,15 @@ export class DemoState {
     }
   }
 
+  recordRollbackAnalysis(analysis: RollbackAnalysis): void {
+    this.rollbackAnalyses.push(analysis);
+    // Keep only last 5 analyses
+    if (this.rollbackAnalyses.length > 5) {
+      this.rollbackAnalyses.shift();
+    }
+    this.addLog(`🔍 Agent analysis complete: ${analysis.factory} rollback`);
+  }
+
   reset(): void {
     for (const timer of this.timers) clearTimeout(timer);
     this.timers = [];
@@ -151,6 +195,7 @@ export class DemoState {
     };
     this.anomalyHistory = [];
     this.statusLog = [];
+    this.rollbackAnalyses = [];
 
     if (this.argoSync?.enabled) {
       void this.realArgoReset();
@@ -333,6 +378,70 @@ export class DemoState {
             this.log?.warn(
               { factory, syncStatus, healthStatus },
               "argoSync: poll timeout",
+            );
+            this.addLog("Argo poll timed out — marking complete");
+            if (f) f.argoSyncStatus = "synced";
+            onDone();
+            return;
+          }
+          const timer = setTimeout(poll, ARGO_POLL_MS);
+          this.timers.push(timer);
+        });
+    };
+    const timer = setTimeout(poll, 2000);
+    this.timers.push(timer);
+  }
+
+  private pollFactoryArgoUntilSynced(factory: string, onDone: () => void): void {
+    let attempts = 0;
+    let sawRunning = false;
+
+    const poll = (): void => {
+      attempts++;
+      void this.argoSync!
+        .getFactoryArgoSyncStatus(factory)
+        .then(({ syncStatus, healthStatus, operationPhase }) => {
+          const f = this.factories[factory];
+          if (attempts % 3 === 1) {
+            this.addLog(
+              `Argo (${factory}): sync=${syncStatus} health=${healthStatus} op=${operationPhase}`,
+            );
+          }
+
+          if (operationPhase === "Running") sawRunning = true;
+
+          if (syncStatus === "Synced" && healthStatus === "Healthy") {
+            if (f) f.argoSyncStatus = "synced";
+            onDone();
+            return;
+          }
+
+          // Our triggered sync ran and completed
+          if (
+            sawRunning &&
+            (operationPhase === "Succeeded" || operationPhase === "Failed")
+          ) {
+            if (f) f.argoSyncStatus = "synced";
+            onDone();
+            return;
+          }
+
+          // After 5 polls (~15s) without seeing Running, sync was a no-op
+          if (
+            attempts >= 5 &&
+            !sawRunning &&
+            operationPhase === "Succeeded"
+          ) {
+            this.addLog("Argo sync settled (no new operation detected)");
+            if (f) f.argoSyncStatus = "synced";
+            onDone();
+            return;
+          }
+
+          if (attempts >= ARGO_MAX_POLLS) {
+            this.log?.warn(
+              { factory, syncStatus, healthStatus },
+              "argoSync: factory poll timeout",
             );
             this.addLog("Argo poll timed out — marking complete");
             if (f) f.argoSyncStatus = "synced";

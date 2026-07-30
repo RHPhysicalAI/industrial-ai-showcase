@@ -154,13 +154,8 @@ export function AgentAssistant({ onClose }: AgentAssistantProps) {
       setMessages((prev) => [...prev, assistantMessage]);
 
       // Check if response indicates approval needed
-      if (response.response.includes("⏸️") && response.response.includes("approval")) {
-        // Extract approval ID from response
-        const match = response.response.match(/Request #(\d+)/);
-        if (match && match[1]) {
-          const approvalId = parseInt(match[1], 10);
-          setPendingApprovalId(approvalId);
-        }
+      if (response.pending_approval_id) {
+        setPendingApprovalId(response.pending_approval_id);
       }
     } catch (err) {
       const errorMessage: Message = {

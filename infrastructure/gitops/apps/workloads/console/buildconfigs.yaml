@@ -9,11 +9,15 @@ metadata:
     phase: phase-1
 spec:
   source:
-    type: Binary
+    type: Git
+    git:
+      uri: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
+      ref: main
+    contextDir: console/backend
   strategy:
     type: Docker
     dockerStrategy:
-      dockerfilePath: console/backend/Containerfile
+      dockerfilePath: Containerfile
   output:
     to:
       kind: ImageStreamTag
@@ -38,11 +42,15 @@ metadata:
     phase: phase-1
 spec:
   source:
-    type: Binary
+    type: Git
+    git:
+      uri: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
+      ref: main
+    contextDir: console/frontend
   strategy:
     type: Docker
     dockerStrategy:
-      dockerfilePath: console/frontend/Containerfile
+      dockerfilePath: Containerfile
   output:
     to:
       kind: ImageStreamTag

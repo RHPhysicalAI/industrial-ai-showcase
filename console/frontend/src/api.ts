@@ -83,6 +83,7 @@ export async function queryAgent(query: string): Promise<{
   query: string;
   response: string;
   timestamp: string;
+  pending_approval_id?: number;
 }> {
   const resp = await fetch("/api/agent/query", {
     method: "POST",
@@ -93,7 +94,7 @@ export async function queryAgent(query: string): Promise<{
     const errorData = await resp.json().catch(() => ({ error: resp.statusText })) as { error?: string };
     throw new Error(errorData.error ?? `Agent query failed: ${resp.statusText}`);
   }
-  return (await resp.json()) as { query: string; response: string; timestamp: string };
+  return (await resp.json()) as { query: string; response: string; timestamp: string; pending_approval_id?: number };
 }
 
 export async function getAgentHealth(): Promise<{ status: string }> {
@@ -102,4 +103,104 @@ export async function getAgentHealth(): Promise<{ status: string }> {
     return { status: "unavailable" };
   }
   return (await resp.json()) as { status: string };
+}
+
+// HIL Approval API functions
+export interface BlastRadius {
+  factory: string;
+  namespace: string;
+  robot_count: number;
+  current_version: string;
+  target_version: string;
+  impact_level: "low" | "medium" | "high";
+}
+
+export interface ModerationCheck {
+  decision: "allowed" | "blocked" | "error";
+  flagged: boolean;
+  categories: string[];
+  latency_ms: number;
+}
+
+export interface ModerationResults {
+  input: ModerationCheck;
+  output: ModerationCheck;
+}
+
+export interface ToolCallTraceEntry {
+  tool_name: string;
+  arguments: Record<string, unknown>;
+  timestamp: string;
+  duration_ms: number;
+  response_summary: string;
+  success: boolean;
+}
+
+export interface MergeError {
+  error: string;
+  error_type: "conflict" | "not_mergeable" | "checks_failed" | "unknown";
+  status_code?: number;
+  pr_number?: number;
+  timestamp: string;
+}
+
+export interface PendingApproval {
+  id: number;
+  session_id: string;
+  user_identity: string;
+  tool_name: string;
+  tool_arguments: Record<string, unknown>;
+  approval_status: string;  // "pending" | "approved" | "rejected" | "merge_failed"
+  timestamp: string;
+  git_diff?: string;  // Git diff preview for promote_policy_version
+  summary?: string;   // Human-readable summary for promote_policy_version
+  blast_radius?: BlastRadius;  // Impact analysis for promote_policy_version (Milestone 4)
+  moderation_results?: ModerationResults;  // Input/output safety checks (Milestone 4)
+  tool_call_trace?: ToolCallTraceEntry[];  // Read-only tool calls before approval (Milestone 4)
+  reasoning_summary?: string;  // Agent's explanation of WHY (Milestone 4)
+  pr_url?: string;    // PR URL if already created (for approved requests)
+  merge_error?: MergeError;  // PR merge failure details (Task #33)
+}
+
+export interface ApprovalResult {
+  status: string;
+  id: number;
+  result?: string;
+  reason?: string;
+  timestamp: string;
+}
+
+export async function getPendingApprovals(): Promise<PendingApproval[]> {
+  const resp = await fetch("/api/approval/pending");
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch pending approvals: ${resp.status}`);
+  }
+  const data = (await resp.json()) as { pending: PendingApproval[] };
+  return data.pending;
+}
+
+export async function approveRequest(id: number): Promise<ApprovalResult> {
+  const resp = await fetch(`/api/approval/${id}/approve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!resp.ok) {
+    const errorData = await resp.json().catch(() => ({ error: resp.statusText })) as { error?: string };
+    throw new Error(errorData.error ?? `Approval failed: ${resp.statusText}`);
+  }
+  return (await resp.json()) as ApprovalResult;
+}
+
+export async function rejectRequest(id: number, reason: string): Promise<ApprovalResult> {
+  const resp = await fetch(`/api/approval/${id}/reject`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason }),
+  });
+  if (!resp.ok) {
+    const errorData = await resp.json().catch(() => ({ error: resp.statusText })) as { error?: string };
+    throw new Error(errorData.error ?? `Rejection failed: ${resp.statusText}`);
+  }
+  return (await resp.json()) as ApprovalResult;
 }
