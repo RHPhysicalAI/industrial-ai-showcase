@@ -22,9 +22,6 @@ logger = logging.getLogger(__name__)
 # Use full orchestrator with HIL gate (Milestone 2)
 from orchestrator import run_agent, mcp_client
 
-# Llama Stack integration (Milestone 3 - Phase 3)
-from llama_stack_adapter import get_llama_stack_adapter, is_llama_stack_enabled
-
 # Content moderation (Phase 3 - ADR-019)
 from moderation_client import (
     moderate_input,
@@ -48,65 +45,10 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize Llama Stack integration on startup"""
-    adapter = get_llama_stack_adapter()
+    """Initialize orchestrator services on startup"""
+    print("Agentic Orchestrator starting...")
+    print("Running in passthrough mode (custom HIL in orchestrator.py)")
 
-    print(f"Agentic Orchestrator starting...")
-    print(f"HIL Mode: {adapter.get_mode_description()}")
-
-    if adapter.is_enabled():
-        try:
-            # Discover and register MCP tools with Llama Stack
-            print("Initializing Llama Stack with MCP tools...")
-
-            # Get tools from MCP servers
-            mlflow_tools = mcp_client.discover_tools()
-            from orchestrator import mcp_fleet_client
-            fleet_tools = mcp_fleet_client.discover_tools()
-
-            all_tools = mlflow_tools + fleet_tools
-
-            # Convert to Llama Stack format
-            llama_tools = []
-            for tool in all_tools:
-                llama_tools.append({
-                    "name": tool["name"],
-                    "description": tool["description"],
-                    "parameters": tool.get("parameters", {}),
-                    "metadata": {
-                        "state_modifying": tool.get("state_modifying", False),
-                        "endpoint": tool.get("endpoint", "")
-                    }
-                })
-
-            # Initialize agent with tools
-            agent_id = adapter.initialize_agent(
-                tools=llama_tools,
-                instructions="""
-                You are an AI assistant for physical AI operations in industrial warehouses.
-                You help operators manage robot fleets and ML model deployments.
-
-                Available tools:
-                - Fleet management: Check factory status, robot telemetry, anomaly history
-                - Model operations: Promote models to factories, register models in MLflow
-                - MLflow: List experiments, get run metrics
-
-                Important:
-                - Always check current state before making changes
-                - Explain what you're about to do for state-modifying operations
-                - State-modifying operations require human approval (HIL)
-                """
-            )
-
-            print(f"Llama Stack agent initialized: {agent_id}")
-
-        except Exception as e:
-            print(f"Warning: Llama Stack initialization failed: {e}")
-            print("Falling back to passthrough mode")
-    else:
-        print("Running in passthrough mode (custom HIL in orchestrator.py)")
-
-    # Start fleet event listener for rollback analysis (Phase 3 Item #8)
     try:
         # Import here to avoid module-level kafka import issues
         from event_listener import start_event_listener
@@ -304,31 +246,13 @@ class ApprovalResumeResponse(BaseModel):
 
 @app.get("/health")
 async def health():
-    """Health check endpoint with Llama Stack and moderation status"""
-    adapter = get_llama_stack_adapter()
-
+    """Health check endpoint with moderation status"""
     health_info = {
         "status": "healthy",
         "service": "agentic-orchestrator",
         "version": "0.1.0",
-        "hil_mode": adapter.mode.value
+        "hil_mode": "passthrough"
     }
-
-    # Check Llama Stack connectivity if enabled
-    if adapter.is_enabled():
-        try:
-            from llama_stack_client import get_llama_stack_client
-            llama_client = get_llama_stack_client()
-            llama_health = llama_client.health_check()
-            health_info["llama_stack"] = {
-                "status": "connected",
-                "health": llama_health
-            }
-        except Exception as e:
-            health_info["llama_stack"] = {
-                "status": "error",
-                "error": str(e)
-            }
 
     # Check moderation client connectivity
     try:

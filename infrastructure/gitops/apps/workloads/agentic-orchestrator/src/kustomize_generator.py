@@ -64,41 +64,6 @@ class KustomizeGenerator:
             )
         }
 
-    def _generate_isvc_patch(self, promotion: ModelPromotion, namespace: str) -> dict:
-        """
-        Generate InferenceService patch YAML.
-
-        This is a strategic merge patch that updates only the storageUri field.
-        """
-        return {
-            "apiVersion": "serving.kserve.io/v1beta1",
-            "kind": "InferenceService",
-            "metadata": {
-                "name": promotion.model_name,
-                "namespace": namespace
-            },
-            "spec": {
-                "predictor": {
-                    "model": {
-                        "modelFormat": {"name": promotion.runtime},
-                        "storageUri": promotion.model_uri,
-                        "resources": {
-                            "limits": {
-                                "nvidia.com/gpu": "1",
-                                "cpu": "4",
-                                "memory": "16Gi"
-                            },
-                            "requests": {
-                                "nvidia.com/gpu": "1",
-                                "cpu": "2",
-                                "memory": "8Gi"
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
     def _generate_policy_version_configmap(self, promotion: ModelPromotion, namespace: str) -> dict:
         """
         Generate policy-version ConfigMap YAML.
@@ -127,20 +92,6 @@ class KustomizeGenerator:
                 "model-uri": promotion.model_uri,
                 "promoted-at": datetime.now(timezone.utc).isoformat()
             }
-        }
-
-    def _generate_kustomization(self, promotion: ModelPromotion, namespace: str) -> dict:
-        """
-        NOTE: Not used anymore. Policy-version ConfigMap is already in kustomization.yaml.
-        Keeping this method for backward compatibility but it's not called.
-        """
-        return {
-            "apiVersion": "kustomize.config.k8s.io/v1beta1",
-            "kind": "Kustomization",
-            "namespace": namespace,
-            "resources": [
-                "policy-version.yaml"
-            ]
         }
 
     def generate_git_diff_preview(self, promotion: ModelPromotion) -> str:

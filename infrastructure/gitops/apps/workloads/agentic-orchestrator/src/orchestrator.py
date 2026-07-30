@@ -16,8 +16,6 @@ from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 import httpx
 
-from tool_call_tracer import ToolCallTracer
-
 
 # Environment configuration
 VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://vllm-agent-brain.agentic-ops.svc.cluster.local:8000/v1")
