@@ -58,6 +58,11 @@ spec:
                   key: vla.endpoint.url
             - name: VLA_REQUEST_TIMEOUT_S
               value: "10"
+            - name: POLICY_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: policy-version
+                  key: version
           resources:
             requests:
               cpu: 100m

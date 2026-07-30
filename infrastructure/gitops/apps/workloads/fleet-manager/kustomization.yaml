@@ -9,3 +9,4 @@ resources:
   - service.yaml
   - networkpolicy.yaml
   - vault-github-token.yaml
+  - policy-version.yaml

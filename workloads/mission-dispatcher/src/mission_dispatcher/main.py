@@ -89,6 +89,7 @@ class Dispatcher:
             self._producer,
             self._settings.telemetry_topic,
             self._settings.waypoint_hz,
+            self._settings.policy_version,
             self._log,
         )
         if not completed:

@@ -1,0 +1,7 @@
+# This project was developed with assistance from AI tools.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - vllm-servingruntime.yaml
+  - vla-warehouse-inferenceservice.yaml
