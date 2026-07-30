@@ -12,7 +12,7 @@ spec:
     type: Git
     git:
       uri: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
-      ref: phase3
+      ref: main
     contextDir: console/backend
   strategy:
     type: Docker
@@ -45,7 +45,7 @@ spec:
     type: Git
     git:
       uri: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
-      ref: phase3
+      ref: main
     contextDir: console/frontend
   strategy:
     type: Docker

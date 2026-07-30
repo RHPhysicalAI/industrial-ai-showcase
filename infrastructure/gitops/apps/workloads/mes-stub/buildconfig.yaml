@@ -11,7 +11,7 @@ spec:
     type: Git
     git:
       uri: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
-      ref: phase3
+      ref: main
   strategy:
     type: Docker
     dockerStrategy:
