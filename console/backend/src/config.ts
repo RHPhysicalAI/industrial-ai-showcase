@@ -39,7 +39,7 @@ export function loadConfig(): AppConfig {
     turnUsername: process.env.TURN_USERNAME ?? "",
     turnCredential: process.env.TURN_CREDENTIAL ?? "",
     githubToken: process.env.GITHUB_TOKEN ?? "",
-    githubRepo: process.env.GITHUB_REPO ?? "jeremyary/industrial-ai-showcase",
+    githubRepo: process.env.GITHUB_REPO ?? "RHPhysicalAI/industrial-ai-showcase",
     clusterAppsDomain: process.env.CLUSTER_APPS_DOMAIN ?? "",
     agenticOrchestratorUrl:
       process.env.AGENTIC_ORCHESTRATOR_URL ??

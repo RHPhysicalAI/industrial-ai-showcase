@@ -10,7 +10,7 @@ spec:
   generators:
     - git:
         repoURL: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
-        revision: main
+        revision: phase3
         directories:
           - path: infrastructure/gitops/apps/operators/*
   template:
@@ -28,7 +28,7 @@ spec:
       project: default
       source:
         repoURL: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
-        targetRevision: main
+        targetRevision: phase3
         path: '{{path}}'
       destination:
         server: https://kubernetes.default.svc

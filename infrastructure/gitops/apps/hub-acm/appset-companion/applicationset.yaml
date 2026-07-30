@@ -19,7 +19,7 @@ spec:
               requeueAfterSeconds: 60
           - git:
               repoURL: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
-              revision: main
+              revision: phase3
               directories:
                 - path: infrastructure/gitops/apps/companion/*
   template:
@@ -37,7 +37,7 @@ spec:
       project: default
       source:
         repoURL: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
-        targetRevision: main
+        targetRevision: phase3
         path: '{{path}}'
       destination:
         # The clusterDecisionResource generator provides {{server}} for

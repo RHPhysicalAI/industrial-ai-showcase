@@ -11,7 +11,7 @@ spec:
     type: Git
     git:
       uri: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
-      ref: main
+      ref: phase3
     sourceSecret:
       name: git-source-secret
   strategy:
