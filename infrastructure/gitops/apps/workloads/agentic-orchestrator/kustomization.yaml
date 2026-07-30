@@ -8,6 +8,7 @@ resources:
   - namespace.yaml
   - vault-auth.yaml
   - vault-static-secret-hf.yaml
+  - vault-github-token.yaml
   - imagestream.yaml
   - buildconfig.yaml
   - deployment.yaml
