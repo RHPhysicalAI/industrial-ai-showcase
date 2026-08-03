@@ -390,7 +390,7 @@ root:
         isOptional: true
         parameterType: STRING
 schemaVersion: 2.1.0
-sdkVersion: kfp-2.13.0
+sdkVersion: kfp-2.17.0
 ---
 platforms:
   kubernetes:
@@ -404,6 +404,7 @@ platforms:
               secretKey: MINIO_ROOT_USER
             - envVar: AWS_SECRET_ACCESS_KEY
               secretKey: MINIO_ROOT_PASSWORD
+            optional: false
             secretName: minio-credentials
             secretNameParameter:
               runtimeValue:
@@ -411,6 +412,7 @@ platforms:
           - keyToEnv:
             - envVar: HF_TOKEN
               secretKey: HF_TOKEN
+            optional: false
             secretName: hf-credentials
             secretNameParameter:
               runtimeValue:
@@ -433,6 +435,7 @@ platforms:
               secretKey: MINIO_ROOT_USER
             - envVar: AWS_SECRET_ACCESS_KEY
               secretKey: MINIO_ROOT_PASSWORD
+            optional: false
             secretName: minio-credentials
             secretNameParameter:
               runtimeValue:
@@ -440,6 +443,7 @@ platforms:
           - keyToEnv:
             - envVar: HF_TOKEN
               secretKey: HF_TOKEN
+            optional: false
             secretName: hf-credentials
             secretNameParameter:
               runtimeValue:
@@ -457,6 +461,7 @@ platforms:
               secretKey: MINIO_ROOT_USER
             - envVar: AWS_SECRET_ACCESS_KEY
               secretKey: MINIO_ROOT_PASSWORD
+            optional: false
             secretName: minio-credentials
             secretNameParameter:
               runtimeValue:
@@ -474,6 +479,7 @@ platforms:
               secretKey: MINIO_ROOT_USER
             - envVar: AWS_SECRET_ACCESS_KEY
               secretKey: MINIO_ROOT_PASSWORD
+            optional: false
             secretName: minio-credentials
             secretNameParameter:
               runtimeValue:
