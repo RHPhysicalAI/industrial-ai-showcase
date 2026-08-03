@@ -185,12 +185,12 @@ deploymentSpec:
             resourceCount: '1'
             resourceType: nvidia.com/gpu
             type: nvidia.com/gpu
-          cpuRequest: 14.0
-          memoryLimit: 118.11160064
-          memoryRequest: 68.719476736
-          resourceCpuRequest: '14'
-          resourceMemoryLimit: 110Gi
-          resourceMemoryRequest: 64Gi
+          cpuRequest: 6.0
+          memoryLimit: 60.129542144
+          memoryRequest: 51.539607552
+          resourceCpuRequest: '6'
+          resourceMemoryLimit: 56Gi
+          resourceMemoryRequest: 48Gi
     exec-vla-register-model-op:
       container:
         args:

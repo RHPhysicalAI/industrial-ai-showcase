@@ -15,9 +15,9 @@ from vla_training.constants import (
 def _configure_gpu_step(task: dsl.PipelineTask) -> None:
     task.set_accelerator_type("nvidia.com/gpu")
     task.set_accelerator_limit(GPU_LIMIT)
-    task.set_cpu_request("14")
-    task.set_memory_request("64Gi")
-    task.set_memory_limit("110Gi")
+    task.set_cpu_request("6")
+    task.set_memory_request("48Gi")
+    task.set_memory_limit("56Gi")
     task.set_env_variable("PYTHONUNBUFFERED", "1")
     task.set_env_variable("S3_ENDPOINT", S3_ENDPOINT)
     task.set_env_variable("S3_BUCKET", "vla-training")
