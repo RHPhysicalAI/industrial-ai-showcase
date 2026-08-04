@@ -282,6 +282,74 @@ async def get_anomaly_history(factory: str, hours: int = 24):
     }
 
 
+@app.get("/tools/get_available_model_versions")
+async def get_available_model_versions(model_name: str = "g1-vla-finetune"):
+    """
+    List model versions registered in RHOAI Model Registry (read-only).
+
+    Use this to discover which trained model versions are available
+    for promotion before calling promote_policy_version.
+
+    Args:
+        model_name: Registered model name (default: g1-vla-finetune)
+
+    Returns:
+        Available versions with metadata (URI, training info, timestamps)
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            base = MODEL_REGISTRY_URL
+            resp = await client.get(
+                f"{base}/api/model_registry/v1alpha3/registered_models",
+                params={"name": model_name},
+            )
+            if resp.status_code != 200:
+                return {"model_name": model_name, "versions": [], "error": "Registry unavailable"}
+            items = resp.json().get("items", [])
+            if not items:
+                return {"model_name": model_name, "versions": [], "error": "Model not found"}
+            reg_model_id = items[0]["id"]
+
+            versions_resp = await client.get(
+                f"{base}/api/model_registry/v1alpha3/registered_models/{reg_model_id}/versions",
+                params={"order_by": "CREATE_TIME", "sort_order": "DESC", "page_size": "20"},
+            )
+            if versions_resp.status_code != 200:
+                return {"model_name": model_name, "versions": [], "error": "Failed to fetch versions"}
+
+            versions = []
+            for v in versions_resp.json().get("items", []):
+                props = v.get("customProperties", {})
+                metadata = {
+                    k: prop.get("string_value", "")
+                    for k, prop in props.items()
+                    if isinstance(prop, dict) and "string_value" in prop
+                }
+
+                uri = ""
+                arts_resp = await client.get(
+                    f"{base}/api/model_registry/v1alpha3/model_versions/{v['id']}/artifacts",
+                )
+                if arts_resp.status_code == 200:
+                    for art in arts_resp.json().get("items", []):
+                        if art.get("uri"):
+                            uri = art["uri"]
+                            break
+
+                versions.append({
+                    "version": v.get("name", ""),
+                    "id": v.get("id", ""),
+                    "uri": uri,
+                    "description": v.get("description", ""),
+                    "created_at": v.get("createTimeSinceEpoch", ""),
+                    "metadata": metadata,
+                })
+
+            return {"model_name": model_name, "versions": versions}
+    except Exception as exc:
+        return {"model_name": model_name, "versions": [], "error": str(exc)}
+
+
 # ========== STATE-MODIFYING TOOLS ==========
 
 @app.post("/tools/promote_policy_version")
@@ -495,6 +563,20 @@ async def list_tools():
                     }
                 },
                 "endpoint": "/tools/get_anomaly_history"
+            },
+
+            {
+                "name": "get_available_model_versions",
+                "description": "List model versions registered in RHOAI Model Registry. Use to discover trained models available for promotion before calling promote_policy_version.",
+                "state_modifying": False,
+                "parameters": {
+                    "model_name": {
+                        "type": "string",
+                        "description": "Registered model name (default: g1-vla-finetune)",
+                        "required": False
+                    }
+                },
+                "endpoint": "/tools/get_available_model_versions"
             },
 
             # State-modifying tool
