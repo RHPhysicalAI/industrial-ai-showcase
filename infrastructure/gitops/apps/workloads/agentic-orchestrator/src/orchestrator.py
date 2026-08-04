@@ -346,12 +346,13 @@ def custom_tool_node(state: AgentState) -> dict:
                     robot_count = factory_config_result.get("robot_count", 0)
                     factory_display_name = factory_config_result.get("name", factory)
 
+                    target_version = f"{model_name}-{model_version}"
                     blast_radius = {
                         "factory": factory_display_name,
                         "namespace": factory_namespace,
                         "robot_count": robot_count,
                         "current_version": current_version,
-                        "target_version": model_version,
+                        "target_version": target_version,
                         "impact_level": "low" if robot_count <= 3 else "medium" if robot_count <= 10 else "high"
                     }
                 except Exception as e:
