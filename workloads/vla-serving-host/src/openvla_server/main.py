@@ -68,6 +68,8 @@ async def lifespan(app: FastAPI):
         unnorm_key=settings.openvla_unnorm_key,
         device=settings.openvla_device,
         torch_dtype=settings.openvla_torch_dtype,
+        s3_endpoint=settings.s3_endpoint,
+        model_cache_dir=settings.model_cache_dir,
     )
     app.state.settings = settings
     app.state.log = log

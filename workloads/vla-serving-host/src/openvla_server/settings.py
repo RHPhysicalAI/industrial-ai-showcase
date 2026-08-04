@@ -20,8 +20,11 @@ class OpenvlaSettings(BaseSettings):
 
     openvla_weights: str = Field(
         default="openvla/openvla-7b",
-        description="HuggingFace model id for OpenVLA weights. Cached at $HF_HOME.",
+        description="Model source: HuggingFace id (openvla/openvla-7b), local path, or s3:// URI.",
     )
+
+    s3_endpoint: str = Field(default="", description="S3-compatible endpoint URL for s3:// model URIs.")
+    model_cache_dir: str = Field(default="/tmp/model_cache", description="Local directory to cache S3-downloaded models.")
     openvla_unnorm_key: str = Field(
         default="bridge_orig",
         description="Action-normalization dataset key; 'bridge_orig' matches the OpenVLA paper defaults.",

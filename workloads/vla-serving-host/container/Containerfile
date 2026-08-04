@@ -42,7 +42,7 @@ COPY workloads/vla-serving-host/src /opt/app/vla-serving-host/src
 RUN pip3 install --no-cache-dir \
         fastapi "uvicorn[standard]" \
         pydantic pydantic-settings \
-        structlog pillow numpy \
+        structlog pillow numpy boto3 \
     && pip3 install --no-cache-dir --no-deps /opt/app/vla-serving-host \
     && chown -R 1001:0 /opt/app
 

@@ -73,15 +73,31 @@ class OpenvlaAdapter:
         return list(action.tolist() if hasattr(action, "tolist") else action)
 
 
+def _resolve_weights(weights: str, s3_endpoint: str = "", model_cache_dir: str = "/tmp/model_cache") -> str:
+    """Resolve an s3:// URI to a local path; pass through HF ids and local paths unchanged."""
+    if not weights.startswith("s3://"):
+        return weights
+    from openvla_server.s3_loader import download_model_from_s3
+
+    return download_model_from_s3(uri=weights, local_dir=model_cache_dir, endpoint=s3_endpoint)
+
+
 def build_adapter(
-    mode: str, weights: str, unnorm_key: str, device: str, torch_dtype: str = "fp16"
+    mode: str,
+    weights: str,
+    unnorm_key: str,
+    device: str,
+    torch_dtype: str = "fp16",
+    s3_endpoint: str = "",
+    model_cache_dir: str = "/tmp/model_cache",
 ) -> VlaAdapter:
     mode = mode.lower()
     if mode == "mock":
         return MockAdapter()
     if mode == "openvla":
+        resolved = _resolve_weights(weights, s3_endpoint=s3_endpoint, model_cache_dir=model_cache_dir)
         return OpenvlaAdapter(
-            weights=weights, unnorm_key=unnorm_key, device=device, torch_dtype=torch_dtype
+            weights=resolved, unnorm_key=unnorm_key, device=device, torch_dtype=torch_dtype
         )
     if mode in {"smolvla", "pi0"}:
         raise NotImplementedError(f"{mode} adapter lands in Phase 3 — see workloads/vla-serving-host/README.md.")
