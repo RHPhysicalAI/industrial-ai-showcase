@@ -17,7 +17,7 @@ spec:
         app: openvla-server
     spec:
       nodeSelector:
-        nvidia.com/gpu.product: NVIDIA-L4
+        nvidia.com/gpu.product: NVIDIA-L40S
       tolerations:
       - key: nvidia.com/gpu
         operator: Exists

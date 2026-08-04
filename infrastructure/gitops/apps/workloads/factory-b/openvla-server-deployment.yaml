@@ -1,3 +1,4 @@
+# This project was developed with assistance from AI tools.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,7 +17,7 @@ spec:
         app: openvla-server
     spec:
       nodeSelector:
-        nvidia.com/gpu.product: NVIDIA-L4
+        nvidia.com/gpu.product: NVIDIA-L40S
       tolerations:
       - key: nvidia.com/gpu
         operator: Exists
@@ -35,9 +36,26 @@ spec:
         - name: PORT
           value: "8000"
         - name: OPENVLA_WEIGHTS
-          value: "openvla/openvla-7b"
+          valueFrom:
+            configMapKeyRef:
+              name: policy-version
+              key: model-uri
+        - name: S3_ENDPOINT
+          value: "http://minio.mlflow.svc:9000"
+        - name: MODEL_CACHE_DIR
+          value: "/models"
         - name: HF_HOME
           value: "/tmp/hf_cache"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: storage-config
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: storage-config
+              key: AWS_SECRET_ACCESS_KEY
         ports:
         - containerPort: 8000
           name: http
@@ -51,6 +69,9 @@ spec:
             cpu: "4"
             memory: "16Gi"
             nvidia.com/gpu: "1"
+        volumeMounts:
+        - name: model-cache
+          mountPath: /models
         livenessProbe:
           httpGet:
             path: /healthz
@@ -63,3 +84,7 @@ spec:
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 10
+      volumes:
+      - name: model-cache
+        persistentVolumeClaim:
+          claimName: model-cache
