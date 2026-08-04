@@ -276,9 +276,9 @@ fastify.get("/api/lineage", async () => {
     max_steps: modelMeta.training_steps,
     batch_size: "64",
     gpu: "NVIDIA L40S",
-    final_loss: latest?.metadata["final_loss"] || "0.1918",
-    duration: latest?.metadata["duration"] || "33m",
-    throughput: latest?.metadata["throughput"] || "1.01 steps/sec",
+    final_loss: latest?.metadata["final_loss"] || "",
+    duration: latest?.metadata["duration"] || "",
+    throughput: latest?.metadata["throughput"] || "",
   };
 
   return {

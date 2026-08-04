@@ -213,6 +213,7 @@ def vla_register_model_op(
             'export VLA_DATASET_REPO="${DATASET}"\n'
             'export VLA_EMBODIMENT_TAG="${EMBODIMENT}"\n'
             'export VLA_MAX_STEPS="${STEPS}"\n'
+            'export VLA_S3_CHECKPOINT_PREFIX="${S3_PREFIX}"\n'
             'export DSPA_RUN_ID="${DSPA_RUN_ID:-unknown}"\n'
             "\n"
             'echo "=== VLA Model Registration ==="\n'

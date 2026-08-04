@@ -200,14 +200,14 @@ deploymentSpec:
           $7\"; STEPS=\"$8\"; OUTPUT_FILE=\"$9\"\nMODEL_URI=\"s3://${S3_BUCKET}/${S3_PREFIX}/onnx\"\
           \n\nexport VLA_BASE_MODEL_REPO=\"${BASE_MODEL}\"\nexport VLA_DATASET_REPO=\"\
           ${DATASET}\"\nexport VLA_EMBODIMENT_TAG=\"${EMBODIMENT}\"\nexport VLA_MAX_STEPS=\"\
-          ${STEPS}\"\nexport DSPA_RUN_ID=\"${DSPA_RUN_ID:-unknown}\"\n\necho \"===\
-          \ VLA Model Registration ===\"\necho \"Model: ${MODEL_NAME} v${MODEL_VERSION}\"\
-          \necho \"URI: ${MODEL_URI}\"\necho \"Start time: $(date -u)\"\n\npython\
-          \ -m vla_training.register_model \\\n  --name \"${MODEL_NAME}\" \\\n  --uri\
-          \ \"${MODEL_URI}\" \\\n  --version \"${MODEL_VERSION}\" \\\n  --description\
-          \ \"GR00T N1.7-3B fine-tuned VLA for G1 teleop\"\n\necho \"REGISTERED\"\
-          \ > \"${OUTPUT_FILE}\"\necho \"End time: $(date -u)\"\necho \"=== VLA Model\
-          \ Registration: COMPLETE ===\""
+          ${STEPS}\"\nexport VLA_S3_CHECKPOINT_PREFIX=\"${S3_PREFIX}\"\nexport DSPA_RUN_ID=\"\
+          ${DSPA_RUN_ID:-unknown}\"\n\necho \"=== VLA Model Registration ===\"\necho\
+          \ \"Model: ${MODEL_NAME} v${MODEL_VERSION}\"\necho \"URI: ${MODEL_URI}\"\
+          \necho \"Start time: $(date -u)\"\n\npython -m vla_training.register_model\
+          \ \\\n  --name \"${MODEL_NAME}\" \\\n  --uri \"${MODEL_URI}\" \\\n  --version\
+          \ \"${MODEL_VERSION}\" \\\n  --description \"GR00T N1.7-3B fine-tuned VLA\
+          \ for G1 teleop\"\n\necho \"REGISTERED\" > \"${OUTPUT_FILE}\"\necho \"End\
+          \ time: $(date -u)\"\necho \"=== VLA Model Registration: COMPLETE ===\""
         - --
         - '{{$.inputs.parameters[''model_name'']}}'
         - '{{$.inputs.parameters[''model_version'']}}'
