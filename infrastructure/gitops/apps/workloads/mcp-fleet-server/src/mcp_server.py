@@ -353,7 +353,7 @@ async def get_available_model_versions(model_name: str = "g1-vla-finetune"):
 # ========== STATE-MODIFYING TOOLS ==========
 
 @app.post("/tools/promote_policy_version")
-async def promote_policy_version(factory: str, model_version: str):
+async def promote_policy_version(factory: str, model_version: str, model_name_param: str = "g1-vla-finetune"):
     """
     Promote model policy version to factory (state-modifying).
 
@@ -393,13 +393,13 @@ async def promote_policy_version(factory: str, model_version: str):
         config = await get_factory_config(factory)
         current_version = config.get("policy_version", "unknown")
         factory_namespace = config.get("namespace")  # Get actual namespace (e.g., "factory-b")
-        model_name = "vla-warehouse"  # Hardcoded for now - could extract from policy_version
+        model_name = model_name_param or "g1-vla-finetune"
 
     except HTTPException as e:
         raise HTTPException(status_code=400, detail=f"Invalid factory: {e.detail}")
 
     # 2. Resolve model URI: registry first, HF fallback for demo versions
-    registry_uri = await _resolve_model_uri_from_registry("g1-vla-finetune", model_version)
+    registry_uri = await _resolve_model_uri_from_registry(model_name, model_version)
     if registry_uri:
         model_uri = registry_uri
     elif SHOWCASE_MODE:

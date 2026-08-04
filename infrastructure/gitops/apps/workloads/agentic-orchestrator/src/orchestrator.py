@@ -276,7 +276,7 @@ def custom_tool_node(state: AgentState) -> dict:
 
                     factory = tool_args.get("factory")
                     model_version = tool_args.get("model_version")
-                    model_name = "vla-warehouse"  # Default model name
+                    model_name = tool_args.get("model_name", "g1-vla-finetune")
 
                     # Resolve model URI: registry first, HF fallback
                     model_uri = None
@@ -285,7 +285,7 @@ def custom_tool_node(state: AgentState) -> dict:
                         import httpx as _httpx
                         _resp = _httpx.get(
                             f"{MCP_FLEET_URL}/tools/get_available_model_versions",
-                            params={"model_name": "g1-vla-finetune"},
+                            params={"model_name": model_name},
                             timeout=5.0,
                         )
                         if _resp.status_code == 200:
