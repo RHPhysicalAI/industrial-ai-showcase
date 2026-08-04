@@ -237,9 +237,9 @@ fastify.get("/api/lineage", async () => {
   const d = config.clusterAppsDomain;
   const links = d
     ? {
-        mlflowExperiment: `https://data-science-gateway.${d}/mlflow/redhat-ods-applications/mlflow/#/experiments`,
-        modelRegistry: `https://rhods-dashboard-redhat-ods-applications.${d}/modelRegistry`,
-        pipelineRuns: `https://rh-ai.${d}/develop-train/pipelines/runs/vla-training`,
+        mlflowExperiment: `https://rh-ai.${d}/projects/vla-training`,
+        modelRegistry: `https://rh-ai.${d}/modelRegistry/wbc-model-registry/registeredModels/1`,
+        pipelineRuns: `https://rh-ai.${d}/pipelines/vla-training/runs`,
         rhoaiDashboard: `https://rh-ai.${d}/projects/vla-training`,
       }
     : null;
