@@ -16,7 +16,7 @@ class OpenvlaSettings(BaseSettings):
     # can be verified without the 14 GB OpenVLA weight download + ROCm inference
     # bring-up gating the whole demo. Flip to `openvla` once the wiring is green.
     # Future values: `smolvla`, `pi0`.
-    vla_mode: str = Field(default="mock", description="mock | openvla | smolvla | pi0")
+    vla_mode: str = Field(default="mock", description="mock | openvla | onnx | smolvla | pi0")
 
     openvla_weights: str = Field(
         default="openvla/openvla-7b",

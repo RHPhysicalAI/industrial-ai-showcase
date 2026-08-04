@@ -6,7 +6,10 @@ from __future__ import annotations
 import base64
 import io
 import random
+from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
+
+import numpy as np
 
 if TYPE_CHECKING:
     from PIL.Image import Image
@@ -73,6 +76,97 @@ class OpenvlaAdapter:
         return list(action.tolist() if hasattr(action, "tolist") else action)
 
 
+_IMAGE_PATTERNS = {"image", "pixel", "vision", "img"}
+_TEXT_PATTERNS = {"token", "input_ids"}
+_MASK_PATTERNS = {"attention", "mask"}
+
+
+class OnnxAdapter:
+    """ONNX Runtime adapter for VLA models exported by NVIDIA's build_trt_pipeline."""
+
+    def __init__(self, model_dir: str, device: str = "cuda") -> None:
+        self._model_dir = model_dir
+        self._device = device
+        self._session = None
+        self.model_version = f"onnx-{Path(model_dir).name}"
+
+    def _ensure_loaded(self) -> None:
+        if self._session is not None:
+            return
+        import onnxruntime as ort  # type: ignore[import-not-found]
+
+        providers = (
+            ["CUDAExecutionProvider", "CPUExecutionProvider"]
+            if self._device == "cuda"
+            else ["CPUExecutionProvider"]
+        )
+
+        onnx_files = sorted(Path(self._model_dir).glob("**/*.onnx"))
+        if not onnx_files:
+            raise FileNotFoundError(f"No .onnx files found in {self._model_dir}")
+
+        main_model = max(onnx_files, key=lambda p: p.stat().st_size)
+        self._session = ort.InferenceSession(str(main_model), providers=providers)
+
+    def _preprocess_image(self, image: Image, shape: list) -> np.ndarray:
+        h, w, layout = 224, 224, "nchw"
+        if len(shape) == 4:
+            if isinstance(shape[1], int) and shape[1] in (1, 3):
+                h = shape[2] if isinstance(shape[2], int) and shape[2] > 0 else 224
+                w = shape[3] if isinstance(shape[3], int) and shape[3] > 0 else 224
+                layout = "nchw"
+            else:
+                h = shape[1] if isinstance(shape[1], int) and shape[1] > 0 else 224
+                w = shape[2] if isinstance(shape[2], int) and shape[2] > 0 else 224
+                layout = "nhwc"
+
+        img = image.resize((w, h))
+        arr = np.array(img, dtype=np.float32) / 255.0
+        if layout == "nchw":
+            arr = arr.transpose(2, 0, 1)
+        return np.expand_dims(arr, axis=0)
+
+    def _prepare_feed(self, image: Image, instruction: str) -> dict:
+        feed: dict[str, np.ndarray] = {}
+        for inp in self._session.get_inputs():  # type: ignore[union-attr]
+            name_lower = inp.name.lower()
+            shape = [d if isinstance(d, int) and d > 0 else 1 for d in inp.shape]
+
+            if any(p in name_lower for p in _IMAGE_PATTERNS):
+                feed[inp.name] = self._preprocess_image(image, inp.shape)
+            elif any(p in name_lower for p in _TEXT_PATTERNS):
+                seq_len = shape[-1] if shape else 64
+                tokens = [ord(c) % 32000 for c in instruction[:seq_len]]
+                arr = np.zeros(shape, dtype=np.int64)
+                arr.flat[: len(tokens)] = tokens
+                feed[inp.name] = arr
+            elif any(p in name_lower for p in _MASK_PATTERNS):
+                feed[inp.name] = np.ones(shape, dtype=np.int64)
+            else:
+                dtype_str = (inp.type or "").lower()
+                if "float" in dtype_str:
+                    feed[inp.name] = np.zeros(shape, dtype=np.float32)
+                else:
+                    feed[inp.name] = np.zeros(shape, dtype=np.int64)
+        return feed
+
+    def infer(self, image: Image, instruction: str) -> list[float]:
+        self._ensure_loaded()
+        feed = self._prepare_feed(image, instruction)
+        outputs = self._session.run(None, feed)  # type: ignore[union-attr]
+        action = outputs[0].flatten().tolist()
+        return action[:7] if len(action) >= 7 else action
+
+
+def _is_onnx_dir(path: str) -> bool:
+    p = Path(path)
+    if not p.is_dir():
+        return False
+    has_onnx = any(p.glob("**/*.onnx"))
+    has_hf_config = (p / "config.json").exists()
+    return has_onnx and not has_hf_config
+
+
 def _resolve_weights(weights: str, s3_endpoint: str = "", model_cache_dir: str = "/tmp/model_cache") -> str:
     """Resolve an s3:// URI to a local path; pass through HF ids and local paths unchanged."""
     if not weights.startswith("s3://"):
@@ -94,8 +188,10 @@ def build_adapter(
     mode = mode.lower()
     if mode == "mock":
         return MockAdapter()
-    if mode == "openvla":
+    if mode in ("openvla", "onnx"):
         resolved = _resolve_weights(weights, s3_endpoint=s3_endpoint, model_cache_dir=model_cache_dir)
+        if _is_onnx_dir(resolved) or mode == "onnx":
+            return OnnxAdapter(model_dir=resolved, device=device)
         return OpenvlaAdapter(
             weights=resolved, unnorm_key=unnorm_key, device=device, torch_dtype=torch_dtype
         )
