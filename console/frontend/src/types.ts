@@ -43,6 +43,13 @@ export interface FactoryStatus {
   };
 }
 
+export interface ModelVersion {
+  name: string;
+  uri: string;
+  registeredAt: string;
+  metadata: Record<string, string>;
+}
+
 export interface AnomalyPoint {
   t: number;
   v: number;
