@@ -61,7 +61,7 @@ RUN if [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release; then \
     fi
 
 # GR00T N1.7 SDK for real VLA inference (cuda only).
-ARG GROOT_REF=n1.7-release
+ARG GROOT_REF=main
 RUN if [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release; then \
         apt-get update && apt-get install -y --no-install-recommends git && \
         git clone --depth 1 --branch "${GROOT_REF}" \
