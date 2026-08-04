@@ -158,6 +158,87 @@ class OnnxAdapter:
         return action[:7] if len(action) >= 7 else action
 
 
+_G1_STATE_DIMS = {
+    "left_leg": 6, "right_leg": 6, "waist": 3,
+    "left_arm": 7, "left_hand": 7, "right_arm": 7, "right_hand": 7,
+}
+_G1_ACTION_KEYS = list(_G1_STATE_DIMS.keys())
+
+
+class GR00TAdapter:
+    """GR00T N1.7 adapter using Gr00tPolicy for real VLA inference."""
+
+    def __init__(self, model_path: str, embodiment_tag: str = "NEW_EMBODIMENT", device: str = "cuda") -> None:
+        self._model_path = model_path
+        self._embodiment_tag = embodiment_tag
+        self._device = device
+        self._policy = None
+        self.model_version = f"groot-{Path(model_path).name}"
+
+    def _register_embodiment(self) -> None:
+        from gr00t.configs.data.embodiment_configs import register_modality_config  # type: ignore[import-not-found]
+        from gr00t.data.embodiment_tags import EmbodimentTag  # type: ignore[import-not-found]
+        from gr00t.data.types import (  # type: ignore[import-not-found]
+            ActionConfig, ActionFormat, ActionRepresentation, ActionType, ModalityConfig,
+        )
+
+        config = {
+            "video": ModalityConfig(delta_indices=[0], modality_keys=["rs_view"]),
+            "state": ModalityConfig(delta_indices=[0], modality_keys=_G1_ACTION_KEYS),
+            "action": ModalityConfig(
+                delta_indices=list(range(16)),
+                modality_keys=_G1_ACTION_KEYS,
+                action_configs=[
+                    ActionConfig(
+                        rep=ActionRepresentation.RELATIVE if k in ("left_arm", "right_arm")
+                        else ActionRepresentation.ABSOLUTE,
+                        type=ActionType.NON_EEF, format=ActionFormat.DEFAULT,
+                    )
+                    for k in _G1_ACTION_KEYS
+                ],
+            ),
+            "language": ModalityConfig(delta_indices=[0], modality_keys=["annotation.human.task_description"]),
+        }
+        register_modality_config(config, embodiment_tag=EmbodimentTag[self._embodiment_tag])
+
+    def _ensure_loaded(self) -> None:
+        if self._policy is not None:
+            return
+        from gr00t.policy.gr00t_policy import Gr00tPolicy  # type: ignore[import-not-found]
+
+        self._register_embodiment()
+        self._policy = Gr00tPolicy(
+            embodiment_tag=self._embodiment_tag,
+            model_path=self._model_path,
+            device=self._device,
+        )
+        self._policy.model.action_head.num_inference_timesteps = 4
+
+    def infer(self, image: Image, instruction: str) -> list[float]:
+        self._ensure_loaded()
+        assert self._policy is not None
+
+        img_arr = np.array(image)
+        obs: dict = {
+            "video.rs_view": np.expand_dims(img_arr, axis=0),
+            "annotation.human.task_description": instruction,
+        }
+        for part, dim in _G1_STATE_DIMS.items():
+            obs[f"state.{part}"] = np.zeros((1, dim), dtype=np.float32)
+
+        action_chunk, _ = self._policy.get_action(obs)
+        action: list[float] = []
+        for key in _G1_ACTION_KEYS:
+            akey = f"action.{key}"
+            if akey in action_chunk:
+                vals = action_chunk[akey]
+                if hasattr(vals, "tolist"):
+                    action.extend(vals[0].tolist() if vals.ndim > 1 else vals.tolist())
+                elif isinstance(vals, list):
+                    action.extend(vals[0] if isinstance(vals[0], list) else vals)
+        return action[:7] if len(action) >= 7 else action
+
+
 def _is_onnx_dir(path: str) -> bool:
     p = Path(path)
     if not p.is_dir():
@@ -184,10 +265,16 @@ def build_adapter(
     torch_dtype: str = "fp16",
     s3_endpoint: str = "",
     model_cache_dir: str = "/tmp/model_cache",
+    groot_model_path: str = "",
+    groot_embodiment_tag: str = "NEW_EMBODIMENT",
 ) -> VlaAdapter:
     mode = mode.lower()
     if mode == "mock":
         return MockAdapter()
+    if mode == "groot":
+        model_path = groot_model_path or weights
+        resolved = _resolve_weights(model_path, s3_endpoint=s3_endpoint, model_cache_dir=model_cache_dir)
+        return GR00TAdapter(model_path=resolved, embodiment_tag=groot_embodiment_tag, device=device)
     if mode in ("openvla", "onnx"):
         resolved = _resolve_weights(weights, s3_endpoint=s3_endpoint, model_cache_dir=model_cache_dir)
         if _is_onnx_dir(resolved) or mode == "onnx":

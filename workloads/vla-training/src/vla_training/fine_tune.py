@@ -229,7 +229,9 @@ def run(
     subprocess.run(export_cmd, env=env, cwd=str(GROOT_ROOT), stdin=subprocess.DEVNULL, check=True)
 
     checkpoint_prefix = cfg.s3.checkpoint_prefix
-    print("\n=== Skipping checkpoint upload (large; ONNX is the deployment artifact) ===")
+
+    print(f"\n=== Uploading checkpoint to S3 ({checkpoint_prefix}/checkpoint/) ===")
+    _upload_artifacts_to_s3(s3, cfg.s3.bucket, f"{checkpoint_prefix}/checkpoint", OUTPUT_DIR)
 
     print(f"\n=== Uploading ONNX to S3 ({checkpoint_prefix}/onnx/) ===")
     _upload_artifacts_to_s3(s3, cfg.s3.bucket, f"{checkpoint_prefix}/onnx", ONNX_DIR)

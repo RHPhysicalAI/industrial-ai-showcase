@@ -16,11 +16,20 @@ class OpenvlaSettings(BaseSettings):
     # can be verified without the 14 GB OpenVLA weight download + ROCm inference
     # bring-up gating the whole demo. Flip to `openvla` once the wiring is green.
     # Future values: `smolvla`, `pi0`.
-    vla_mode: str = Field(default="mock", description="mock | openvla | onnx | smolvla | pi0")
+    vla_mode: str = Field(default="mock", description="mock | groot | openvla | onnx | smolvla | pi0")
 
     openvla_weights: str = Field(
         default="openvla/openvla-7b",
         description="Model source: HuggingFace id (openvla/openvla-7b), local path, or s3:// URI.",
+    )
+
+    groot_model_path: str = Field(
+        default="",
+        description="S3 URI or local path to GR00T checkpoint. Falls back to openvla_weights if empty.",
+    )
+    groot_embodiment_tag: str = Field(
+        default="NEW_EMBODIMENT",
+        description="GR00T embodiment tag for the target robot (e.g. NEW_EMBODIMENT for Unitree G1).",
     )
 
     s3_endpoint: str = Field(default="", description="S3-compatible endpoint URL for s3:// model URIs.")

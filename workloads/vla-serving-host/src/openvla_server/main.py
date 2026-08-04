@@ -70,6 +70,8 @@ async def lifespan(app: FastAPI):
         torch_dtype=settings.openvla_torch_dtype,
         s3_endpoint=settings.s3_endpoint,
         model_cache_dir=settings.model_cache_dir,
+        groot_model_path=settings.groot_model_path,
+        groot_embodiment_tag=settings.groot_embodiment_tag,
     )
     app.state.settings = settings
     app.state.log = log

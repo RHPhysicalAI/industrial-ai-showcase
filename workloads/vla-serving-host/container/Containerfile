@@ -60,6 +60,18 @@ RUN if [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release; then \
             onnxruntime-gpu ; \
     fi
 
+# GR00T N1.7 SDK for real VLA inference (cuda only).
+ARG GROOT_REF=n1.7-release
+RUN if [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release; then \
+        apt-get update && apt-get install -y --no-install-recommends git && \
+        git clone --depth 1 --branch "${GROOT_REF}" \
+            https://github.com/NVIDIA/Isaac-GR00T.git /workspace/Isaac-GR00T && \
+        cd /workspace/Isaac-GR00T && \
+        pip3 install --no-cache-dir . && \
+        pip3 install --no-cache-dir flash-attn --no-build-isolation && \
+        rm -rf /var/lib/apt/lists/* ; \
+    fi
+
 USER 1001
 
 EXPOSE 8000

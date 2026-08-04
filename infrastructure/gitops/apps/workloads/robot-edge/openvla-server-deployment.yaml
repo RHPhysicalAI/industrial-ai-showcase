@@ -28,7 +28,7 @@ spec:
         imagePullPolicy: Always
         env:
         - name: VLA_MODE
-          value: "openvla"
+          value: "groot"
         - name: SERVICE_NAME
           value: "openvla-server"
         - name: LOG_LEVEL
@@ -40,6 +40,10 @@ spec:
             configMapKeyRef:
               name: policy-version
               key: model-uri
+        - name: GROOT_MODEL_PATH
+          value: "s3://vla-training/vla-finetune/base-model"
+        - name: GROOT_EMBODIMENT_TAG
+          value: "NEW_EMBODIMENT"
         - name: S3_ENDPOINT
           value: "http://minio.mlflow.svc:9000"
         - name: MODEL_CACHE_DIR
