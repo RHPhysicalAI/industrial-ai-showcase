@@ -33,6 +33,7 @@ app = FastAPI(
 FLEET_MANAGER_URL = os.getenv("FLEET_MANAGER_URL", "http://fleet-manager.fleet-ops.svc.cluster.local:8080")
 CONSOLE_BACKEND_URL = os.getenv("CONSOLE_BACKEND_URL", "http://showcase-console-backend.fleet-ops.svc.cluster.local:8090")
 GITHUB_BASE_BRANCH = os.getenv("GITHUB_BASE_BRANCH", "main")
+MODEL_REGISTRY_URL = os.getenv("MODEL_REGISTRY_URL", "http://wbc-model-registry.rhoai-model-registries.svc:8080")
 
 # Showcase mode: use HF models instead of MLflow/MinIO
 # Set SHOWCASE_MODE=false for production deployments with real training pipeline
@@ -46,6 +47,54 @@ HF_MODEL_VERSIONS = {
     "v1.5": "hf://openvla/openvla-7b",
     "v1.6": "hf://openvla/openvla-7b",
 }
+
+
+async def _resolve_model_uri_from_registry(model_name: str, model_version: str) -> str | None:
+    """Look up model artifact URI from RHOAI Model Registry. Returns None on failure."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            base = MODEL_REGISTRY_URL
+            resp = await client.get(
+                f"{base}/api/model_registry/v1alpha3/registered_models",
+                params={"name": model_name},
+            )
+            if resp.status_code != 200:
+                return None
+            items = resp.json().get("items", [])
+            if not items:
+                return None
+            reg_model_id = items[0]["id"]
+
+            versions_resp = await client.get(
+                f"{base}/api/model_registry/v1alpha3/registered_models/{reg_model_id}/versions",
+                params={"order_by": "CREATE_TIME", "sort_order": "DESC", "page_size": "20"},
+            )
+            if versions_resp.status_code != 200:
+                return None
+
+            for v in versions_resp.json().get("items", []):
+                if v.get("name") == model_version:
+                    props = v.get("customProperties", {})
+                    uri = props.get("uri", {}).get("string_value", "")
+                    if uri:
+                        return uri
+                    break
+
+            # Fallback: check model artifacts for the matched version
+            for v in versions_resp.json().get("items", []):
+                if v.get("name") == model_version:
+                    arts_resp = await client.get(
+                        f"{base}/api/model_registry/v1alpha3/model_versions/{v['id']}/artifacts",
+                    )
+                    if arts_resp.status_code == 200:
+                        for art in arts_resp.json().get("items", []):
+                            art_uri = art.get("uri", "")
+                            if art_uri:
+                                return art_uri
+                    break
+        return None
+    except Exception:
+        return None
 
 
 # ========== READ-ONLY TOOLS ==========
@@ -283,11 +332,12 @@ async def promote_policy_version(factory: str, model_version: str):
 
     # 2. Construct model URI
     # Showcase mode: use HF models (no training required)
-    # Production mode: use MLflow S3 storage (requires training pipeline)
+    # Production mode: look up from Model Registry, fallback to S3 convention
     if SHOWCASE_MODE:
         model_uri = HF_MODEL_VERSIONS.get(model_version, HF_MODEL_VERSIONS["v1.4"])
     else:
-        model_uri = f"s3://mlflow/models/{model_name}/{model_version}"
+        registry_uri = await _resolve_model_uri_from_registry(model_name, model_version)
+        model_uri = registry_uri or f"s3://mlflow/models/{model_name}/{model_version}"
 
     # 3. Generate Kustomize overlay (use namespace, not display name with spaces)
     # factory_namespace is valid Kubernetes namespace (e.g., "factory-b")

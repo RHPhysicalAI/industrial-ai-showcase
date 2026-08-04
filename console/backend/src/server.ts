@@ -24,6 +24,77 @@ async function getPolicyVersion(namespace: string): Promise<string> {
   }
 }
 
+interface ModelVersionInfo {
+  name: string;
+  uri: string;
+  registeredAt: string;
+  metadata: Record<string, string>;
+}
+
+async function fetchModelRegistryVersions(registryUrl: string): Promise<ModelVersionInfo[]> {
+  try {
+    const modelsResp = await fetch(
+      `${registryUrl}/api/model_registry/v1alpha3/registered_models?name=g1-vla-finetune`,
+      { signal: AbortSignal.timeout(3000) }
+    );
+    if (!modelsResp.ok) return [];
+    const modelsData = await modelsResp.json() as {
+      items?: Array<{ id: string; name: string }>;
+    };
+    const model = modelsData.items?.[0];
+    if (!model) return [];
+
+    const versionsResp = await fetch(
+      `${registryUrl}/api/model_registry/v1alpha3/registered_models/${model.id}/versions?order_by=CREATE_TIME&sort_order=DESC&page_size=10`,
+      { signal: AbortSignal.timeout(3000) }
+    );
+    if (!versionsResp.ok) return [];
+    const versionsData = await versionsResp.json() as {
+      items?: Array<{
+        id: string;
+        name: string;
+        createTimeSinceEpoch?: string;
+        customProperties?: Record<string, { string_value?: string; int_value?: string }>;
+      }>;
+    };
+
+    const results: ModelVersionInfo[] = [];
+    for (const v of versionsData.items ?? []) {
+      const props = v.customProperties ?? {};
+      const meta: Record<string, string> = {};
+      for (const [key, val] of Object.entries(props)) {
+        meta[key] = val.string_value ?? val.int_value ?? "";
+      }
+      let uri = meta["uri"] ?? "";
+      if (!uri) {
+        try {
+          const artsResp = await fetch(
+            `${registryUrl}/api/model_registry/v1alpha3/model_versions/${v.id}/artifacts`,
+            { signal: AbortSignal.timeout(3000) }
+          );
+          if (artsResp.ok) {
+            const artsData = await artsResp.json() as {
+              items?: Array<{ uri?: string }>;
+            };
+            uri = artsData.items?.[0]?.uri ?? "";
+          }
+        } catch { /* artifact fetch is best-effort */ }
+      }
+      results.push({
+        name: v.name,
+        uri,
+        registeredAt: v.createTimeSinceEpoch
+          ? new Date(parseInt(v.createTimeSinceEpoch, 10)).toISOString()
+          : "",
+        metadata: meta,
+      });
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
 const config = loadConfig();
 const fastify = Fastify({
   logger: { level: config.logLevel, name: "showcase-console" },
@@ -162,7 +233,7 @@ fastify.get("/api/fleet", async () => {
 });
 
 fastify.get("/api/lineage", async () => {
-  const ls = stream.demoState.lineageStatuses;
+  const ls = stream.demoState.getLineageStatuses();
   const d = config.clusterAppsDomain;
   const links = d
     ? {
@@ -172,6 +243,41 @@ fastify.get("/api/lineage", async () => {
         rhoaiDashboard: `https://rh-ai.${d}/projects/vla-training`,
       }
     : null;
+
+  const versions = await fetchModelRegistryVersions(config.modelRegistryUrl);
+  const latest = versions[0];
+
+  const modelLabel = latest ? `g1-vla-finetune ${latest.name}` : "g1-vla-finetune v1";
+  const modelMeta = latest
+    ? {
+        registry: "RHOAI Model Registry",
+        format: "ONNX",
+        version: latest.name,
+        uri: latest.uri || latest.metadata["uri"] || "s3://vla-training/vla-finetune/onnx",
+        base_model: latest.metadata["base_model_repo"] || "nvidia/GR00T-N1.7-3B",
+        dataset: latest.metadata["dataset_repo"] || "nvidia/PhysicalAI-Robotics-GR00T-Teleop-G1",
+        training_steps: latest.metadata["training_steps"] || "2000",
+        embodiment: latest.metadata["embodiment_tag"] || "UNITREE_G1",
+        pipeline_run_id: latest.metadata["pipeline_run_id"] || "",
+      }
+    : {
+        registry: "RHOAI Model Registry",
+        format: "ONNX",
+        uri: "s3://vla-training/vla-finetune/onnx",
+        base_model: "nvidia/GR00T-N1.7-3B",
+        dataset: "nvidia/PhysicalAI-Robotics-GR00T-Teleop-G1",
+        training_steps: "2000",
+        embodiment: "UNITREE_G1",
+      };
+
+  const trainingMeta: Record<string, string> = {
+    base_model: modelMeta.base_model,
+    embodiment: modelMeta.embodiment,
+    max_steps: modelMeta.training_steps,
+    batch_size: "64",
+    gpu: "NVIDIA L40S",
+  };
+
   return {
     nodes: [
       {
@@ -180,7 +286,7 @@ fastify.get("/api/lineage", async () => {
         label: "G1 Teleop Dataset",
         status: ls["dataset"] ?? "completed",
         metadata: {
-          repo: "nvidia/PhysicalAI-Robotics-GR00T-Teleop-G1",
+          repo: modelMeta.dataset,
           episodes: "311",
           modality: "video + joint positions (43 DOF)",
         },
@@ -201,16 +307,7 @@ fastify.get("/api/lineage", async () => {
         type: "training",
         label: "GR00T N1.7-3B Fine-Tune",
         status: ls["training"] ?? "completed",
-        metadata: {
-          base_model: "nvidia/GR00T-N1.7-3B",
-          embodiment: "UNITREE_G1",
-          max_steps: "2000",
-          batch_size: "64",
-          gpu: "NVIDIA L40S",
-          final_loss: "0.051",
-          duration: "29m 42s",
-          throughput: "1.12 steps/sec",
-        },
+        metadata: trainingMeta,
       },
       {
         id: "validation",
@@ -225,17 +322,9 @@ fastify.get("/api/lineage", async () => {
       {
         id: "model",
         type: "model",
-        label: "g1-vla-finetune v1",
+        label: modelLabel,
         status: ls["model"] ?? "completed",
-        metadata: {
-          registry: "RHOAI Model Registry",
-          format: "ONNX",
-          uri: "s3://vla-training/vla-finetune/onnx",
-          base_model: "nvidia/GR00T-N1.7-3B",
-          dataset: "nvidia/PhysicalAI-Robotics-GR00T-Teleop-G1",
-          training_steps: "2000",
-          embodiment: "UNITREE_G1",
-        },
+        metadata: modelMeta,
       },
     ],
     edges: [
@@ -246,6 +335,11 @@ fastify.get("/api/lineage", async () => {
     ],
     links,
   };
+});
+
+fastify.get("/api/model-versions", async () => {
+  const versions = await fetchModelRegistryVersions(config.modelRegistryUrl);
+  return { versions };
 });
 
 fastify.get("/api/pipeline-runs", async () => {
@@ -276,16 +370,19 @@ fastify.get("/api/pipeline-runs", async () => {
         error?: { message?: string };
       }>;
     };
-    return {
-      runs: (data.runs ?? []).map((r) => ({
-        id: r.run_id,
-        name: r.display_name,
-        state: r.state,
-        createdAt: r.created_at,
-        finishedAt: r.finished_at ?? null,
-        error: r.error?.message ?? null,
-      })),
-    };
+    const runs = (data.runs ?? []).map((r) => ({
+      id: r.run_id,
+      name: r.display_name,
+      state: r.state,
+      createdAt: r.created_at,
+      finishedAt: r.finished_at ?? null,
+      error: r.error?.message ?? null,
+    }));
+    const latestRun = runs[0];
+    if (latestRun) {
+      stream.demoState.lastDspaRunState = latestRun.state;
+    }
+    return { runs };
   } catch (err) {
     log.warn({ err }, "pipeline-runs fetch failed");
     return { runs: [] };
