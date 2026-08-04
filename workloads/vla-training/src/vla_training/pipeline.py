@@ -260,10 +260,12 @@ def vla_finetune_pipeline(
     model_name: str = "g1-vla-finetune",
     model_version: str = "v1",
 ):
+    versioned_prefix = f"{s3_prefix}/{model_version}"
+
     data_prep_task = vla_data_prep_op(
         base_model_repo=base_model_repo,
         dataset_repo=dataset_repo,
-        s3_prefix=s3_prefix,
+        s3_prefix=versioned_prefix,
     )
     _configure_cpu_step(data_prep_task)
     data_prep_task.set_cpu_request("4")
