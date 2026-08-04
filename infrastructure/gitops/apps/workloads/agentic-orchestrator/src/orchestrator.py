@@ -278,18 +278,31 @@ def custom_tool_node(state: AgentState) -> dict:
                     model_version = tool_args.get("model_version")
                     model_name = "vla-warehouse"  # Default model name
 
-                    # Showcase mode: use HF VLA models instead of MLflow/MinIO
-                    SHOWCASE_MODE = os.getenv("SHOWCASE_MODE", "true").lower() == "true"
-                    HF_MODEL_VERSIONS = {
-                        "v1.4": "hf://openvla/openvla-7b",
-                        "v1.5": "hf://openvla/openvla-7b",
-                        "v1.6": "hf://openvla/openvla-7b",
-                    }
+                    # Resolve model URI: registry first, HF fallback
+                    model_uri = None
+                    MCP_FLEET_URL = os.getenv("MCP_FLEET_URL", "http://mcp-fleet-server.agentic-ops.svc.cluster.local:8080")
+                    try:
+                        import httpx as _httpx
+                        _resp = _httpx.get(
+                            f"{MCP_FLEET_URL}/tools/get_available_model_versions",
+                            params={"model_name": "g1-vla-finetune"},
+                            timeout=5.0,
+                        )
+                        if _resp.status_code == 200:
+                            for _v in _resp.json().get("versions", []):
+                                if _v.get("version") == model_version and _v.get("uri"):
+                                    model_uri = _v["uri"]
+                                    break
+                    except Exception:
+                        pass
 
-                    if SHOWCASE_MODE:
-                        model_uri = HF_MODEL_VERSIONS.get(model_version, HF_MODEL_VERSIONS["v1.4"])
-                    else:
-                        model_uri = f"s3://mlflow/models/{model_name}/{model_version}"
+                    if not model_uri:
+                        HF_MODEL_VERSIONS = {
+                            "v1.4": "hf://openvla/openvla-7b",
+                            "v1.5": "hf://openvla/openvla-7b",
+                            "v1.6": "hf://openvla/openvla-7b",
+                        }
+                        model_uri = HF_MODEL_VERSIONS.get(model_version, f"s3://mlflow/models/{model_name}/{model_version}")
 
                     # Get factory namespace (K8s-compliant, e.g., "factory-b")
                     # factory might be display name with spaces (e.g., "Factory B")
