@@ -72,6 +72,17 @@ RUN if [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release; then \
         rm -rf /var/lib/apt/lists/* ; \
     fi
 
+# gr00t upgrades torch 2.6→2.9 which breaks the base image's pre-compiled
+# transformer_engine .so (ABI mismatch). Stub out the two functions accelerate
+# imports from it — they are training-only, not needed for inference.
+RUN python3 -c "\
+import pathlib, sys; \
+p = pathlib.Path('/usr/local/lib/python3.12/dist-packages/accelerate/utils/transformer_engine.py'); \
+p.exists() and p.write_text( \
+'def convert_model(model, **kwargs):\n    return model\n\n' \
+'def has_transformer_engine_layers(model):\n    return False\n' \
+) or True"
+
 USER 1001
 
 EXPOSE 8000
