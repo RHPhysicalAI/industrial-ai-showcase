@@ -398,14 +398,14 @@ async def promote_policy_version(factory: str, model_version: str):
     except HTTPException as e:
         raise HTTPException(status_code=400, detail=f"Invalid factory: {e.detail}")
 
-    # 2. Construct model URI
-    # Showcase mode: use HF models (no training required)
-    # Production mode: look up from Model Registry, fallback to S3 convention
-    if SHOWCASE_MODE:
+    # 2. Resolve model URI: registry first, HF fallback for demo versions
+    registry_uri = await _resolve_model_uri_from_registry("g1-vla-finetune", model_version)
+    if registry_uri:
+        model_uri = registry_uri
+    elif SHOWCASE_MODE:
         model_uri = HF_MODEL_VERSIONS.get(model_version, HF_MODEL_VERSIONS["v1.4"])
     else:
-        registry_uri = await _resolve_model_uri_from_registry(model_name, model_version)
-        model_uri = registry_uri or f"s3://mlflow/models/{model_name}/{model_version}"
+        model_uri = f"s3://mlflow/models/{model_name}/{model_version}"
 
     # 3. Generate Kustomize overlay (use namespace, not display name with spaces)
     # factory_namespace is valid Kubernetes namespace (e.g., "factory-b")
