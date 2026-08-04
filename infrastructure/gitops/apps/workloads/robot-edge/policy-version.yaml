@@ -9,4 +9,4 @@ metadata:
 data:
   version: g1-vla-finetune-v1
   model-uri: s3://vla-training/vla-finetune/onnx
-  promoted-at: '2026-08-04T16:04:49.689682+00:00'
+  promoted-at: '2026-08-04T16:50:08.762443+00:00'
