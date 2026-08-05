@@ -224,10 +224,11 @@ class GR00TAdapter:
         img_arr = np.array(image, dtype=np.uint8)
         if img_arr.ndim == 2:
             img_arr = np.stack([img_arr] * 3, axis=-1)
-        # Gr00tPolicy expects: video -> {key: (B, T, H, W, C)}, state -> {key: (B, T, D)},
-        # language -> {key: [[str]]}
+        # REAL_G1 uses delta_indices=[0,1] for video (2 frames) and [0] for state.
+        # Duplicate the single frame to fill the temporal horizon.
+        video_frames = np.stack([img_arr, img_arr], axis=0)  # (T=2, H, W, C)
         obs: dict = {
-            "video": {self._video_key: img_arr[np.newaxis, np.newaxis, ...]},
+            "video": {self._video_key: video_frames[np.newaxis, ...]},  # (B=1, T=2, H, W, C)
             "state": {part: np.zeros((1, 1, dim), dtype=np.float32) for part, dim in _G1_STATE_DIMS.items()},
             "language": {"task_description": [[instruction]]},
         }

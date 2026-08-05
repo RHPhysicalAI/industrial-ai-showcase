@@ -8,6 +8,8 @@ metadata:
     app: openvla-server
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: openvla-server
@@ -43,13 +45,18 @@ spec:
         - name: GROOT_MODEL_PATH
           value: "s3://vla-training/vla-finetune/base-model"
         - name: GROOT_EMBODIMENT_TAG
-          value: "NEW_EMBODIMENT"
+          value: "REAL_G1"
         - name: S3_ENDPOINT
           value: "http://minio.mlflow.svc:9000"
         - name: MODEL_CACHE_DIR
           value: "/models"
         - name: HF_HOME
           value: "/tmp/hf_cache"
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: token
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:
