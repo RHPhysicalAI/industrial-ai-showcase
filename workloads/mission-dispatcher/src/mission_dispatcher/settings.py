@@ -27,5 +27,7 @@ class MissionDispatcherSettings(ServiceSettings):
     )
     vla_request_timeout_s: float = Field(default=10.0)
 
+    policy_version: str = Field(default="v1.0")
+
     waypoint_hz: float = Field(default=5.0, gt=0.0)
     waypoint_speed_mps: float = Field(default=2.0, gt=0.0)
