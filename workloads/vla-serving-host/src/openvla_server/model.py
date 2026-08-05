@@ -159,8 +159,9 @@ class OnnxAdapter:
 
 
 _G1_STATE_DIMS = {
-    "left_leg": 6, "right_leg": 6, "waist": 3,
-    "left_arm": 7, "left_hand": 7, "right_arm": 7, "right_hand": 7,
+    "left_wrist_eef_9d": 9, "right_wrist_eef_9d": 9,
+    "left_hand": 7, "right_hand": 7,
+    "left_arm": 7, "right_arm": 7, "waist": 3,
 }
 _G1_ACTION_KEYS = list(_G1_STATE_DIMS.keys())
 
@@ -200,7 +201,7 @@ class GR00TAdapter:
                     for k in _G1_ACTION_KEYS
                 ],
             ),
-            "language": ModalityConfig(delta_indices=[0], modality_keys=["task_description"]),
+            "language": ModalityConfig(delta_indices=[0], modality_keys=["annotation.human.task_description"]),
         }
         register_modality_config(config, embodiment_tag=EmbodimentTag[self._embodiment_tag])
 
@@ -230,7 +231,7 @@ class GR00TAdapter:
         obs: dict = {
             "video": {self._video_key: video_frames[np.newaxis, ...]},  # (B=1, T=2, H, W, C)
             "state": {part: np.zeros((1, 1, dim), dtype=np.float32) for part, dim in _G1_STATE_DIMS.items()},
-            "language": {"task_description": [[instruction]]},
+            "language": {"annotation.human.task_description": [[instruction]]},
         }
 
         action_chunk, _ = self._policy.get_action(obs)
