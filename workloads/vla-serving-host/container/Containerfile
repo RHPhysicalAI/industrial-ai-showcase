@@ -73,15 +73,20 @@ RUN if [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release; then \
     fi
 
 # gr00t upgrades torch 2.6→2.9 which breaks the base image's pre-compiled
-# transformer_engine .so (ABI mismatch). Stub out the two functions accelerate
-# imports from it — they are training-only, not needed for inference.
-RUN python3 -c "\
-import pathlib, sys; \
-p = pathlib.Path('/usr/local/lib/python3.12/dist-packages/accelerate/utils/transformer_engine.py'); \
-p.exists() and p.write_text( \
-'def convert_model(model, **kwargs):\n    return model\n\n' \
-'def has_transformer_engine_layers(model):\n    return False\n' \
-) or True"
+# transformer_engine .so (ABI mismatch). Replace with a minimal stub —
+# inference doesn't use TransformerEngine (it's for FP8 mixed-precision training).
+RUN pip3 uninstall -y transformer-engine 2>/dev/null; \
+    rm -rf /usr/local/lib/python3.12/dist-packages/transformer_engine && \
+    mkdir -p /usr/local/lib/python3.12/dist-packages/transformer_engine/pytorch && \
+    printf '%s\n' \
+      'from contextlib import contextmanager' \
+      '@contextmanager' \
+      'def fp8_autocast(*a, **kw):' \
+      '    yield' \
+      'def fp8_model_init(*a, **kw):' \
+      '    pass' \
+      > /usr/local/lib/python3.12/dist-packages/transformer_engine/pytorch/__init__.py && \
+    touch /usr/local/lib/python3.12/dist-packages/transformer_engine/__init__.py
 
 USER 1001
 
