@@ -16,9 +16,10 @@ ARG BASE_FLAVOR=slim
 
 FROM registry.access.redhat.com/ubi9/python-312:latest AS slim
 
-FROM nvcr.io/nvidia/pytorch:24.12-py3 AS cuda
-# NVIDIA PyTorch 2.6 + CUDA 12.6 + Python 3.12 pre-installed.
-# Optimized for NVIDIA GPUs (L40S, L4).
+FROM nvcr.io/nvidia/pytorch:25.09-py3 AS cuda
+# NVIDIA PyTorch 2.9 + CUDA 13.0 + Python 3.12 pre-installed.
+# Matches GR00T SDK's torch==2.9.0 pin so all pre-compiled C extensions
+# (transformer_engine, apex, flash-attn) stay ABI-compatible.
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 ENV PIP_ROOT_USER_ACTION=ignore
 
@@ -71,22 +72,6 @@ RUN if [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release; then \
         pip3 install --no-cache-dir flash-attn --no-build-isolation && \
         rm -rf /var/lib/apt/lists/* ; \
     fi
-
-# gr00t upgrades torch 2.6→2.9 which breaks the base image's pre-compiled
-# transformer_engine .so (ABI mismatch). Replace with a minimal stub —
-# inference doesn't use TransformerEngine (it's for FP8 mixed-precision training).
-RUN pip3 uninstall -y transformer-engine 2>/dev/null; \
-    rm -rf /usr/local/lib/python3.12/dist-packages/transformer_engine && \
-    mkdir -p /usr/local/lib/python3.12/dist-packages/transformer_engine/pytorch && \
-    printf '%s\n' \
-      'from contextlib import contextmanager' \
-      '@contextmanager' \
-      'def fp8_autocast(*a, **kw):' \
-      '    yield' \
-      'def fp8_model_init(*a, **kw):' \
-      '    pass' \
-      > /usr/local/lib/python3.12/dist-packages/transformer_engine/pytorch/__init__.py && \
-    touch /usr/local/lib/python3.12/dist-packages/transformer_engine/__init__.py
 
 USER 1001
 
