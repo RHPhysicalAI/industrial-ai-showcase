@@ -166,6 +166,24 @@ _G1_STATE_DIMS = {
 _G1_ACTION_KEYS = list(_G1_STATE_DIMS.keys())
 
 
+def _build_g1_state_placeholder() -> dict[str, np.ndarray]:
+    """Build a numerically safe placeholder state for REAL_G1.
+
+    EEF 9D keys use XYZ_ROT6D format: [x,y,z, col0(3), col1(3)] where col0/col1
+    are the first two columns of a rotation matrix. Identity rotation avoids SVD
+    divergence on all-zeros input.
+    """
+    identity_rot6d = np.array([1, 0, 0, 0, 1, 0], dtype=np.float32)
+    state: dict[str, np.ndarray] = {}
+    for part, dim in _G1_STATE_DIMS.items():
+        if part.endswith("_eef_9d"):
+            val = np.concatenate([np.zeros(3, dtype=np.float32), identity_rot6d])
+            state[part] = val.reshape(1, 1, dim)
+        else:
+            state[part] = np.zeros((1, 1, dim), dtype=np.float32)
+    return state
+
+
 class GR00TAdapter:
     """GR00T N1.7 adapter using Gr00tPolicy for real VLA inference."""
 
@@ -230,7 +248,7 @@ class GR00TAdapter:
         video_frames = np.stack([img_arr, img_arr], axis=0)  # (T=2, H, W, C)
         obs: dict = {
             "video": {self._video_key: video_frames[np.newaxis, ...]},  # (B=1, T=2, H, W, C)
-            "state": {part: np.zeros((1, 1, dim), dtype=np.float32) for part, dim in _G1_STATE_DIMS.items()},
+            "state": _build_g1_state_placeholder(),
             "language": {"annotation.human.task_description": [[instruction]]},
         }
 
