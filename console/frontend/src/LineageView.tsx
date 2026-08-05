@@ -411,6 +411,9 @@ function PipelineDetailPanel({
                 <div><strong>Pipeline:</strong> {m.pipeline}</div>
                 <div><strong>Namespace:</strong> {m.namespace}</div>
                 <div><strong>Steps:</strong> {m.steps}</div>
+                {m.duration && <div><strong>Duration:</strong> {m.duration}</div>}
+                {m.started && <div><strong>Started:</strong> {formatTime(m.started)}</div>}
+                {m.finished && <div><strong>Finished:</strong> {formatTime(m.finished)}</div>}
               </div>
             </CardBody>
           </Card>
@@ -452,8 +455,10 @@ function TrainingDetail({ node, links }: { node: LineageNode; links: LineageLink
                 <MetricCard label="GPU" value={m.gpu} />
                 <MetricCard label="Steps" value={m.max_steps} />
                 <MetricCard label="Batch Size" value={m.batch_size} />
-                <MetricCard label="Duration" value={m.duration} />
-                <MetricCard label="Throughput" value={m.throughput} />
+                <MetricCard label="Fine-Tune Duration" value={m.fine_tune_duration} />
+                <MetricCard label="Pipeline Duration" value={m.pipeline_duration} />
+                <MetricCard label="Pipeline Run" value={m.pipeline_run} />
+                <MetricCard label="Pipeline State" value={m.pipeline_state} highlight />
               </div>
             </StackItem>
             <StackItem>
