@@ -168,14 +168,17 @@ _G1_ACTION_KEYS = list(_G1_STATE_DIMS.keys())
 class GR00TAdapter:
     """GR00T N1.7 adapter using Gr00tPolicy for real VLA inference."""
 
-    def __init__(self, model_path: str, embodiment_tag: str = "NEW_EMBODIMENT", device: str = "cuda") -> None:
+    _BUILTIN_TAGS = {"REAL_G1", "XDOF", "XDOF_SUBTASK", "OXE_DROID_RELATIVE_EEF_RELATIVE_JOINT"}
+
+    def __init__(self, model_path: str, embodiment_tag: str = "REAL_G1", device: str = "cuda") -> None:
         self._model_path = model_path
         self._embodiment_tag = embodiment_tag
         self._device = device
         self._policy = None
+        self._video_key = "ego_view"
         self.model_version = f"groot-{Path(model_path).name}"
 
-    def _register_embodiment(self) -> None:
+    def _register_custom_embodiment(self) -> None:
         from gr00t.configs.data.embodiment_configs import register_modality_config  # type: ignore[import-not-found]
         from gr00t.data.embodiment_tags import EmbodimentTag  # type: ignore[import-not-found]
         from gr00t.data.types import (  # type: ignore[import-not-found]
@@ -183,7 +186,7 @@ class GR00TAdapter:
         )
 
         config = {
-            "video": ModalityConfig(delta_indices=[0], modality_keys=["rs_view"]),
+            "video": ModalityConfig(delta_indices=[0], modality_keys=[self._video_key]),
             "state": ModalityConfig(delta_indices=[0], modality_keys=_G1_ACTION_KEYS),
             "action": ModalityConfig(
                 delta_indices=list(range(16)),
@@ -197,7 +200,7 @@ class GR00TAdapter:
                     for k in _G1_ACTION_KEYS
                 ],
             ),
-            "language": ModalityConfig(delta_indices=[0], modality_keys=["annotation.human.task_description"]),
+            "language": ModalityConfig(delta_indices=[0], modality_keys=["task_description"]),
         }
         register_modality_config(config, embodiment_tag=EmbodimentTag[self._embodiment_tag])
 
@@ -206,36 +209,37 @@ class GR00TAdapter:
             return
         from gr00t.policy.gr00t_policy import Gr00tPolicy  # type: ignore[import-not-found]
 
-        self._register_embodiment()
+        if self._embodiment_tag not in self._BUILTIN_TAGS:
+            self._register_custom_embodiment()
         self._policy = Gr00tPolicy(
             embodiment_tag=self._embodiment_tag,
             model_path=self._model_path,
             device=self._device,
         )
-        self._policy.model.action_head.num_inference_timesteps = 4
 
     def infer(self, image: Image, instruction: str) -> list[float]:
         self._ensure_loaded()
         assert self._policy is not None
 
-        img_arr = np.array(image)
+        img_arr = np.array(image, dtype=np.uint8)
+        if img_arr.ndim == 2:
+            img_arr = np.stack([img_arr] * 3, axis=-1)
+        # Gr00tPolicy expects: video -> {key: (B, T, H, W, C)}, state -> {key: (B, T, D)},
+        # language -> {key: [[str]]}
         obs: dict = {
-            "video.rs_view": np.expand_dims(img_arr, axis=0),
-            "annotation.human.task_description": instruction,
+            "video": {self._video_key: img_arr[np.newaxis, np.newaxis, ...]},
+            "state": {part: np.zeros((1, 1, dim), dtype=np.float32) for part, dim in _G1_STATE_DIMS.items()},
+            "language": {"task_description": [[instruction]]},
         }
-        for part, dim in _G1_STATE_DIMS.items():
-            obs[f"state.{part}"] = np.zeros((1, dim), dtype=np.float32)
 
         action_chunk, _ = self._policy.get_action(obs)
         action: list[float] = []
-        for key in _G1_ACTION_KEYS:
-            akey = f"action.{key}"
-            if akey in action_chunk:
-                vals = action_chunk[akey]
-                if hasattr(vals, "tolist"):
-                    action.extend(vals[0].tolist() if vals.ndim > 1 else vals.tolist())
-                elif isinstance(vals, list):
-                    action.extend(vals[0] if isinstance(vals[0], list) else vals)
+        for key in action_chunk:
+            vals = action_chunk[key]
+            if hasattr(vals, "tolist"):
+                action.extend(vals.flatten().tolist())
+            elif isinstance(vals, list):
+                action.extend(vals)
         return action[:7] if len(action) >= 7 else action
 
 
