@@ -8,4 +8,5 @@ resources:
   - imagestream.yaml
   - buildconfig.yaml
   - bucket-init-job.yaml
+  - console-dspa-access.yaml
   - dspa.yaml

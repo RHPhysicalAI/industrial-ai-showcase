@@ -24,6 +24,80 @@ async function getPolicyVersion(namespace: string): Promise<string> {
   }
 }
 
+interface DspaRunInfo {
+  id: string;
+  name: string;
+  state: string;
+  createdAt: string;
+  finishedAt: string | null;
+  durationMin: number | null;
+  fineTuneDurationMin: number | null;
+  mlflowRunUrl: string | null;
+}
+
+async function fetchLatestDspaRun(): Promise<DspaRunInfo | null> {
+  try {
+    const { readFile } = await import("node:fs/promises");
+    const { Agent } = await import("node:https");
+    const token = (await readFile("/var/run/secrets/kubernetes.io/serviceaccount/token", "utf-8")).trim();
+    const agent = new Agent({ rejectUnauthorized: false });
+    const dspaUrl = "https://ds-pipeline-dspa.vla-training.svc:8443";
+    const { default: https } = await import("node:https");
+    const body = await new Promise<string>((resolve, reject) => {
+      const req = https.get(
+        `${dspaUrl}/apis/v2beta1/runs?page_size=1&sort_by=created_at%20desc`,
+        { headers: { Authorization: `Bearer ${token}` }, agent },
+        (res) => {
+          let data = "";
+          res.on("data", (chunk: Buffer) => { data += chunk.toString(); });
+          res.on("end", () => resolve(data));
+        }
+      );
+      req.on("error", reject);
+      req.setTimeout(5000, () => { req.destroy(); reject(new Error("timeout")); });
+    });
+    const data = JSON.parse(body) as { runs?: Array<Record<string, unknown>> };
+    const r = data.runs?.[0];
+    if (!r) return null;
+
+    const createdAt = r.created_at as string;
+    const finishedAt = (r.finished_at as string) ?? null;
+    let durationMin: number | null = null;
+    if (createdAt && finishedAt) {
+      durationMin = Math.round((new Date(finishedAt).getTime() - new Date(createdAt).getTime()) / 60000);
+    }
+
+    let fineTuneDurationMin: number | null = null;
+    const tasks = (r.run_details as Record<string, unknown>)?.task_details as Array<Record<string, unknown>> | undefined;
+    if (tasks) {
+      const ftTask = tasks.find((t) => t.display_name === "vla-fine-tune-and-export-op");
+      if (ftTask && ftTask.start_time && ftTask.end_time) {
+        fineTuneDurationMin = Math.round(
+          (new Date(ftTask.end_time as string).getTime() - new Date(ftTask.start_time as string).getTime()) / 60000
+        );
+      }
+    }
+
+    const mlflowEntries = (r.plugins_output as Record<string, Record<string, Record<string, Record<string, string>>>>)
+      ?.mlflow?.entries;
+    const mlflowRunUrl = mlflowEntries?.run_url?.value ?? null;
+
+    return {
+      id: r.run_id as string,
+      name: r.display_name as string,
+      state: r.state as string,
+      createdAt,
+      finishedAt,
+      durationMin,
+      fineTuneDurationMin,
+      mlflowRunUrl,
+    };
+  } catch (err) {
+    console.error("fetchLatestDspaRun failed:", err);
+    return null;
+  }
+}
+
 interface ModelVersionInfo {
   name: string;
   uri: string;
@@ -234,6 +308,12 @@ fastify.get("/api/fleet", async () => {
 
 fastify.get("/api/lineage", async () => {
   const ls = stream.demoState.getLineageStatuses();
+
+  const [versions, dspaRun] = await Promise.all([
+    fetchModelRegistryVersions(config.modelRegistryUrl),
+    fetchLatestDspaRun(),
+  ]);
+
   const d = config.clusterAppsDomain;
   const links = d
     ? {
@@ -241,10 +321,9 @@ fastify.get("/api/lineage", async () => {
         modelRegistry: `https://rh-ai.${d}/modelRegistry/wbc-model-registry/registeredModels/1`,
         pipelineRuns: `https://rh-ai.${d}/pipelines/vla-training/runs`,
         rhoaiDashboard: `https://rh-ai.${d}/projects/vla-training`,
+        mlflowRun: dspaRun?.mlflowRunUrl ?? null,
       }
     : null;
-
-  const versions = await fetchModelRegistryVersions(config.modelRegistryUrl);
   const latest = versions[0];
 
   const modelLabel = latest ? `g1-vla-finetune ${latest.name}` : "g1-vla-finetune v1";
@@ -276,9 +355,10 @@ fastify.get("/api/lineage", async () => {
     max_steps: modelMeta.training_steps,
     batch_size: "64",
     gpu: "NVIDIA L40S",
-    final_loss: latest?.metadata["final_loss"] || "",
-    duration: latest?.metadata["duration"] || "",
-    throughput: latest?.metadata["throughput"] || "",
+    fine_tune_duration: dspaRun?.fineTuneDurationMin ? `${dspaRun.fineTuneDurationMin} min` : "",
+    pipeline_duration: dspaRun?.durationMin ? `${dspaRun.durationMin} min` : "",
+    pipeline_run: dspaRun?.name ?? "",
+    pipeline_state: dspaRun?.state ?? "",
   };
 
   return {
@@ -297,12 +377,16 @@ fastify.get("/api/lineage", async () => {
       {
         id: "pipeline",
         type: "pipeline",
-        label: "KFP Pipeline Run",
+        label: dspaRun ? `KFP: ${dspaRun.name}` : "KFP Pipeline Run",
         status: ls["pipeline"] ?? "completed",
         metadata: {
           pipeline: "vla-finetune",
           namespace: "vla-training",
           steps: "data_prep → fine_tune → validate → register",
+          run_id: dspaRun?.id ?? "",
+          started: dspaRun?.createdAt ?? "",
+          finished: dspaRun?.finishedAt ?? "",
+          duration: dspaRun?.durationMin ? `${dspaRun.durationMin} min` : "",
         },
       },
       {
