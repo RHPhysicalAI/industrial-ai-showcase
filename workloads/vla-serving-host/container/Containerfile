@@ -47,29 +47,37 @@ RUN pip3 install --no-cache-dir \
     && pip3 install --no-cache-dir --no-deps /opt/app/vla-serving-host \
     && chown -R 1001:0 /opt/app
 
-# Real-model deps only land in the :cuda image.
-# transformers pinned to 4.40.x — OpenVLA's trust_remote_code registrations
-# target the pre-5.0 API (AutoModelForVision2Seq, LlamaTokenizer behaviors).
-# accelerate + timm versions pinned compatibly with transformers 4.40.
-RUN if [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release; then \
-        pip3 install --no-cache-dir \
-            "transformers==4.40.1" \
-            "tokenizers>=0.19,<0.20" \
-            "accelerate==0.30.1" \
-            "timm==0.9.16" \
-            sentencepiece \
-            onnxruntime-gpu ; \
-    fi
-
-# GR00T N1.7 SDK for real VLA inference (cuda only).
+# GR00T N1.7 SDK + inference deps (cuda only).
+# The base image ships a matched set of torch + transformer_engine + flash-attn +
+# apex. Installing gr00t normally would upgrade torch from the base image's custom
+# build (2.9.0a0+...) to the PyPI release (2.9.0), breaking all pre-compiled C
+# extensions. Following NVIDIA's recommended pattern: install gr00t with --no-deps,
+# then install its Python-only dependencies separately without touching torch.
+# ref: https://next.redhat.com/2025/08/26/a-developers-guide-to-pytorch-containers-and-nvidia-solving-the-puzzle/
 ARG GROOT_REF=main
 RUN if [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release; then \
         apt-get update && apt-get install -y --no-install-recommends git && \
         git clone --depth 1 --branch "${GROOT_REF}" \
             https://github.com/NVIDIA/Isaac-GR00T.git /workspace/Isaac-GR00T && \
         cd /workspace/Isaac-GR00T && \
-        pip3 install --no-cache-dir . && \
-        pip3 install --no-cache-dir flash-attn --no-build-isolation && \
+        pip3 install --no-cache-dir --no-deps . && \
+        pip3 install --no-cache-dir \
+            albumentations==1.4.18 \
+            "huggingface-hub[cli]" \
+            "opencv-python-headless>=4.5,<4.13" \
+            diffusers==0.35.1 dm-tree \
+            lmdb==1.7.5 msgpack==1.1.0 msgpack-numpy==0.4.8 \
+            pandas==2.2.3 peft==0.17.1 termcolor==3.2.0 \
+            transformers==4.57.3 tyro==0.9.17 click==8.1.8 \
+            datasets==3.6.0 "cryptography>=46.0.7" \
+            einops==0.8.1 gitpython==3.1.50 jsonlines==4.0.0 \
+            gymnasium==1.2.2 matplotlib==3.10.1 numpy==1.26.4 \
+            omegaconf==2.3.0 scipy==1.15.3 \
+            wandb==0.23.0 pyzmq==27.0.1 \
+            "onnx>=1.20.0" onnxscript \
+            onnxruntime-gpu sentencepiece && \
+        pip3 install --no-cache-dir --no-deps \
+            torchcodec==0.8.0 deepspeed==0.17.6 && \
         rm -rf /var/lib/apt/lists/* ; \
     fi
 
