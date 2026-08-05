@@ -16,7 +16,5 @@ resources:
 - mission-dispatcher-b-deployment.yaml
 - mission-dispatcher-b-service.yaml
 - model-cache-pvc.yaml
-- openvla-server-imagestream.yaml
-- openvla-server-buildconfig.yaml
 - openvla-server-deployment.yaml
 - openvla-server-service.yaml

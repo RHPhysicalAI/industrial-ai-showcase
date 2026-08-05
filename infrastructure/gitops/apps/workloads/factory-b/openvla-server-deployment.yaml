@@ -8,6 +8,8 @@ metadata:
     app: openvla-server
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: openvla-server
@@ -24,11 +26,11 @@ spec:
         effect: NoSchedule
       containers:
       - name: openvla-server
-        image: image-registry.openshift-image-registry.svc:5000/factory-b/openvla-server:latest
+        image: quay.io/ecosystem-appeng/openvla-server:groot-n1.7-v1
         imagePullPolicy: Always
         env:
         - name: VLA_MODE
-          value: "openvla"
+          value: "groot"
         - name: SERVICE_NAME
           value: "openvla-server"
         - name: LOG_LEVEL
@@ -40,12 +42,21 @@ spec:
             configMapKeyRef:
               name: policy-version
               key: model-uri
+        - name: GROOT_MODEL_PATH
+          value: "s3://vla-training/vla-finetune/base-model"
+        - name: GROOT_EMBODIMENT_TAG
+          value: "REAL_G1"
         - name: S3_ENDPOINT
           value: "http://minio.mlflow.svc:9000"
         - name: MODEL_CACHE_DIR
           value: "/models"
         - name: HF_HOME
           value: "/tmp/hf_cache"
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: token
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:
