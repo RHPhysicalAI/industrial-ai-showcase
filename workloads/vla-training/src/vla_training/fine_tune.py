@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from vla_training.config import VlaTrainingConfig
@@ -169,6 +171,7 @@ def run(
 
     print(f"Command: {' '.join(train_cmd)}\n")
     train_log = Path("/tmp/train_stdout.log")
+    train_start = time.monotonic()
     with open(train_log, "w") as log_f:
         proc = subprocess.Popen(
             train_cmd, env=env, cwd=str(GROOT_ROOT), stdin=subprocess.DEVNULL,
@@ -179,15 +182,35 @@ def run(
             sys.stdout.write(line)
             log_f.write(line)
         proc.wait()
+    train_elapsed = time.monotonic() - train_start
     if proc.returncode != 0:
         raise subprocess.CalledProcessError(proc.returncode, train_cmd)
 
     train_stdout = train_log.read_text()
+    losses = _parse_loss_values(train_stdout)
+
     if cfg.mlflow.enabled:
         try:
             _log_training_to_mlflow(cfg, train_stdout, max_steps, global_batch_size, num_gpus)
         except Exception as exc:
             print(f"WARNING: MLflow logging failed (non-fatal): {exc}", file=sys.stderr)
+
+    minutes = int(train_elapsed // 60)
+    seconds = int(train_elapsed % 60)
+    duration_str = f"{minutes}m {seconds}s" if minutes else f"{seconds}s"
+    throughput = f"{len(losses) / train_elapsed:.2f} steps/sec" if losses and train_elapsed > 0 else ""
+    final_loss = f"{losses[-1]:.4f}" if losses else ""
+
+    metrics = {
+        "final_loss": final_loss,
+        "duration": duration_str,
+        "throughput": throughput,
+        "training_steps_completed": str(len(losses)),
+    }
+    metrics_path = Path("/tmp/training_metrics.json")
+    metrics_path.write_text(json.dumps(metrics))
+    s3.upload_file(str(metrics_path), cfg.s3.bucket, f"{cfg.s3.checkpoint_prefix}/training_metrics.json")
+    print(f"Training metrics: loss={final_loss}, duration={duration_str}, throughput={throughput}")
 
     print("\n=== ONNX Export ===")
     ONNX_DIR.mkdir(parents=True, exist_ok=True)
@@ -206,7 +229,9 @@ def run(
     subprocess.run(export_cmd, env=env, cwd=str(GROOT_ROOT), stdin=subprocess.DEVNULL, check=True)
 
     checkpoint_prefix = cfg.s3.checkpoint_prefix
-    print("\n=== Skipping checkpoint upload (large; ONNX is the deployment artifact) ===")
+
+    print(f"\n=== Uploading checkpoint to S3 ({checkpoint_prefix}/checkpoint/) ===")
+    _upload_artifacts_to_s3(s3, cfg.s3.bucket, f"{checkpoint_prefix}/checkpoint", OUTPUT_DIR)
 
     print(f"\n=== Uploading ONNX to S3 ({checkpoint_prefix}/onnx/) ===")
     _upload_artifacts_to_s3(s3, cfg.s3.bucket, f"{checkpoint_prefix}/onnx", ONNX_DIR)

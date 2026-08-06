@@ -15,9 +15,9 @@ from vla_training.constants import (
 def _configure_gpu_step(task: dsl.PipelineTask) -> None:
     task.set_accelerator_type("nvidia.com/gpu")
     task.set_accelerator_limit(GPU_LIMIT)
-    task.set_cpu_request("14")
-    task.set_memory_request("64Gi")
-    task.set_memory_limit("110Gi")
+    task.set_cpu_request("6")
+    task.set_memory_request("48Gi")
+    task.set_memory_limit("56Gi")
     task.set_env_variable("PYTHONUNBUFFERED", "1")
     task.set_env_variable("S3_ENDPOINT", S3_ENDPOINT)
     task.set_env_variable("S3_BUCKET", "vla-training")
@@ -213,6 +213,7 @@ def vla_register_model_op(
             'export VLA_DATASET_REPO="${DATASET}"\n'
             'export VLA_EMBODIMENT_TAG="${EMBODIMENT}"\n'
             'export VLA_MAX_STEPS="${STEPS}"\n'
+            'export VLA_S3_CHECKPOINT_PREFIX="${S3_PREFIX}"\n'
             'export DSPA_RUN_ID="${DSPA_RUN_ID:-unknown}"\n'
             "\n"
             'echo "=== VLA Model Registration ==="\n'
@@ -259,10 +260,12 @@ def vla_finetune_pipeline(
     model_name: str = "g1-vla-finetune",
     model_version: str = "v1",
 ):
+    versioned_prefix = f"{s3_prefix}/{model_version}"
+
     data_prep_task = vla_data_prep_op(
         base_model_repo=base_model_repo,
         dataset_repo=dataset_repo,
-        s3_prefix=s3_prefix,
+        s3_prefix=versioned_prefix,
     )
     _configure_cpu_step(data_prep_task)
     data_prep_task.set_cpu_request("4")

@@ -185,12 +185,12 @@ deploymentSpec:
             resourceCount: '1'
             resourceType: nvidia.com/gpu
             type: nvidia.com/gpu
-          cpuRequest: 14.0
-          memoryLimit: 118.11160064
-          memoryRequest: 68.719476736
-          resourceCpuRequest: '14'
-          resourceMemoryLimit: 110Gi
-          resourceMemoryRequest: 64Gi
+          cpuRequest: 6.0
+          memoryLimit: 60.129542144
+          memoryRequest: 51.539607552
+          resourceCpuRequest: '6'
+          resourceMemoryLimit: 56Gi
+          resourceMemoryRequest: 48Gi
     exec-vla-register-model-op:
       container:
         args:
@@ -200,14 +200,14 @@ deploymentSpec:
           $7\"; STEPS=\"$8\"; OUTPUT_FILE=\"$9\"\nMODEL_URI=\"s3://${S3_BUCKET}/${S3_PREFIX}/onnx\"\
           \n\nexport VLA_BASE_MODEL_REPO=\"${BASE_MODEL}\"\nexport VLA_DATASET_REPO=\"\
           ${DATASET}\"\nexport VLA_EMBODIMENT_TAG=\"${EMBODIMENT}\"\nexport VLA_MAX_STEPS=\"\
-          ${STEPS}\"\nexport DSPA_RUN_ID=\"${DSPA_RUN_ID:-unknown}\"\n\necho \"===\
-          \ VLA Model Registration ===\"\necho \"Model: ${MODEL_NAME} v${MODEL_VERSION}\"\
-          \necho \"URI: ${MODEL_URI}\"\necho \"Start time: $(date -u)\"\n\npython\
-          \ -m vla_training.register_model \\\n  --name \"${MODEL_NAME}\" \\\n  --uri\
-          \ \"${MODEL_URI}\" \\\n  --version \"${MODEL_VERSION}\" \\\n  --description\
-          \ \"GR00T N1.7-3B fine-tuned VLA for G1 teleop\"\n\necho \"REGISTERED\"\
-          \ > \"${OUTPUT_FILE}\"\necho \"End time: $(date -u)\"\necho \"=== VLA Model\
-          \ Registration: COMPLETE ===\""
+          ${STEPS}\"\nexport VLA_S3_CHECKPOINT_PREFIX=\"${S3_PREFIX}\"\nexport DSPA_RUN_ID=\"\
+          ${DSPA_RUN_ID:-unknown}\"\n\necho \"=== VLA Model Registration ===\"\necho\
+          \ \"Model: ${MODEL_NAME} v${MODEL_VERSION}\"\necho \"URI: ${MODEL_URI}\"\
+          \necho \"Start time: $(date -u)\"\n\npython -m vla_training.register_model\
+          \ \\\n  --name \"${MODEL_NAME}\" \\\n  --uri \"${MODEL_URI}\" \\\n  --version\
+          \ \"${MODEL_VERSION}\" \\\n  --description \"GR00T N1.7-3B fine-tuned VLA\
+          \ for G1 teleop\"\n\necho \"REGISTERED\" > \"${OUTPUT_FILE}\"\necho \"End\
+          \ time: $(date -u)\"\necho \"=== VLA Model Registration: COMPLETE ===\""
         - --
         - '{{$.inputs.parameters[''model_name'']}}'
         - '{{$.inputs.parameters[''model_version'']}}'
@@ -390,7 +390,7 @@ root:
         isOptional: true
         parameterType: STRING
 schemaVersion: 2.1.0
-sdkVersion: kfp-2.13.0
+sdkVersion: kfp-2.17.0
 ---
 platforms:
   kubernetes:
@@ -404,6 +404,7 @@ platforms:
               secretKey: MINIO_ROOT_USER
             - envVar: AWS_SECRET_ACCESS_KEY
               secretKey: MINIO_ROOT_PASSWORD
+            optional: false
             secretName: minio-credentials
             secretNameParameter:
               runtimeValue:
@@ -411,6 +412,7 @@ platforms:
           - keyToEnv:
             - envVar: HF_TOKEN
               secretKey: HF_TOKEN
+            optional: false
             secretName: hf-credentials
             secretNameParameter:
               runtimeValue:
@@ -433,6 +435,7 @@ platforms:
               secretKey: MINIO_ROOT_USER
             - envVar: AWS_SECRET_ACCESS_KEY
               secretKey: MINIO_ROOT_PASSWORD
+            optional: false
             secretName: minio-credentials
             secretNameParameter:
               runtimeValue:
@@ -440,6 +443,7 @@ platforms:
           - keyToEnv:
             - envVar: HF_TOKEN
               secretKey: HF_TOKEN
+            optional: false
             secretName: hf-credentials
             secretNameParameter:
               runtimeValue:
@@ -457,6 +461,7 @@ platforms:
               secretKey: MINIO_ROOT_USER
             - envVar: AWS_SECRET_ACCESS_KEY
               secretKey: MINIO_ROOT_PASSWORD
+            optional: false
             secretName: minio-credentials
             secretNameParameter:
               runtimeValue:
@@ -474,6 +479,7 @@ platforms:
               secretKey: MINIO_ROOT_USER
             - envVar: AWS_SECRET_ACCESS_KEY
               secretKey: MINIO_ROOT_PASSWORD
+            optional: false
             secretName: minio-credentials
             secretNameParameter:
               runtimeValue:
