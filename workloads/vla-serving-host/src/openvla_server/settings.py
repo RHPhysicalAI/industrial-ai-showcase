@@ -16,12 +16,24 @@ class OpenvlaSettings(BaseSettings):
     # can be verified without the 14 GB OpenVLA weight download + ROCm inference
     # bring-up gating the whole demo. Flip to `openvla` once the wiring is green.
     # Future values: `smolvla`, `pi0`.
-    vla_mode: str = Field(default="mock", description="mock | openvla | smolvla | pi0")
+    vla_mode: str = Field(default="mock", description="mock | groot | openvla | onnx | smolvla | pi0")
 
     openvla_weights: str = Field(
         default="openvla/openvla-7b",
-        description="HuggingFace model id for OpenVLA weights. Cached at $HF_HOME.",
+        description="Model source: HuggingFace id (openvla/openvla-7b), local path, or s3:// URI.",
     )
+
+    groot_model_path: str = Field(
+        default="",
+        description="S3 URI or local path to GR00T checkpoint. Falls back to openvla_weights if empty.",
+    )
+    groot_embodiment_tag: str = Field(
+        default="NEW_EMBODIMENT",
+        description="GR00T embodiment tag for the target robot (e.g. NEW_EMBODIMENT for Unitree G1).",
+    )
+
+    s3_endpoint: str = Field(default="", description="S3-compatible endpoint URL for s3:// model URIs.")
+    model_cache_dir: str = Field(default="/tmp/model_cache", description="Local directory to cache S3-downloaded models.")
     openvla_unnorm_key: str = Field(
         default="bridge_orig",
         description="Action-normalization dataset key; 'bridge_orig' matches the OpenVLA paper defaults.",
