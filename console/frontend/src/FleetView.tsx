@@ -28,6 +28,7 @@ import type {
   FactoryStatus,
   FleetMessage,
   FleetStatus,
+  ModelVersion,
   ScenarioDetail,
   StatusLogEntry,
 } from "./types.js";
@@ -35,6 +36,7 @@ import {
   executeAction,
   fetchArgoStatus,
   fetchFleetStatus,
+  fetchModelVersions,
   fetchScenarioDetail,
 } from "./api.js";
 
@@ -402,16 +404,19 @@ function ArgoSyncPanel({
 
 function FactoryPanel({
   factory,
+  registryVersions,
   onPromotionTriggered,
   setToast,
 }: {
   factory: FactoryStatus;
+  registryVersions: ModelVersion[];
   onPromotionTriggered?: (approvalId: number) => void;
   setToast: (toast: { message: string; variant: "success" | "danger" | "info" } | null) => void;
 }) {
   const prevVersion = useRef(factory.policyVersion);
   const [pillClass, setPillClass] = useState("");
   const [promoting, setPromoting] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState("");
 
   useEffect(() => {
     if (prevVersion.current !== factory.policyVersion) {
@@ -426,23 +431,13 @@ function FactoryPanel({
     }
   }, [factory.policyVersion]);
 
-  const calculateNextVersion = (): string => {
-    const currentVer = factory.policyVersion.match(/v(\d+)\.(\d+)/);
-    if (currentVer && currentVer[1] && currentVer[2]) {
-      const nextMinor = parseInt(currentVer[2], 10) + 1;
-      return `v${currentVer[1]}.${nextMinor}`;
-    }
-    return "v1.4";
-  };
+  const promoteVersion = selectedVersion || (registryVersions[0]?.name ?? "v1");
 
   const handlePromoteClick = async () => {
-    // Calculate next version and start promotion immediately
-    const nextVersion = calculateNextVersion();
     setPromoting(true);
 
     try {
-      // Call agent query API with promote command
-      const query = `Promote model ${nextVersion} to ${factory.name}`;
+      const query = `Promote model ${promoteVersion} to ${factory.name}`;
       const resp = await fetch("/api/agent/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -456,14 +451,12 @@ function FactoryPanel({
         return;
       }
 
-      // Get response with approval ID
       const data = await resp.json() as { query: string; response: string; pending_approval_id?: number };
 
       if (data.pending_approval_id && onPromotionTriggered) {
-        // Got approval ID - open HIL drawer directly!
         onPromotionTriggered(data.pending_approval_id);
       } else {
-        setToast({ message: `Promotion pending for ${factory.name} → ${nextVersion}. Check AI Assistant.`, variant: "info" });
+        setToast({ message: `Promotion pending for ${factory.name} → ${promoteVersion}. Check AI Assistant.`, variant: "info" });
       }
     } catch (err) {
       console.error("Promotion error:", err);
@@ -535,16 +528,44 @@ function FactoryPanel({
           </StackItem>
 
           <StackItem>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handlePromoteClick}
-              isLoading={promoting}
-              isDisabled={promoting}
-              style={{ marginTop: 8 }}
-            >
-              {promoting ? "Preparing..." : `Promote to ${calculateNextVersion()}`}
-            </Button>
+            {registryVersions.length > 1 ? (
+              <Flex alignItems={{ default: "alignItemsCenter" }} spaceItems={{ default: "spaceItemsSm" }} style={{ marginTop: 8 }}>
+                <FlexItem>
+                  <select
+                    value={promoteVersion}
+                    onChange={(e) => setSelectedVersion(e.target.value)}
+                    style={{ fontSize: 13, padding: "4px 8px", borderRadius: 4, border: "1px solid #D2D2D2" }}
+                    disabled={promoting}
+                  >
+                    {registryVersions.map((v) => (
+                      <option key={v.name} value={v.name}>{v.name}</option>
+                    ))}
+                  </select>
+                </FlexItem>
+                <FlexItem>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handlePromoteClick}
+                    isLoading={promoting}
+                    isDisabled={promoting}
+                  >
+                    {promoting ? "Preparing..." : "Promote"}
+                  </Button>
+                </FlexItem>
+              </Flex>
+            ) : (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handlePromoteClick}
+                isLoading={promoting}
+                isDisabled={promoting}
+                style={{ marginTop: 8 }}
+              >
+                {promoting ? "Preparing..." : `Promote to ${promoteVersion}`}
+              </Button>
+            )}
           </StackItem>
 
           {factory.links && (
@@ -568,6 +589,7 @@ export function FleetView({
   const [fleet, setFleet] = useState<FleetStatus | null>(null);
   const [argo, setArgo] = useState<ArgoAppStatus | null>(null);
   const [auditHistory, setAuditHistory] = useState<any[]>([]);
+  const [modelVersions, setModelVersions] = useState<ModelVersion[]>([]);
   const [pendingApprovalId, setPendingApprovalId] = useState<number | null>(null);
   const [showRollbackAnalysis, setShowRollbackAnalysis] = useState(false);
   const [toast, setToast] = useState<{ message: string; variant: "success" | "danger" | "info" } | null>(null);
@@ -575,6 +597,7 @@ export function FleetView({
   const refresh = useCallback(() => {
     fetchFleetStatus().then(setFleet).catch(() => undefined);
     fetchArgoStatus().then(setArgo).catch(() => undefined);
+    fetchModelVersions().then(setModelVersions).catch(() => undefined);
 
     // Fetch recent audit history
     fetch("/api/audit/history?limit=5")
@@ -692,6 +715,7 @@ export function FleetView({
             <FlexItem key={f.name} flex={{ default: "flex_1" }}>
               <FactoryPanel
                 factory={f}
+                registryVersions={modelVersions}
                 onPromotionTriggered={(approvalId) => setPendingApprovalId(approvalId)}
                 setToast={setToast}
               />
@@ -738,7 +762,7 @@ export function FleetView({
                           <strong>{item.tool_name}</strong>
                           {item.tool_arguments?.model_version && (
                             <span style={{ color: "#6A6E73" }}>
-                              {" "}— v{item.tool_arguments.model_version} →{" "}
+                              {" "}— {item.tool_arguments.model_version} →{" "}
                               {item.tool_arguments.factory}
                             </span>
                           )}

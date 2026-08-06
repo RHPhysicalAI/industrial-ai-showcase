@@ -65,9 +65,40 @@ export class DemoState {
   rollbackAnalyses: RollbackAnalysis[] = [];
   private timers: ReturnType<typeof setTimeout>[] = [];
   private promotedVersion: string = BASELINE_VERSION;
+  private lineageManualOverrideUntil: number = 0;
   argoSync: ArgoSync | null = null;
   wmsStubBaseUrl: string = "";
   log: SimpleLogger | null = null;
+  lastDspaRunState: string | null = null;
+
+  get isLineageManuallyOverridden(): boolean {
+    return Date.now() < this.lineageManualOverrideUntil;
+  }
+
+  getLineageStatuses(): Record<string, LineageNodeStatus> {
+    if (this.isLineageManuallyOverridden) return this.lineageStatuses;
+
+    if (this.lastDspaRunState === "RUNNING" || this.lastDspaRunState === "PENDING") {
+      return {
+        dataset: "completed",
+        pipeline: "running",
+        training: "running",
+        validation: "pending",
+        model: "pending",
+      };
+    }
+    if (this.lastDspaRunState === "SUCCEEDED") {
+      return {
+        dataset: "completed",
+        pipeline: "completed",
+        training: "completed",
+        validation: "completed",
+        model: "completed",
+      };
+    }
+
+    return this.lineageStatuses;
+  }
 
   private async publishAnomalyScore(
     robotId: string,
@@ -135,6 +166,7 @@ export class DemoState {
   }
 
   advanceLineage(phase: string): void {
+    this.lineageManualOverrideUntil = Date.now() + 60_000;
     if (phase === "training-running") {
       this.phase = "training-running";
       this.lineageStatuses = {
