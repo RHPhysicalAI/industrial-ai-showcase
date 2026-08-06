@@ -27,6 +27,7 @@ def _configure_gpu_step(task: dsl.PipelineTask) -> None:
     task.set_env_variable("HOME", "/tmp")
     kubernetes.empty_dir_mount(task, volume_name="dshm", mount_path="/dev/shm", medium="Memory", size_limit="16Gi")
     kubernetes.add_toleration(task, key="nvidia.com/gpu", operator="Exists", effect="NoSchedule")
+    kubernetes.add_node_selector(task, "nvidia.com/gpu.product", "NVIDIA-L40S")
     kubernetes.use_secret_as_env(
         task,
         secret_name="minio-credentials",
@@ -66,6 +67,7 @@ def vla_data_prep_op(
     base_model_repo: str,
     dataset_repo: str,
     s3_prefix: str,
+    model_version: str,
     s3_prefix_out: dsl.OutputPath(str),
 ):
     """Download GR00T N1.7-3B base model and training dataset from HuggingFace, cache in S3."""
@@ -75,28 +77,31 @@ def vla_data_prep_op(
         args=[
             "-c",
             "set -euo pipefail\n"
-            'BASE_MODEL_REPO="$1"; DATASET_REPO="$2"; S3_PREFIX="$3"; OUTPUT_FILE="$4"\n'
+            'BASE_MODEL_REPO="$1"; DATASET_REPO="$2"; S3_PREFIX="$3"\n'
+            'MODEL_VERSION="$4"; OUTPUT_FILE="$5"\n'
+            'VERSIONED_PREFIX="${S3_PREFIX}/${MODEL_VERSION}"\n'
             "\n"
             'echo "=== VLA Data Prep ==="\n'
             'echo "Base model: ${BASE_MODEL_REPO}"\n'
             'echo "Dataset: ${DATASET_REPO}"\n'
-            'echo "S3 prefix: ${S3_PREFIX}"\n'
+            'echo "S3 prefix: ${VERSIONED_PREFIX}"\n'
             'echo "Start time: $(date -u)"\n'
             "\n"
             'export VLA_BASE_MODEL_REPO="${BASE_MODEL_REPO}"\n'
             'export VLA_DATASET_REPO="${DATASET_REPO}"\n'
-            'export VLA_S3_MODEL_PREFIX="${S3_PREFIX}/base-model"\n'
-            'export VLA_S3_DATASET_PREFIX="${S3_PREFIX}/dataset"\n'
+            'export VLA_S3_MODEL_PREFIX="${VERSIONED_PREFIX}/base-model"\n'
+            'export VLA_S3_DATASET_PREFIX="${VERSIONED_PREFIX}/dataset"\n'
             "\n"
             "python -m vla_training.data_prep\n"
             "\n"
-            'printf "%s" "${S3_PREFIX}" > "${OUTPUT_FILE}"\n'
+            'printf "%s" "${VERSIONED_PREFIX}" > "${OUTPUT_FILE}"\n'
             'echo "End time: $(date -u)"\n'
             'echo "=== VLA Data Prep: COMPLETE ==="',
             "--",
             base_model_repo,
             dataset_repo,
             s3_prefix,
+            model_version,
             s3_prefix_out,
         ],
     )
@@ -260,12 +265,11 @@ def vla_finetune_pipeline(
     model_name: str = "g1-vla-finetune",
     model_version: str = "v1",
 ):
-    versioned_prefix = f"{s3_prefix}/{model_version}"
-
     data_prep_task = vla_data_prep_op(
         base_model_repo=base_model_repo,
         dataset_repo=dataset_repo,
-        s3_prefix=versioned_prefix,
+        s3_prefix=s3_prefix,
+        model_version=model_version,
     )
     _configure_cpu_step(data_prep_task)
     data_prep_task.set_cpu_request("4")

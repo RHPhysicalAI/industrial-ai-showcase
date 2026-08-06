@@ -441,44 +441,41 @@ def custom_tool_node(state: AgentState) -> dict:
     from langgraph.prebuilt import ToolNode
     tool_executor = ToolNode(read_only_tools)
 
-    # Execute tools and capture trace
+    # Execute all tool calls once via ToolNode and capture trace
     tool_call_trace = state.get("tool_call_trace", [])
+
+    start_time_ms = int(time.time() * 1000)
+    timestamp = datetime.now().isoformat()
+
+    result = tool_executor.invoke(state)
+
+    end_time_ms = int(time.time() * 1000)
+    duration_ms = end_time_ms - start_time_ms
+
+    tool_messages = result.get("messages", [])
+    tool_msg_by_id = {
+        msg.tool_call_id: msg for msg in tool_messages
+        if hasattr(msg, "tool_call_id")
+    }
 
     for tool_call in last_message.tool_calls:
         tool_name = tool_call.get("name")
         tool_args = tool_call.get("args", {})
-
-        # Record start time
-        start_time_ms = int(time.time() * 1000)
-        timestamp = datetime.now().isoformat()
-
-        # Execute via ToolNode
-        result = tool_executor.invoke(state)
-
-        # Record end time and result
-        end_time_ms = int(time.time() * 1000)
-        duration_ms = end_time_ms - start_time_ms
-
-        # Extract response summary from the ToolMessage
-        tool_messages = result.get("messages", [])
         response_summary = "No response"
-        if tool_messages:
-            last_tool_msg = tool_messages[-1]
-            if hasattr(last_tool_msg, 'content'):
-                response_summary = str(last_tool_msg.content)[:200]  # First 200 chars
+        msg = tool_msg_by_id.get(tool_call.get("id"))
+        if msg and hasattr(msg, "content"):
+            response_summary = str(msg.content)[:200]
 
-        # Add to trace
         tool_call_trace.append({
             "tool_name": tool_name,
             "arguments": tool_args,
             "timestamp": timestamp,
             "duration_ms": duration_ms,
             "response_summary": response_summary,
-            "success": True  # If we got here, no exception
+            "success": True,
         })
 
-        # Update state with trace
-        state["tool_call_trace"] = tool_call_trace
+    state["tool_call_trace"] = tool_call_trace
 
     return result
 

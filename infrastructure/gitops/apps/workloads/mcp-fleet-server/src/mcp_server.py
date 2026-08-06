@@ -125,23 +125,21 @@ async def get_fleet_status(factory: Optional[str] = None):
         }
     """
     try:
-        # Call console backend (which has Fleet Manager integration)
-        client = httpx.Client(timeout=10.0)
-        resp = client.get(f"{CONSOLE_BACKEND_URL}/api/fleet")
-        resp.raise_for_status()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{CONSOLE_BACKEND_URL}/api/fleet")
+            resp.raise_for_status()
 
-        fleet_data = resp.json()
+            fleet_data = resp.json()
 
-        # Filter by factory if specified
-        if factory:
-            factories = [
-                f for f in fleet_data.get("factories", [])
-                if f.get("name", "").lower() == factory.lower()
-                or f.get("namespace", "") == factory
-            ]
-            return {"factories": factories}
+            if factory:
+                factories = [
+                    f for f in fleet_data.get("factories", [])
+                    if f.get("name", "").lower() == factory.lower()
+                    or f.get("namespace", "") == factory
+                ]
+                return {"factories": factories}
 
-        return fleet_data
+            return fleet_data
 
     except httpx.HTTPError as e:
         raise HTTPException(status_code=503, detail=f"Fleet Manager unavailable: {str(e)}")

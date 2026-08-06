@@ -21,6 +21,8 @@ components:
           parameterType: STRING
         dataset_repo:
           parameterType: STRING
+        model_version:
+          parameterType: STRING
         s3_prefix:
           parameterType: STRING
     outputDefinitions:
@@ -87,7 +89,11 @@ deploymentSpec:
         - -c
         - 'set -euo pipefail
 
-          BASE_MODEL_REPO="$1"; DATASET_REPO="$2"; S3_PREFIX="$3"; OUTPUT_FILE="$4"
+          BASE_MODEL_REPO="$1"; DATASET_REPO="$2"; S3_PREFIX="$3"
+
+          MODEL_VERSION="$4"; OUTPUT_FILE="$5"
+
+          VERSIONED_PREFIX="${S3_PREFIX}/${MODEL_VERSION}"
 
 
           echo "=== VLA Data Prep ==="
@@ -96,7 +102,7 @@ deploymentSpec:
 
           echo "Dataset: ${DATASET_REPO}"
 
-          echo "S3 prefix: ${S3_PREFIX}"
+          echo "S3 prefix: ${VERSIONED_PREFIX}"
 
           echo "Start time: $(date -u)"
 
@@ -105,15 +111,15 @@ deploymentSpec:
 
           export VLA_DATASET_REPO="${DATASET_REPO}"
 
-          export VLA_S3_MODEL_PREFIX="${S3_PREFIX}/base-model"
+          export VLA_S3_MODEL_PREFIX="${VERSIONED_PREFIX}/base-model"
 
-          export VLA_S3_DATASET_PREFIX="${S3_PREFIX}/dataset"
+          export VLA_S3_DATASET_PREFIX="${VERSIONED_PREFIX}/dataset"
 
 
           python -m vla_training.data_prep
 
 
-          printf "%s" "${S3_PREFIX}" > "${OUTPUT_FILE}"
+          printf "%s" "${VERSIONED_PREFIX}" > "${OUTPUT_FILE}"
 
           echo "End time: $(date -u)"
 
@@ -122,6 +128,7 @@ deploymentSpec:
         - '{{$.inputs.parameters[''base_model_repo'']}}'
         - '{{$.inputs.parameters[''dataset_repo'']}}'
         - '{{$.inputs.parameters[''s3_prefix'']}}'
+        - '{{$.inputs.parameters[''model_version'']}}'
         - '{{$.outputs.parameters[''s3_prefix_out''].output_file}}'
         command:
         - /bin/bash
@@ -278,6 +285,8 @@ root:
               componentInputParameter: base_model_repo
             dataset_repo:
               componentInputParameter: dataset_repo
+            model_version:
+              componentInputParameter: model_version
             s3_prefix:
               componentInputParameter: s3_prefix
         taskInfo:
@@ -429,6 +438,9 @@ platforms:
             sizeLimit: 16Gi
             volumeName: dshm
           imagePullPolicy: Always
+          nodeSelector:
+            labels:
+              nvidia.com/gpu.product: NVIDIA-L40S
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
