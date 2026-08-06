@@ -27,7 +27,6 @@ def _configure_gpu_step(task: dsl.PipelineTask) -> None:
     task.set_env_variable("HOME", "/tmp")
     kubernetes.empty_dir_mount(task, volume_name="dshm", mount_path="/dev/shm", medium="Memory", size_limit="16Gi")
     kubernetes.add_toleration(task, key="nvidia.com/gpu", operator="Exists", effect="NoSchedule")
-    kubernetes.add_node_selector(task, "nvidia.com/gpu.product", "NVIDIA-L40S")
     kubernetes.use_secret_as_env(
         task,
         secret_name="minio-credentials",
@@ -289,6 +288,8 @@ def vla_finetune_pipeline(
         num_gpus=num_gpus,
     )
     _configure_gpu_step(fine_tune_task)
+    # nodeSelector omitted — scheduler picks any available GPU node.
+    # Override in compiled YAML per-cluster if mixed GPU types require pinning.
     kubernetes.set_timeout(fine_tune_task, 7200)
     fine_tune_task.set_caching_options(False)
 

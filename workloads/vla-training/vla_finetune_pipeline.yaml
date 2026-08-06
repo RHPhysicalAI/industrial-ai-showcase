@@ -438,9 +438,6 @@ platforms:
             sizeLimit: 16Gi
             volumeName: dshm
           imagePullPolicy: Always
-          nodeSelector:
-            labels:
-              nvidia.com/gpu.product: NVIDIA-L40S
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
