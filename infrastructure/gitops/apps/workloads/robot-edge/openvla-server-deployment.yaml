@@ -1,3 +1,4 @@
+# This project was developed with assistance from AI tools.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,6 +8,8 @@ metadata:
     app: openvla-server
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: openvla-server
@@ -16,18 +19,18 @@ spec:
         app: openvla-server
     spec:
       nodeSelector:
-        nvidia.com/gpu.product: NVIDIA-L4
+        nvidia.com/gpu.product: NVIDIA-L40S
       tolerations:
       - key: nvidia.com/gpu
         operator: Exists
         effect: NoSchedule
       containers:
       - name: openvla-server
-        image: image-registry.openshift-image-registry.svc:5000/robot-edge/openvla-server:latest
+        image: quay.io/ecosystem-appeng/openvla-server:groot-n1.7-v1
         imagePullPolicy: Always
         env:
         - name: VLA_MODE
-          value: "openvla"
+          value: "groot"
         - name: SERVICE_NAME
           value: "openvla-server"
         - name: LOG_LEVEL
@@ -35,9 +38,35 @@ spec:
         - name: PORT
           value: "8000"
         - name: OPENVLA_WEIGHTS
-          value: "openvla/openvla-7b"
+          valueFrom:
+            configMapKeyRef:
+              name: policy-version
+              key: model-uri
+        - name: GROOT_MODEL_PATH
+          value: "s3://vla-training/vla-finetune/base-model"
+        - name: GROOT_EMBODIMENT_TAG
+          value: "REAL_G1"
+        - name: S3_ENDPOINT
+          value: "http://minio.mlflow.svc:9000"
+        - name: MODEL_CACHE_DIR
+          value: "/models"
         - name: HF_HOME
           value: "/tmp/hf_cache"
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: token
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: storage-config
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: storage-config
+              key: AWS_SECRET_ACCESS_KEY
         ports:
         - containerPort: 8000
           name: http
@@ -51,6 +80,9 @@ spec:
             cpu: "4"
             memory: "16Gi"
             nvidia.com/gpu: "1"
+        volumeMounts:
+        - name: model-cache
+          mountPath: /models
         livenessProbe:
           httpGet:
             path: /healthz
@@ -63,3 +95,7 @@ spec:
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 10
+      volumes:
+      - name: model-cache
+        persistentVolumeClaim:
+          claimName: model-cache
