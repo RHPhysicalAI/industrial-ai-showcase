@@ -24,6 +24,151 @@ async function getPolicyVersion(namespace: string): Promise<string> {
   }
 }
 
+interface DspaRunInfo {
+  id: string;
+  name: string;
+  state: string;
+  createdAt: string;
+  finishedAt: string | null;
+  durationMin: number | null;
+  fineTuneDurationMin: number | null;
+  mlflowRunUrl: string | null;
+}
+
+async function fetchLatestDspaRun(): Promise<DspaRunInfo | null> {
+  try {
+    const { readFile } = await import("node:fs/promises");
+    const { Agent } = await import("node:https");
+    const token = (await readFile("/var/run/secrets/kubernetes.io/serviceaccount/token", "utf-8")).trim();
+    const agent = new Agent({ rejectUnauthorized: false });
+    const dspaUrl = "https://ds-pipeline-dspa.vla-training.svc:8443";
+    const { default: https } = await import("node:https");
+    const body = await new Promise<string>((resolve, reject) => {
+      const req = https.get(
+        `${dspaUrl}/apis/v2beta1/runs?page_size=1&sort_by=created_at%20desc`,
+        { headers: { Authorization: `Bearer ${token}` }, agent },
+        (res) => {
+          let data = "";
+          res.on("data", (chunk: Buffer) => { data += chunk.toString(); });
+          res.on("end", () => resolve(data));
+        }
+      );
+      req.on("error", reject);
+      req.setTimeout(5000, () => { req.destroy(); reject(new Error("timeout")); });
+    });
+    const data = JSON.parse(body) as { runs?: Array<Record<string, unknown>> };
+    const r = data.runs?.[0];
+    if (!r) return null;
+
+    const createdAt = r.created_at as string;
+    const finishedAt = (r.finished_at as string) ?? null;
+    let durationMin: number | null = null;
+    if (createdAt && finishedAt) {
+      durationMin = Math.round((new Date(finishedAt).getTime() - new Date(createdAt).getTime()) / 60000);
+    }
+
+    let fineTuneDurationMin: number | null = null;
+    const tasks = (r.run_details as Record<string, unknown>)?.task_details as Array<Record<string, unknown>> | undefined;
+    if (tasks) {
+      const ftTask = tasks.find((t) => t.display_name === "vla-fine-tune-and-export-op");
+      if (ftTask && ftTask.start_time && ftTask.end_time) {
+        fineTuneDurationMin = Math.round(
+          (new Date(ftTask.end_time as string).getTime() - new Date(ftTask.start_time as string).getTime()) / 60000
+        );
+      }
+    }
+
+    const mlflowEntries = (r.plugins_output as Record<string, Record<string, Record<string, Record<string, string>>>>)
+      ?.mlflow?.entries;
+    const mlflowRunUrl = mlflowEntries?.run_url?.value ?? null;
+
+    return {
+      id: r.run_id as string,
+      name: r.display_name as string,
+      state: r.state as string,
+      createdAt,
+      finishedAt,
+      durationMin,
+      fineTuneDurationMin,
+      mlflowRunUrl,
+    };
+  } catch (err) {
+    console.error("fetchLatestDspaRun failed:", err);
+    return null;
+  }
+}
+
+interface ModelVersionInfo {
+  name: string;
+  uri: string;
+  registeredAt: string;
+  metadata: Record<string, string>;
+}
+
+async function fetchModelRegistryVersions(registryUrl: string): Promise<ModelVersionInfo[]> {
+  try {
+    const modelsResp = await fetch(
+      `${registryUrl}/api/model_registry/v1alpha3/registered_models?name=g1-vla-finetune`,
+      { signal: AbortSignal.timeout(3000) }
+    );
+    if (!modelsResp.ok) return [];
+    const modelsData = await modelsResp.json() as {
+      items?: Array<{ id: string; name: string }>;
+    };
+    const model = modelsData.items?.[0];
+    if (!model) return [];
+
+    const versionsResp = await fetch(
+      `${registryUrl}/api/model_registry/v1alpha3/registered_models/${model.id}/versions?order_by=CREATE_TIME&sort_order=DESC&page_size=10`,
+      { signal: AbortSignal.timeout(3000) }
+    );
+    if (!versionsResp.ok) return [];
+    const versionsData = await versionsResp.json() as {
+      items?: Array<{
+        id: string;
+        name: string;
+        createTimeSinceEpoch?: string;
+        customProperties?: Record<string, { string_value?: string; int_value?: string }>;
+      }>;
+    };
+
+    const results: ModelVersionInfo[] = [];
+    for (const v of versionsData.items ?? []) {
+      const props = v.customProperties ?? {};
+      const meta: Record<string, string> = {};
+      for (const [key, val] of Object.entries(props)) {
+        meta[key] = val.string_value ?? val.int_value ?? "";
+      }
+      let uri = meta["uri"] ?? "";
+      if (!uri) {
+        try {
+          const artsResp = await fetch(
+            `${registryUrl}/api/model_registry/v1alpha3/model_versions/${v.id}/artifacts`,
+            { signal: AbortSignal.timeout(3000) }
+          );
+          if (artsResp.ok) {
+            const artsData = await artsResp.json() as {
+              items?: Array<{ uri?: string }>;
+            };
+            uri = artsData.items?.[0]?.uri ?? "";
+          }
+        } catch { /* artifact fetch is best-effort */ }
+      }
+      results.push({
+        name: v.name,
+        uri,
+        registeredAt: v.createTimeSinceEpoch
+          ? new Date(parseInt(v.createTimeSinceEpoch, 10)).toISOString()
+          : "",
+        metadata: meta,
+      });
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
 const config = loadConfig();
 const fastify = Fastify({
   logger: { level: config.logLevel, name: "showcase-console" },
@@ -162,16 +307,60 @@ fastify.get("/api/fleet", async () => {
 });
 
 fastify.get("/api/lineage", async () => {
-  const ls = stream.demoState.lineageStatuses;
+  const ls = stream.demoState.getLineageStatuses();
+
+  const [versions, dspaRun] = await Promise.all([
+    fetchModelRegistryVersions(config.modelRegistryUrl),
+    fetchLatestDspaRun(),
+  ]);
+
   const d = config.clusterAppsDomain;
   const links = d
     ? {
-        mlflowExperiment: `https://data-science-gateway.${d}/mlflow/redhat-ods-applications/mlflow/#/experiments`,
-        modelRegistry: `https://rhods-dashboard-redhat-ods-applications.${d}/modelRegistry`,
-        pipelineRuns: `https://rh-ai.${d}/develop-train/pipelines/runs/vla-training`,
+        mlflowExperiment: `https://rh-ai.${d}/projects/vla-training`,
+        modelRegistry: `https://rh-ai.${d}/modelRegistry/wbc-model-registry/registeredModels/1`,
+        pipelineRuns: `https://rh-ai.${d}/pipelines/vla-training/runs`,
         rhoaiDashboard: `https://rh-ai.${d}/projects/vla-training`,
+        mlflowRun: dspaRun?.mlflowRunUrl ?? null,
       }
     : null;
+  const latest = versions[0];
+
+  const modelLabel = latest ? `g1-vla-finetune ${latest.name}` : "g1-vla-finetune v1";
+  const modelMeta = latest
+    ? {
+        registry: "RHOAI Model Registry",
+        format: "ONNX",
+        version: latest.name,
+        uri: latest.uri || latest.metadata["uri"] || "s3://vla-training/vla-finetune/onnx",
+        base_model: latest.metadata["base_model_repo"] || "nvidia/GR00T-N1.7-3B",
+        dataset: latest.metadata["dataset_repo"] || "nvidia/PhysicalAI-Robotics-GR00T-Teleop-G1",
+        training_steps: latest.metadata["training_steps"] || "2000",
+        embodiment: latest.metadata["embodiment_tag"] || "UNITREE_G1",
+        pipeline_run_id: latest.metadata["pipeline_run_id"] || "",
+      }
+    : {
+        registry: "RHOAI Model Registry",
+        format: "ONNX",
+        uri: "s3://vla-training/vla-finetune/onnx",
+        base_model: "nvidia/GR00T-N1.7-3B",
+        dataset: "nvidia/PhysicalAI-Robotics-GR00T-Teleop-G1",
+        training_steps: "2000",
+        embodiment: "UNITREE_G1",
+      };
+
+  const trainingMeta: Record<string, string> = {
+    base_model: modelMeta.base_model,
+    embodiment: modelMeta.embodiment,
+    max_steps: modelMeta.training_steps,
+    batch_size: "64",
+    gpu: "NVIDIA L40S",
+    fine_tune_duration: dspaRun?.fineTuneDurationMin ? `${dspaRun.fineTuneDurationMin} min` : "",
+    pipeline_duration: dspaRun?.durationMin ? `${dspaRun.durationMin} min` : "",
+    pipeline_run: dspaRun?.name ?? "",
+    pipeline_state: dspaRun?.state ?? "",
+  };
+
   return {
     nodes: [
       {
@@ -180,7 +369,7 @@ fastify.get("/api/lineage", async () => {
         label: "G1 Teleop Dataset",
         status: ls["dataset"] ?? "completed",
         metadata: {
-          repo: "nvidia/PhysicalAI-Robotics-GR00T-Teleop-G1",
+          repo: modelMeta.dataset,
           episodes: "311",
           modality: "video + joint positions (43 DOF)",
         },
@@ -188,12 +377,16 @@ fastify.get("/api/lineage", async () => {
       {
         id: "pipeline",
         type: "pipeline",
-        label: "KFP Pipeline Run",
+        label: dspaRun ? `KFP: ${dspaRun.name}` : "KFP Pipeline Run",
         status: ls["pipeline"] ?? "completed",
         metadata: {
           pipeline: "vla-finetune",
           namespace: "vla-training",
           steps: "data_prep → fine_tune → validate → register",
+          run_id: dspaRun?.id ?? "",
+          started: dspaRun?.createdAt ?? "",
+          finished: dspaRun?.finishedAt ?? "",
+          duration: dspaRun?.durationMin ? `${dspaRun.durationMin} min` : "",
         },
       },
       {
@@ -201,16 +394,7 @@ fastify.get("/api/lineage", async () => {
         type: "training",
         label: "GR00T N1.7-3B Fine-Tune",
         status: ls["training"] ?? "completed",
-        metadata: {
-          base_model: "nvidia/GR00T-N1.7-3B",
-          embodiment: "UNITREE_G1",
-          max_steps: "2000",
-          batch_size: "64",
-          gpu: "NVIDIA L40S",
-          final_loss: "0.051",
-          duration: "29m 42s",
-          throughput: "1.12 steps/sec",
-        },
+        metadata: trainingMeta,
       },
       {
         id: "validation",
@@ -225,17 +409,9 @@ fastify.get("/api/lineage", async () => {
       {
         id: "model",
         type: "model",
-        label: "g1-vla-finetune v1",
+        label: modelLabel,
         status: ls["model"] ?? "completed",
-        metadata: {
-          registry: "RHOAI Model Registry",
-          format: "ONNX",
-          uri: "s3://vla-training/vla-finetune/onnx",
-          base_model: "nvidia/GR00T-N1.7-3B",
-          dataset: "nvidia/PhysicalAI-Robotics-GR00T-Teleop-G1",
-          training_steps: "2000",
-          embodiment: "UNITREE_G1",
-        },
+        metadata: modelMeta,
       },
     ],
     edges: [
@@ -246,6 +422,11 @@ fastify.get("/api/lineage", async () => {
     ],
     links,
   };
+});
+
+fastify.get("/api/model-versions", async () => {
+  const versions = await fetchModelRegistryVersions(config.modelRegistryUrl);
+  return { versions };
 });
 
 fastify.get("/api/pipeline-runs", async () => {
@@ -276,16 +457,19 @@ fastify.get("/api/pipeline-runs", async () => {
         error?: { message?: string };
       }>;
     };
-    return {
-      runs: (data.runs ?? []).map((r) => ({
-        id: r.run_id,
-        name: r.display_name,
-        state: r.state,
-        createdAt: r.created_at,
-        finishedAt: r.finished_at ?? null,
-        error: r.error?.message ?? null,
-      })),
-    };
+    const runs = (data.runs ?? []).map((r) => ({
+      id: r.run_id,
+      name: r.display_name,
+      state: r.state,
+      createdAt: r.created_at,
+      finishedAt: r.finished_at ?? null,
+      error: r.error?.message ?? null,
+    }));
+    const latestRun = runs[0];
+    if (latestRun) {
+      stream.demoState.lastDspaRunState = latestRun.state;
+    }
+    return { runs };
   } catch (err) {
     log.warn({ err }, "pipeline-runs fetch failed");
     return { runs: [] };

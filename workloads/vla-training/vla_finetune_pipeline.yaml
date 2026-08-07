@@ -21,6 +21,8 @@ components:
           parameterType: STRING
         dataset_repo:
           parameterType: STRING
+        model_version:
+          parameterType: STRING
         s3_prefix:
           parameterType: STRING
     outputDefinitions:
@@ -87,7 +89,11 @@ deploymentSpec:
         - -c
         - 'set -euo pipefail
 
-          BASE_MODEL_REPO="$1"; DATASET_REPO="$2"; S3_PREFIX="$3"; OUTPUT_FILE="$4"
+          BASE_MODEL_REPO="$1"; DATASET_REPO="$2"; S3_PREFIX="$3"
+
+          MODEL_VERSION="$4"; OUTPUT_FILE="$5"
+
+          VERSIONED_PREFIX="${S3_PREFIX}/${MODEL_VERSION}"
 
 
           echo "=== VLA Data Prep ==="
@@ -96,7 +102,7 @@ deploymentSpec:
 
           echo "Dataset: ${DATASET_REPO}"
 
-          echo "S3 prefix: ${S3_PREFIX}"
+          echo "S3 prefix: ${VERSIONED_PREFIX}"
 
           echo "Start time: $(date -u)"
 
@@ -105,15 +111,15 @@ deploymentSpec:
 
           export VLA_DATASET_REPO="${DATASET_REPO}"
 
-          export VLA_S3_MODEL_PREFIX="${S3_PREFIX}/base-model"
+          export VLA_S3_MODEL_PREFIX="${VERSIONED_PREFIX}/base-model"
 
-          export VLA_S3_DATASET_PREFIX="${S3_PREFIX}/dataset"
+          export VLA_S3_DATASET_PREFIX="${VERSIONED_PREFIX}/dataset"
 
 
           python -m vla_training.data_prep
 
 
-          printf "%s" "${S3_PREFIX}" > "${OUTPUT_FILE}"
+          printf "%s" "${VERSIONED_PREFIX}" > "${OUTPUT_FILE}"
 
           echo "End time: $(date -u)"
 
@@ -122,6 +128,7 @@ deploymentSpec:
         - '{{$.inputs.parameters[''base_model_repo'']}}'
         - '{{$.inputs.parameters[''dataset_repo'']}}'
         - '{{$.inputs.parameters[''s3_prefix'']}}'
+        - '{{$.inputs.parameters[''model_version'']}}'
         - '{{$.outputs.parameters[''s3_prefix_out''].output_file}}'
         command:
         - /bin/bash
@@ -185,12 +192,12 @@ deploymentSpec:
             resourceCount: '1'
             resourceType: nvidia.com/gpu
             type: nvidia.com/gpu
-          cpuRequest: 14.0
-          memoryLimit: 118.11160064
-          memoryRequest: 68.719476736
-          resourceCpuRequest: '14'
-          resourceMemoryLimit: 110Gi
-          resourceMemoryRequest: 64Gi
+          cpuRequest: 6.0
+          memoryLimit: 60.129542144
+          memoryRequest: 51.539607552
+          resourceCpuRequest: '6'
+          resourceMemoryLimit: 56Gi
+          resourceMemoryRequest: 48Gi
     exec-vla-register-model-op:
       container:
         args:
@@ -200,14 +207,14 @@ deploymentSpec:
           $7\"; STEPS=\"$8\"; OUTPUT_FILE=\"$9\"\nMODEL_URI=\"s3://${S3_BUCKET}/${S3_PREFIX}/onnx\"\
           \n\nexport VLA_BASE_MODEL_REPO=\"${BASE_MODEL}\"\nexport VLA_DATASET_REPO=\"\
           ${DATASET}\"\nexport VLA_EMBODIMENT_TAG=\"${EMBODIMENT}\"\nexport VLA_MAX_STEPS=\"\
-          ${STEPS}\"\nexport DSPA_RUN_ID=\"${DSPA_RUN_ID:-unknown}\"\n\necho \"===\
-          \ VLA Model Registration ===\"\necho \"Model: ${MODEL_NAME} v${MODEL_VERSION}\"\
-          \necho \"URI: ${MODEL_URI}\"\necho \"Start time: $(date -u)\"\n\npython\
-          \ -m vla_training.register_model \\\n  --name \"${MODEL_NAME}\" \\\n  --uri\
-          \ \"${MODEL_URI}\" \\\n  --version \"${MODEL_VERSION}\" \\\n  --description\
-          \ \"GR00T N1.7-3B fine-tuned VLA for G1 teleop\"\n\necho \"REGISTERED\"\
-          \ > \"${OUTPUT_FILE}\"\necho \"End time: $(date -u)\"\necho \"=== VLA Model\
-          \ Registration: COMPLETE ===\""
+          ${STEPS}\"\nexport VLA_S3_CHECKPOINT_PREFIX=\"${S3_PREFIX}\"\nexport DSPA_RUN_ID=\"\
+          ${DSPA_RUN_ID:-unknown}\"\n\necho \"=== VLA Model Registration ===\"\necho\
+          \ \"Model: ${MODEL_NAME} v${MODEL_VERSION}\"\necho \"URI: ${MODEL_URI}\"\
+          \necho \"Start time: $(date -u)\"\n\npython -m vla_training.register_model\
+          \ \\\n  --name \"${MODEL_NAME}\" \\\n  --uri \"${MODEL_URI}\" \\\n  --version\
+          \ \"${MODEL_VERSION}\" \\\n  --description \"GR00T N1.7-3B fine-tuned VLA\
+          \ for G1 teleop\"\n\necho \"REGISTERED\" > \"${OUTPUT_FILE}\"\necho \"End\
+          \ time: $(date -u)\"\necho \"=== VLA Model Registration: COMPLETE ===\""
         - --
         - '{{$.inputs.parameters[''model_name'']}}'
         - '{{$.inputs.parameters[''model_version'']}}'
@@ -278,6 +285,8 @@ root:
               componentInputParameter: base_model_repo
             dataset_repo:
               componentInputParameter: dataset_repo
+            model_version:
+              componentInputParameter: model_version
             s3_prefix:
               componentInputParameter: s3_prefix
         taskInfo:
@@ -390,7 +399,7 @@ root:
         isOptional: true
         parameterType: STRING
 schemaVersion: 2.1.0
-sdkVersion: kfp-2.13.0
+sdkVersion: kfp-2.17.0
 ---
 platforms:
   kubernetes:
@@ -404,6 +413,7 @@ platforms:
               secretKey: MINIO_ROOT_USER
             - envVar: AWS_SECRET_ACCESS_KEY
               secretKey: MINIO_ROOT_PASSWORD
+            optional: false
             secretName: minio-credentials
             secretNameParameter:
               runtimeValue:
@@ -411,6 +421,7 @@ platforms:
           - keyToEnv:
             - envVar: HF_TOKEN
               secretKey: HF_TOKEN
+            optional: false
             secretName: hf-credentials
             secretNameParameter:
               runtimeValue:
@@ -433,6 +444,7 @@ platforms:
               secretKey: MINIO_ROOT_USER
             - envVar: AWS_SECRET_ACCESS_KEY
               secretKey: MINIO_ROOT_PASSWORD
+            optional: false
             secretName: minio-credentials
             secretNameParameter:
               runtimeValue:
@@ -440,6 +452,7 @@ platforms:
           - keyToEnv:
             - envVar: HF_TOKEN
               secretKey: HF_TOKEN
+            optional: false
             secretName: hf-credentials
             secretNameParameter:
               runtimeValue:
@@ -457,6 +470,7 @@ platforms:
               secretKey: MINIO_ROOT_USER
             - envVar: AWS_SECRET_ACCESS_KEY
               secretKey: MINIO_ROOT_PASSWORD
+            optional: false
             secretName: minio-credentials
             secretNameParameter:
               runtimeValue:
@@ -474,6 +488,7 @@ platforms:
               secretKey: MINIO_ROOT_USER
             - envVar: AWS_SECRET_ACCESS_KEY
               secretKey: MINIO_ROOT_PASSWORD
+            optional: false
             secretName: minio-credentials
             secretNameParameter:
               runtimeValue:

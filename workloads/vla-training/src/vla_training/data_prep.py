@@ -19,17 +19,30 @@ def _s3_has_files(s3, bucket: str, prefix: str, extensions: tuple[str, ...]) -> 
 
 
 def _download_and_upload(s3, bucket: str, repo_id: str, s3_prefix: str, revision: str | None) -> list[str]:
+    import time
     from huggingface_hub import snapshot_download
 
     hf_token = os.environ.get("HF_TOKEN")
     print(f"Downloading from HuggingFace: {repo_id}")
 
-    download_dir = snapshot_download(
-        repo_id=repo_id,
-        token=hf_token,
-        revision=revision,
-        repo_type="dataset" if "/" in repo_id and "GR00T-N1" not in repo_id else "model",
-    )
+    repo_type = "dataset" if "/" in repo_id and "GR00T-N1" not in repo_id else "model"
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            download_dir = snapshot_download(
+                repo_id=repo_id,
+                token=hf_token,
+                revision=revision,
+                repo_type=repo_type,
+            )
+            break
+        except Exception as exc:
+            if "429" in str(exc) and attempt < max_retries - 1:
+                wait = 60 * (2 ** attempt)
+                print(f"Rate limited (attempt {attempt + 1}/{max_retries}), waiting {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
 
     uploaded: list[str] = []
     download_path = Path(download_dir)

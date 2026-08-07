@@ -1,5 +1,5 @@
 // This project was developed with assistance from AI tools.
-import type { ArgoAppStatus, FleetMessage, FleetStatus, GovernanceStatus, LineageGraph, PipelineRun, ScenarioDetail, Topology } from "./types.js";
+import type { ArgoAppStatus, FleetMessage, FleetStatus, GovernanceStatus, LineageGraph, ModelVersion, PipelineRun, ScenarioDetail, Topology } from "./types.js";
 
 export async function fetchTopology(): Promise<Topology> {
   const resp = await fetch("/api/topology");
@@ -52,6 +52,13 @@ export async function fetchPipelineRuns(): Promise<PipelineRun[]> {
   if (!resp.ok) return [];
   const data = (await resp.json()) as { runs: PipelineRun[] };
   return data.runs ?? [];
+}
+
+export async function fetchModelVersions(): Promise<ModelVersion[]> {
+  const resp = await fetch("/api/model-versions");
+  if (!resp.ok) return [];
+  const data = (await resp.json()) as { versions: ModelVersion[] };
+  return data.versions ?? [];
 }
 
 export async function fetchArgoStatus(): Promise<ArgoAppStatus> {

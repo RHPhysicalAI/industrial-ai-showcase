@@ -3,7 +3,8 @@ kind: Kustomization
 namespace: robot-edge
 resources:
 - policy-version.yaml
-- openvla-server-imagestream.yaml
-- openvla-server-buildconfig.yaml
+- vault-static-secret-hf.yaml
+- vault-static-secret-storage.yaml
+- model-cache-pvc.yaml
 - openvla-server-deployment.yaml
 - openvla-server-service.yaml

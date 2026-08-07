@@ -137,12 +137,12 @@ class KustomizeGenerator:
 ### What will change
 
 This promotion will update the policy-version ConfigMap in namespace `{promotion.namespace or promotion.factory}`.
-The VLA model (`openvla-server`) is already deployed and serving `{promotion.model_uri}`.
+After merge, the VLA serving endpoint will load model artifacts from `{promotion.model_uri}`.
 
 ### Impact
 
 - **UI Display**: Console will show updated version ({promotion.model_version})
-- **Deployment**: No pod restarts (VLA server already running)
+- **Deployment**: Argo CD syncs after PR merge
 - **Rollback**: Revert this PR if needed
 """
 

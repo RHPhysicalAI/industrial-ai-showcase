@@ -15,9 +15,9 @@ from vla_training.constants import (
 def _configure_gpu_step(task: dsl.PipelineTask) -> None:
     task.set_accelerator_type("nvidia.com/gpu")
     task.set_accelerator_limit(GPU_LIMIT)
-    task.set_cpu_request("14")
-    task.set_memory_request("64Gi")
-    task.set_memory_limit("110Gi")
+    task.set_cpu_request("6")
+    task.set_memory_request("48Gi")
+    task.set_memory_limit("56Gi")
     task.set_env_variable("PYTHONUNBUFFERED", "1")
     task.set_env_variable("S3_ENDPOINT", S3_ENDPOINT)
     task.set_env_variable("S3_BUCKET", "vla-training")
@@ -66,6 +66,7 @@ def vla_data_prep_op(
     base_model_repo: str,
     dataset_repo: str,
     s3_prefix: str,
+    model_version: str,
     s3_prefix_out: dsl.OutputPath(str),
 ):
     """Download GR00T N1.7-3B base model and training dataset from HuggingFace, cache in S3."""
@@ -75,28 +76,31 @@ def vla_data_prep_op(
         args=[
             "-c",
             "set -euo pipefail\n"
-            'BASE_MODEL_REPO="$1"; DATASET_REPO="$2"; S3_PREFIX="$3"; OUTPUT_FILE="$4"\n'
+            'BASE_MODEL_REPO="$1"; DATASET_REPO="$2"; S3_PREFIX="$3"\n'
+            'MODEL_VERSION="$4"; OUTPUT_FILE="$5"\n'
+            'VERSIONED_PREFIX="${S3_PREFIX}/${MODEL_VERSION}"\n'
             "\n"
             'echo "=== VLA Data Prep ==="\n'
             'echo "Base model: ${BASE_MODEL_REPO}"\n'
             'echo "Dataset: ${DATASET_REPO}"\n'
-            'echo "S3 prefix: ${S3_PREFIX}"\n'
+            'echo "S3 prefix: ${VERSIONED_PREFIX}"\n'
             'echo "Start time: $(date -u)"\n'
             "\n"
             'export VLA_BASE_MODEL_REPO="${BASE_MODEL_REPO}"\n'
             'export VLA_DATASET_REPO="${DATASET_REPO}"\n'
-            'export VLA_S3_MODEL_PREFIX="${S3_PREFIX}/base-model"\n'
-            'export VLA_S3_DATASET_PREFIX="${S3_PREFIX}/dataset"\n'
+            'export VLA_S3_MODEL_PREFIX="${VERSIONED_PREFIX}/base-model"\n'
+            'export VLA_S3_DATASET_PREFIX="${VERSIONED_PREFIX}/dataset"\n'
             "\n"
             "python -m vla_training.data_prep\n"
             "\n"
-            'printf "%s" "${S3_PREFIX}" > "${OUTPUT_FILE}"\n'
+            'printf "%s" "${VERSIONED_PREFIX}" > "${OUTPUT_FILE}"\n'
             'echo "End time: $(date -u)"\n'
             'echo "=== VLA Data Prep: COMPLETE ==="',
             "--",
             base_model_repo,
             dataset_repo,
             s3_prefix,
+            model_version,
             s3_prefix_out,
         ],
     )
@@ -213,6 +217,7 @@ def vla_register_model_op(
             'export VLA_DATASET_REPO="${DATASET}"\n'
             'export VLA_EMBODIMENT_TAG="${EMBODIMENT}"\n'
             'export VLA_MAX_STEPS="${STEPS}"\n'
+            'export VLA_S3_CHECKPOINT_PREFIX="${S3_PREFIX}"\n'
             'export DSPA_RUN_ID="${DSPA_RUN_ID:-unknown}"\n'
             "\n"
             'echo "=== VLA Model Registration ==="\n'
@@ -263,6 +268,7 @@ def vla_finetune_pipeline(
         base_model_repo=base_model_repo,
         dataset_repo=dataset_repo,
         s3_prefix=s3_prefix,
+        model_version=model_version,
     )
     _configure_cpu_step(data_prep_task)
     data_prep_task.set_cpu_request("4")
@@ -282,6 +288,8 @@ def vla_finetune_pipeline(
         num_gpus=num_gpus,
     )
     _configure_gpu_step(fine_tune_task)
+    # nodeSelector omitted — scheduler picks any available GPU node.
+    # Override in compiled YAML per-cluster if mixed GPU types require pinning.
     kubernetes.set_timeout(fine_tune_task, 7200)
     fine_tune_task.set_caching_options(False)
 

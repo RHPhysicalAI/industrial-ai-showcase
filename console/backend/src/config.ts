@@ -17,6 +17,7 @@ export interface AppConfig {
   clusterAppsDomain: string;
   agenticOrchestratorUrl: string;
   auditServiceUrl: string;
+  modelRegistryUrl: string;
 }
 
 export function loadConfig(): AppConfig {
@@ -47,5 +48,8 @@ export function loadConfig(): AppConfig {
     auditServiceUrl:
       process.env.AUDIT_SERVICE_URL ??
       "http://audit-service.agentic-ops.svc.cluster.local:8090",
+    modelRegistryUrl:
+      process.env.MODEL_REGISTRY_URL ??
+      "http://wbc-model-registry.rhoai-model-registries.svc:8080",
   };
 }

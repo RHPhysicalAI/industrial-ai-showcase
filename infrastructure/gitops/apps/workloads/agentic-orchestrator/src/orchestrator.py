@@ -276,20 +276,33 @@ def custom_tool_node(state: AgentState) -> dict:
 
                     factory = tool_args.get("factory")
                     model_version = tool_args.get("model_version")
-                    model_name = "vla-warehouse"  # Default model name
+                    model_name = tool_args.get("model_name", "g1-vla-finetune")
 
-                    # Showcase mode: use HF VLA models instead of MLflow/MinIO
-                    SHOWCASE_MODE = os.getenv("SHOWCASE_MODE", "true").lower() == "true"
-                    HF_MODEL_VERSIONS = {
-                        "v1.4": "hf://openvla/openvla-7b",
-                        "v1.5": "hf://openvla/openvla-7b",
-                        "v1.6": "hf://openvla/openvla-7b",
-                    }
+                    # Resolve model URI: registry first, HF fallback
+                    model_uri = None
+                    MCP_FLEET_URL = os.getenv("MCP_FLEET_URL", "http://mcp-fleet-server.agentic-ops.svc.cluster.local:8080")
+                    try:
+                        import httpx as _httpx
+                        _resp = _httpx.get(
+                            f"{MCP_FLEET_URL}/tools/get_available_model_versions",
+                            params={"model_name": model_name},
+                            timeout=5.0,
+                        )
+                        if _resp.status_code == 200:
+                            for _v in _resp.json().get("versions", []):
+                                if _v.get("version") == model_version and _v.get("uri"):
+                                    model_uri = _v["uri"]
+                                    break
+                    except Exception:
+                        pass
 
-                    if SHOWCASE_MODE:
-                        model_uri = HF_MODEL_VERSIONS.get(model_version, HF_MODEL_VERSIONS["v1.4"])
-                    else:
-                        model_uri = f"s3://mlflow/models/{model_name}/{model_version}"
+                    if not model_uri:
+                        HF_MODEL_VERSIONS = {
+                            "v1.4": "hf://openvla/openvla-7b",
+                            "v1.5": "hf://openvla/openvla-7b",
+                            "v1.6": "hf://openvla/openvla-7b",
+                        }
+                        model_uri = HF_MODEL_VERSIONS.get(model_version, f"s3://mlflow/models/{model_name}/{model_version}")
 
                     # Get factory namespace (K8s-compliant, e.g., "factory-b")
                     # factory might be display name with spaces (e.g., "Factory B")
@@ -333,12 +346,13 @@ def custom_tool_node(state: AgentState) -> dict:
                     robot_count = factory_config_result.get("robot_count", 0)
                     factory_display_name = factory_config_result.get("name", factory)
 
+                    target_version = f"{model_name}-{model_version}"
                     blast_radius = {
                         "factory": factory_display_name,
                         "namespace": factory_namespace,
                         "robot_count": robot_count,
                         "current_version": current_version,
-                        "target_version": model_version,
+                        "target_version": target_version,
                         "impact_level": "low" if robot_count <= 3 else "medium" if robot_count <= 10 else "high"
                     }
                 except Exception as e:
@@ -427,44 +441,41 @@ def custom_tool_node(state: AgentState) -> dict:
     from langgraph.prebuilt import ToolNode
     tool_executor = ToolNode(read_only_tools)
 
-    # Execute tools and capture trace
+    # Execute all tool calls once via ToolNode and capture trace
     tool_call_trace = state.get("tool_call_trace", [])
+
+    start_time_ms = int(time.time() * 1000)
+    timestamp = datetime.now().isoformat()
+
+    result = tool_executor.invoke(state)
+
+    end_time_ms = int(time.time() * 1000)
+    duration_ms = end_time_ms - start_time_ms
+
+    tool_messages = result.get("messages", [])
+    tool_msg_by_id = {
+        msg.tool_call_id: msg for msg in tool_messages
+        if hasattr(msg, "tool_call_id")
+    }
 
     for tool_call in last_message.tool_calls:
         tool_name = tool_call.get("name")
         tool_args = tool_call.get("args", {})
-
-        # Record start time
-        start_time_ms = int(time.time() * 1000)
-        timestamp = datetime.now().isoformat()
-
-        # Execute via ToolNode
-        result = tool_executor.invoke(state)
-
-        # Record end time and result
-        end_time_ms = int(time.time() * 1000)
-        duration_ms = end_time_ms - start_time_ms
-
-        # Extract response summary from the ToolMessage
-        tool_messages = result.get("messages", [])
         response_summary = "No response"
-        if tool_messages:
-            last_tool_msg = tool_messages[-1]
-            if hasattr(last_tool_msg, 'content'):
-                response_summary = str(last_tool_msg.content)[:200]  # First 200 chars
+        msg = tool_msg_by_id.get(tool_call.get("id"))
+        if msg and hasattr(msg, "content"):
+            response_summary = str(msg.content)[:200]
 
-        # Add to trace
         tool_call_trace.append({
             "tool_name": tool_name,
             "arguments": tool_args,
             "timestamp": timestamp,
             "duration_ms": duration_ms,
             "response_summary": response_summary,
-            "success": True  # If we got here, no exception
+            "success": True,
         })
 
-        # Update state with trace
-        state["tool_call_trace"] = tool_call_trace
+    state["tool_call_trace"] = tool_call_trace
 
     return result
 

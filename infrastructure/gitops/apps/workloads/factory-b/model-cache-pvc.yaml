@@ -1,0 +1,15 @@
+# This project was developed with assistance from AI tools.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-cache
+  namespace: factory-b
+  labels:
+    app: openvla-server
+    app.kubernetes.io/part-of: factory-b
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi

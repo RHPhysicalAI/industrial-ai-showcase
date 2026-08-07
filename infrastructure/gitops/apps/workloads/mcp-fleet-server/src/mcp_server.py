@@ -33,6 +33,7 @@ app = FastAPI(
 FLEET_MANAGER_URL = os.getenv("FLEET_MANAGER_URL", "http://fleet-manager.fleet-ops.svc.cluster.local:8080")
 CONSOLE_BACKEND_URL = os.getenv("CONSOLE_BACKEND_URL", "http://showcase-console-backend.fleet-ops.svc.cluster.local:8090")
 GITHUB_BASE_BRANCH = os.getenv("GITHUB_BASE_BRANCH", "main")
+MODEL_REGISTRY_URL = os.getenv("MODEL_REGISTRY_URL", "http://wbc-model-registry.rhoai-model-registries.svc:8080")
 
 # Showcase mode: use HF models instead of MLflow/MinIO
 # Set SHOWCASE_MODE=false for production deployments with real training pipeline
@@ -46,6 +47,54 @@ HF_MODEL_VERSIONS = {
     "v1.5": "hf://openvla/openvla-7b",
     "v1.6": "hf://openvla/openvla-7b",
 }
+
+
+async def _resolve_model_uri_from_registry(model_name: str, model_version: str) -> str | None:
+    """Look up model artifact URI from RHOAI Model Registry. Returns None on failure."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            base = MODEL_REGISTRY_URL
+            resp = await client.get(
+                f"{base}/api/model_registry/v1alpha3/registered_models",
+                params={"name": model_name},
+            )
+            if resp.status_code != 200:
+                return None
+            items = resp.json().get("items", [])
+            if not items:
+                return None
+            reg_model_id = items[0]["id"]
+
+            versions_resp = await client.get(
+                f"{base}/api/model_registry/v1alpha3/registered_models/{reg_model_id}/versions",
+                params={"order_by": "CREATE_TIME", "sort_order": "DESC", "page_size": "20"},
+            )
+            if versions_resp.status_code != 200:
+                return None
+
+            for v in versions_resp.json().get("items", []):
+                if v.get("name") == model_version:
+                    props = v.get("customProperties", {})
+                    uri = props.get("uri", {}).get("string_value", "")
+                    if uri:
+                        return uri
+                    break
+
+            # Fallback: check model artifacts for the matched version
+            for v in versions_resp.json().get("items", []):
+                if v.get("name") == model_version:
+                    arts_resp = await client.get(
+                        f"{base}/api/model_registry/v1alpha3/model_versions/{v['id']}/artifacts",
+                    )
+                    if arts_resp.status_code == 200:
+                        for art in arts_resp.json().get("items", []):
+                            art_uri = art.get("uri", "")
+                            if art_uri:
+                                return art_uri
+                    break
+        return None
+    except Exception:
+        return None
 
 
 # ========== READ-ONLY TOOLS ==========
@@ -76,23 +125,21 @@ async def get_fleet_status(factory: Optional[str] = None):
         }
     """
     try:
-        # Call console backend (which has Fleet Manager integration)
-        client = httpx.Client(timeout=10.0)
-        resp = client.get(f"{CONSOLE_BACKEND_URL}/api/fleet")
-        resp.raise_for_status()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{CONSOLE_BACKEND_URL}/api/fleet")
+            resp.raise_for_status()
 
-        fleet_data = resp.json()
+            fleet_data = resp.json()
 
-        # Filter by factory if specified
-        if factory:
-            factories = [
-                f for f in fleet_data.get("factories", [])
-                if f.get("name", "").lower() == factory.lower()
-                or f.get("namespace", "") == factory
-            ]
-            return {"factories": factories}
+            if factory:
+                factories = [
+                    f for f in fleet_data.get("factories", [])
+                    if f.get("name", "").lower() == factory.lower()
+                    or f.get("namespace", "") == factory
+                ]
+                return {"factories": factories}
 
-        return fleet_data
+            return fleet_data
 
     except httpx.HTTPError as e:
         raise HTTPException(status_code=503, detail=f"Fleet Manager unavailable: {str(e)}")
@@ -233,10 +280,78 @@ async def get_anomaly_history(factory: str, hours: int = 24):
     }
 
 
+@app.get("/tools/get_available_model_versions")
+async def get_available_model_versions(model_name: str = "g1-vla-finetune"):
+    """
+    List model versions registered in RHOAI Model Registry (read-only).
+
+    Use this to discover which trained model versions are available
+    for promotion before calling promote_policy_version.
+
+    Args:
+        model_name: Registered model name (default: g1-vla-finetune)
+
+    Returns:
+        Available versions with metadata (URI, training info, timestamps)
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            base = MODEL_REGISTRY_URL
+            resp = await client.get(
+                f"{base}/api/model_registry/v1alpha3/registered_models",
+                params={"name": model_name},
+            )
+            if resp.status_code != 200:
+                return {"model_name": model_name, "versions": [], "error": "Registry unavailable"}
+            items = resp.json().get("items", [])
+            if not items:
+                return {"model_name": model_name, "versions": [], "error": "Model not found"}
+            reg_model_id = items[0]["id"]
+
+            versions_resp = await client.get(
+                f"{base}/api/model_registry/v1alpha3/registered_models/{reg_model_id}/versions",
+                params={"order_by": "CREATE_TIME", "sort_order": "DESC", "page_size": "20"},
+            )
+            if versions_resp.status_code != 200:
+                return {"model_name": model_name, "versions": [], "error": "Failed to fetch versions"}
+
+            versions = []
+            for v in versions_resp.json().get("items", []):
+                props = v.get("customProperties", {})
+                metadata = {
+                    k: prop.get("string_value", "")
+                    for k, prop in props.items()
+                    if isinstance(prop, dict) and "string_value" in prop
+                }
+
+                uri = ""
+                arts_resp = await client.get(
+                    f"{base}/api/model_registry/v1alpha3/model_versions/{v['id']}/artifacts",
+                )
+                if arts_resp.status_code == 200:
+                    for art in arts_resp.json().get("items", []):
+                        if art.get("uri"):
+                            uri = art["uri"]
+                            break
+
+                versions.append({
+                    "version": v.get("name", ""),
+                    "id": v.get("id", ""),
+                    "uri": uri,
+                    "description": v.get("description", ""),
+                    "created_at": v.get("createTimeSinceEpoch", ""),
+                    "metadata": metadata,
+                })
+
+            return {"model_name": model_name, "versions": versions}
+    except Exception as exc:
+        return {"model_name": model_name, "versions": [], "error": str(exc)}
+
+
 # ========== STATE-MODIFYING TOOLS ==========
 
 @app.post("/tools/promote_policy_version")
-async def promote_policy_version(factory: str, model_version: str):
+async def promote_policy_version(factory: str, model_version: str, model_name_param: str = "g1-vla-finetune"):
     """
     Promote model policy version to factory (state-modifying).
 
@@ -276,15 +391,16 @@ async def promote_policy_version(factory: str, model_version: str):
         config = await get_factory_config(factory)
         current_version = config.get("policy_version", "unknown")
         factory_namespace = config.get("namespace")  # Get actual namespace (e.g., "factory-b")
-        model_name = "vla-warehouse"  # Hardcoded for now - could extract from policy_version
+        model_name = model_name_param or "g1-vla-finetune"
 
     except HTTPException as e:
         raise HTTPException(status_code=400, detail=f"Invalid factory: {e.detail}")
 
-    # 2. Construct model URI
-    # Showcase mode: use HF models (no training required)
-    # Production mode: use MLflow S3 storage (requires training pipeline)
-    if SHOWCASE_MODE:
+    # 2. Resolve model URI: registry first, HF fallback for demo versions
+    registry_uri = await _resolve_model_uri_from_registry(model_name, model_version)
+    if registry_uri:
+        model_uri = registry_uri
+    elif SHOWCASE_MODE:
         model_uri = HF_MODEL_VERSIONS.get(model_version, HF_MODEL_VERSIONS["v1.4"])
     else:
         model_uri = f"s3://mlflow/models/{model_name}/{model_version}"
@@ -445,6 +561,20 @@ async def list_tools():
                     }
                 },
                 "endpoint": "/tools/get_anomaly_history"
+            },
+
+            {
+                "name": "get_available_model_versions",
+                "description": "List model versions registered in RHOAI Model Registry. Use to discover trained models available for promotion before calling promote_policy_version.",
+                "state_modifying": False,
+                "parameters": {
+                    "model_name": {
+                        "type": "string",
+                        "description": "Registered model name (default: g1-vla-finetune)",
+                        "required": False
+                    }
+                },
+                "endpoint": "/tools/get_available_model_versions"
             },
 
             # State-modifying tool

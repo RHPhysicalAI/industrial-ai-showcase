@@ -75,8 +75,27 @@ def register_model(
         return mv.id
 
 
+def _training_metrics_from_s3() -> dict:
+    """Read training metrics JSON written by fine_tune step."""
+    import json
+
+    try:
+        from vla_training.config import VlaTrainingConfig
+        cfg = VlaTrainingConfig()
+        if not cfg.s3.enabled:
+            return {}
+        s3 = cfg.s3.create_client()
+        obj = s3.get_object(
+            Bucket=cfg.s3.bucket,
+            Key=f"{cfg.s3.checkpoint_prefix}/training_metrics.json",
+        )
+        return json.loads(obj["Body"].read())
+    except Exception:
+        return {}
+
+
 def _lineage_metadata() -> dict:
-    """Collect lineage metadata from environment (set by pipeline steps)."""
+    """Collect lineage metadata from environment and training metrics from S3."""
     meta = {}
     env_map = {
         "DSPA_RUN_ID": "pipeline_run_id",
@@ -89,6 +108,12 @@ def _lineage_metadata() -> dict:
         val = os.environ.get(env_key, "")
         if val:
             meta[meta_key] = val
+
+    metrics = _training_metrics_from_s3()
+    for key in ("final_loss", "duration", "throughput", "training_steps_completed"):
+        if metrics.get(key):
+            meta[key] = metrics[key]
+
     return meta
 
 
