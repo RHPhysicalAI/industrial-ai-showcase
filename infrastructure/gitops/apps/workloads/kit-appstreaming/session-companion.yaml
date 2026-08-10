@@ -226,7 +226,7 @@ spec:
           command: ["/bin/bash", "/scripts/reconcile.sh"]
           env:
             - name: INGRESS_DOMAIN
-              value: apps.jary-qs-0323.7w5j.p1.openshiftapps.com
+              value: apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
             - name: NAMESPACE
               value: omni-streaming
             - name: POLL_INTERVAL

@@ -58,7 +58,7 @@ data:
 
     fingerprint
     lt-cred-mech
-    realm=omni-streaming.apps.jary-qs-0323.7w5j.p1.openshiftapps.com
+    realm=omni-streaming.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
     user=kasdemo:TURN_PASSWORD_PLACEHOLDER
 
     no-multicast-peers
