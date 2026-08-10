@@ -51,6 +51,7 @@ VSO projects these KV paths into Kubernetes Secrets in the consumer namespaces. 
 vault kv put kv/mlflow/s3 AWS_ACCESS_KEY_ID=mlflow-root AWS_SECRET_ACCESS_KEY=phase-0-placeholder-rotate-in-s08
 vault kv put kv/obs/s3 AWS_ACCESS_KEY_ID=obs-root AWS_SECRET_ACCESS_KEY=phase-0-placeholder-rotate-in-s08
 vault kv put kv/loki/s3 access_key_id=obs-root access_key_secret=phase-0-placeholder-rotate-in-s08 bucketnames=loki-logs endpoint=http://minio.obs-storage.svc.cluster.local:9000 region=us-east-1
+vault kv put kv/coturn/credentials password=phase-0-placeholder-rotate-before-demo
 ```
 
 The `VaultStaticSecret` CRs in `apps/platform/mlflow/`, `apps/observability/storage/`, and `apps/observability/loki/` reference these paths.

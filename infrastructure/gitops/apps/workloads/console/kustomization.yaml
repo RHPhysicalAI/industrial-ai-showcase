@@ -11,3 +11,4 @@ resources:
   - networkpolicies.yaml
   - argo-rbac.yaml
   - rbac-configmap-reader.yaml
+  - vault-static-secret-coturn.yaml

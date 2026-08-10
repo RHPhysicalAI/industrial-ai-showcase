@@ -12,4 +12,5 @@ resources:
   - default-sa-anyuid.yaml
   - session-companion.yaml
   - coturn.yaml
+  - vault-static-secret-coturn.yaml
   - warehouse-scenario.yaml

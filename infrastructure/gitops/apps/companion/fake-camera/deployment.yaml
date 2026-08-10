@@ -39,7 +39,7 @@ spec:
             # fleet-cluster-ca-cert from hub fleet-ops into this namespace —
             # see README.
             - name: KAFKA_BOOTSTRAP_SERVERS
-              value: fleet-kafka-bootstrap-fleet-ops.apps.jary-qs-0323.7w5j.p1.openshiftapps.com:443
+              value: fleet-kafka-bootstrap-fleet-ops.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com:443
             - name: KAFKA_SECURITY_PROTOCOL
               value: SSL
             - name: KAFKA_CA_CERT_PATH

@@ -40,9 +40,9 @@ spec:
             - name: OUTPUT_USDA
               value: /tmp/warehouse_scene_pack.usda
             - name: NUCLEUS_ROOT
-              value: omniverse://nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com/Projects/showcase/assets/Isaac/6.0
+              value: omniverse://nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com/Projects/showcase/assets/Isaac/6.0
             - name: NUCLEUS_TARGET
-              value: omniverse://nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com/Projects/showcase/scene-packs/warehouse_scene_pack.usda
+              value: omniverse://nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com/Projects/showcase/scene-packs/warehouse_scene_pack.usda
             - name: NUCLEUS_UPLOAD
               value: "1"
             - name: NUCLEUS_USER

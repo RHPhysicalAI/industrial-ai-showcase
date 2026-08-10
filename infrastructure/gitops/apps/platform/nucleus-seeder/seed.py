@@ -34,7 +34,7 @@ STRIP_PREFIX = S3_PREFIX
 LOCAL_STAGING = pathlib.Path(os.environ.get("LOCAL_STAGING", "/staging"))
 CUSTOM_SCENE = pathlib.Path(os.environ.get("CUSTOM_SCENE_DIR", "/scene"))
 
-NUCLEUS_HOST = os.environ.get("NUCLEUS_HOST", "nucleus.apps.jary-qs-0323.7w5j.p1.openshiftapps.com")
+NUCLEUS_HOST = os.environ.get("NUCLEUS_HOST", "nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com")
 NUCLEUS_USER = os.environ.get("NUCLEUS_USER", "omniverse")
 NUCLEUS_PASS = os.environ.get("NUCLEUS_PASS", "")
 NUCLEUS_ROOT = os.environ.get("NUCLEUS_ROOT", "/Projects/showcase/custom")
