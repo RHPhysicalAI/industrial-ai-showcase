@@ -60,6 +60,7 @@ class OpenvlaAdapter:
         self._processor = AutoProcessor.from_pretrained(self._weights, trust_remote_code=True)
         self._model = AutoModelForVision2Seq.from_pretrained(
             self._weights,
+            attn_implementation="eager",
             torch_dtype=dtype,
             low_cpu_mem_usage=True,
             trust_remote_code=True,

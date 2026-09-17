@@ -2,6 +2,13 @@
 .env
 .env.*
 !.env.example
+*.kubeconfig
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.csr
 
 LAST_CHANGES.md
 PLAN.md

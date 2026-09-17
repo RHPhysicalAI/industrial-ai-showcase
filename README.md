@@ -31,3 +31,6 @@ In active development. Architecture docs are living, and components land increme
 - `docs/07-decisions.md` — ADR log.
 - `docs/plans/` — per-phase tactical plans, exit reviews.
 - `infrastructure/baseline/` — current cluster state snapshots.
+- `roadmaps/prereq.md` — prerequisite roadmap for the hosted `demo.redhat.com` SNO and separate cloud VLA VM. The older Fedora/KVM path is historical and unsupported by the checker.
+- `tools/companion-install/README.md` — self-managed Fedora/KVM Companion SNO installation guide.
+- `tools/demo-redhat-sno/README.md` — hosted `demo.redhat.com` SNO configuration and baseline guide.
