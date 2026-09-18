@@ -23,9 +23,12 @@ if TYPE_CHECKING:
 
 COORDS: dict[str, tuple[float, float, float, float]] = {
     "dock-a": (-22.82, 5.8, 0.0, 90.0),
-    "aisle-3-approach": (-16.82, 5.8, 0.0, 90.0),
+    # These names match workloads/warehouse/warehouse-topology.yaml.  The
+    # coordinates remain in the scene overlay's authored frame.
+    "aisle-3-west": (-16.82, 5.8, 0.0, 90.0),
     "aisle-3-end": (-7.82, 5.8, 0.0, 90.0),
-    "dock-b-3": (4.18, 5.8, 0.0, 90.0),
+    "dock-b": (4.18, 5.8, 0.0, 90.0),
+    "aisle-4-west": (-16.82, 5.8, 0.0, 90.0),
     "aisle-4-turn-in": (-7.82, 5.8, 0.0, 180.0),
     "aisle-4-end": (-7.82, 27.8, 0.0, 180.0),
     "aisle-4-turn-out": (-7.82, 27.8, 0.0, 90.0),
@@ -33,14 +36,14 @@ COORDS: dict[str, tuple[float, float, float, float]] = {
 }
 
 ROUTES: dict[str, list[str]] = {
-    "aisle-3": ["dock-a", "aisle-3-approach", "aisle-3-end", "dock-b-3"],
+    "aisle-3": ["dock-a", "aisle-3-west", "aisle-3-end", "dock-b"],
     "aisle-4": [
-        "aisle-3-approach", "aisle-3-end", "aisle-4-turn-in",
+        "dock-a", "aisle-4-west", "aisle-3-end", "aisle-4-turn-in",
         "aisle-4-end", "aisle-4-turn-out", "aisle-4-exit",
     ],
 }
 
-APPROACH_POINTS = {"aisle-3-approach"}
+APPROACH_POINTS = {"aisle-3-west", "aisle-4-west"}
 
 ANGULAR_SPEED_DPS = 90.0
 
