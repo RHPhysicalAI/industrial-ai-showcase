@@ -45,14 +45,17 @@ spec:
             - name: LOCAL_STAGING
               value: /staging
             - name: NUCLEUS_HOST
-              value: nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com
+              # Use the in-cluster Nucleus API endpoint. The public Route is
+              # for external clients and is not reliable for in-cluster
+              # omni.client uploads during initial bootstrap.
+              value: nucleus-api.omniverse-nucleus.svc.cluster.local:3009
             - name: NUCLEUS_USER
               value: omniverse
             - name: NUCLEUS_PASS
               valueFrom:
                 secretKeyRef:
                   name: nucleus-passwords
-                  key: master-password
+                  key: service-password
             - name: NUCLEUS_ROOT
               value: /Projects/showcase/custom
           resources:

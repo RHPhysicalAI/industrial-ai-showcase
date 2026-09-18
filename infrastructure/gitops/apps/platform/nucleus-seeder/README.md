@@ -25,7 +25,7 @@ Co-located with its Kubernetes `Job` + `ConfigMap` in this directory (deployment
 | `NUCLEUS_HOST` | `nucleus-api.omniverse-nucleus.svc.cluster.local:3009` | Nucleus API service. In-cluster — bypasses the Route. |
 | `NUCLEUS_USER` | `omniverse` | Service user in `nucleus-passwords` Secret. |
 | `NUCLEUS_PASS` | — | Pulled from `nucleus-passwords.service-password`. |
-| `NUCLEUS_ROOT` | `/Projects/showcase/assets/Isaac/6.0` | Path root on Nucleus. Scenes load via `omniverse://.../Projects/showcase/assets/Isaac/6.0/Isaac/Environments/Digital_Twin_Warehouse/small_warehouse_digital_twin.usd`. |
+| `NUCLEUS_ROOT` | `/Projects/showcase/custom` | Path root for the seeded asset tree and `Warehouse_edit.usd` scene used by the standalone Isaac Sim workload. |
 
 ## Re-running
 
