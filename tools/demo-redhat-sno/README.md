@@ -23,6 +23,7 @@ The VLA VM is a separate prerequisite. Its IP only identifies the machine; it do
 
 - `.env.example` — variable names and safe placeholders; copy to the ignored `.env`.
 - `capture-baseline.sh` — read-only SNO inventory and capability capture.
+- `deploy-workload.sh` — applies the first hosted-SNO workload slice and copies the Hub Kafka CA certificate into the Companion namespace.
 - `.gitignore` — prevents local kubeconfigs and environment configuration from being committed.
 
 ## Required demo handoff
@@ -67,6 +68,34 @@ KUBECONFIG="$DEMO_SNO_KUBECONFIG" oc get clusterversion
 KUBECONFIG="$DEMO_SNO_KUBECONFIG" oc get nodes -o wide
 KUBECONFIG="$DEMO_SNO_KUBECONFIG" oc get clusteroperators
 KUBECONFIG="$DEMO_SNO_KUBECONFIG" oc get storageclass
+```
+
+## Deploy the first hosted-SNO workload slice
+
+After the baseline is healthy and the Hub Kafka route is available, apply the
+hosted overlay:
+
+```bash
+source tools/demo-redhat-sno/.env
+tools/demo-redhat-sno/deploy-workload.sh
+```
+
+This applies the Fake Camera, Mission Dispatcher, and policy-version resources.
+It builds both images from the public `rhkp` fork, configures the Hub Kafka
+external Route, points Mission Dispatcher at the separate cloud VLA VM, and
+copies only the Hub Kafka CA certificate needed by Fake Camera. The Kafka and
+VLA endpoint values are created as local runtime ConfigMaps from the ignored
+`.env`; they are deliberately not embedded in the GitOps overlay. The script
+does not install LVMS, KubeVirt, Compliance Operator, a PLC VM, or the old
+Fedora/bare-metal Companion stack.
+
+Inspect the result with:
+
+```bash
+oc get builds -A
+oc get pods -n warehouse-edge
+oc get pods -n robot-edge
+oc get routes -n warehouse-edge
 ```
 
 ## What we install on the hosted SNO
@@ -144,6 +173,17 @@ The ACM sequence is:
 
 The current ACM manifests use the name `companion`. If the demo cluster is registered as `demo-redhat-sno`, the ACM resources and selectors must be parameterized or overlaid before applying them.
 
+### Hosted-demo ACM permission note
+
+Some hosted SNO providers preinstall an ACM klusterlet agent. The one-time
+import still requires cluster-scoped CRD and RBAC operations on the SNO. A
+`dedicated-admin` account may be able to log in and deploy workloads but still
+be forbidden from applying the import payload. In that case, have the demo
+provider or a cluster administrator apply the generated `crds.yaml` and
+`import.yaml`, or provide an approved ACM enrollment workflow. Do not work
+around this by granting partial hand-written RBAC; the import payload must be
+applied consistently.
+
 ## Preflight
 
 Use the repository checker against the hosted kubeconfig:
@@ -157,4 +197,7 @@ python3 tools/preflight/check.py \
   --color always
 ```
 
-The `fedora` scope is not applicable to this hosted path. The checker should eventually have a hosted-SNO profile that treats KubeVirt, LVMS, and compliance as optional rather than blocking.
+The `fedora` scope is not applicable to this hosted path. The hosted-SNO
+profiles treat KubeVirt, LVMS, and compliance capabilities as optional rather
+than blocking; the first workload slice only requires the hosted cluster,
+storage, namespaces, Hub Kafka CA, and cloud VLA endpoint.

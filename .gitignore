@@ -52,3 +52,4 @@ console/frontend/*.d.ts
 .DS_Store
 Thumbs.db
 .coverage
+.codegraph/

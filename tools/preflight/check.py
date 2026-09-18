@@ -615,6 +615,9 @@ class PreflightChecker:
                     ("companion.robot-edge", "namespace/robot-edge", None),
                     ("companion.warehouse-edge", "namespace/warehouse-edge", None),
                 ),
+                optional_ids={"companion.kubevirt"}
+                if self.profile in {"basic-infra", "demo-workload", "agentic"}
+                else None,
             )
             if self.profile in {"demo-workload", "factory", "agentic"}:
                 self.check_deployments(scope, kubeconfig, DEMO_WORKLOAD_COMPANION_DEPLOYMENTS)
@@ -737,8 +740,11 @@ class PreflightChecker:
         scope: str,
         kubeconfig: str | None,
         resources: Iterable[tuple[str, str, str | None]],
+        optional_ids: set[str] | None = None,
     ) -> None:
+        optional_ids = optional_ids or set()
         for check_id, resource, namespace in resources:
+            optional = check_id in optional_ids
             args = ["get", resource, "-o", "json"]
             if namespace:
                 args.extend(["-n", namespace])
@@ -758,11 +764,19 @@ class PreflightChecker:
             self.add(
                 check_id,
                 scope,
-                "blocking",
-                "pass" if ok and ready else "fail",
-                f"{resource} is present and ready" if ok and ready else f"{resource} is missing or not ready",
+                "warning" if optional else "blocking",
+                "pass" if ok and ready else ("warn" if optional else "fail"),
+                f"{resource} is present and ready" if ok and ready else (
+                    f"Optional {resource} is not present or not ready"
+                    if optional
+                    else f"{resource} is missing or not ready"
+                ),
                 detail=(clean_error(result.stderr or result.stdout) if not ok else readiness_detail),
-                action=f"Sync or repair the GitOps application that provides {resource}.",
+                action=(
+                    f"Install {resource} only if this hosted-SNO profile needs it."
+                    if optional
+                    else f"Sync or repair the GitOps application that provides {resource}."
+                ),
             )
 
     def check_deployments(

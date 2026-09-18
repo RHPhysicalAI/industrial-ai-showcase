@@ -1,0 +1,12 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: fake-camera
+  namespace: warehouse-edge
+spec:
+  source:
+    git:
+      uri: https://github.com/rhkp/industrial-ai-showcase.git
+      ref: main
+    # The fork is public; the old Companion source secret is not required.
+    sourceSecret: null

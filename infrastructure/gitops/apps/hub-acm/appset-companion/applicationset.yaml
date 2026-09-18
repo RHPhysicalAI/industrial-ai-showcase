@@ -4,10 +4,9 @@ metadata:
   name: companion-apps
   namespace: openshift-gitops
 spec:
-  # Matrix generator: one Application per (companion-cluster × directory
-  # under apps/companion/). Since there is only one companion cluster
-  # for now, this expands to N Applications where N = count of
-  # subdirectories under infrastructure/gitops/apps/companion/.
+  # Matrix generator: one Application per (companion-cluster × hosted-SNO
+  # workload overlay). The hosted path intentionally excludes the old
+  # Fedora/bare-metal Companion application tree.
   generators:
     - matrix:
         generators:
@@ -18,10 +17,10 @@ spec:
                   cluster.open-cluster-management.io/placement: all-companion
               requeueAfterSeconds: 60
           - git:
-              repoURL: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
+              repoURL: https://github.com/rhkp/industrial-ai-showcase.git
               revision: main
               directories:
-                - path: infrastructure/gitops/apps/companion/*
+                - path: infrastructure/gitops/apps/demo-redhat-sno
   template:
     metadata:
       name: 'companion-{{path.basename}}'
@@ -36,7 +35,7 @@ spec:
     spec:
       project: default
       source:
-        repoURL: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
+        repoURL: https://github.com/rhkp/industrial-ai-showcase.git
         targetRevision: main
         path: '{{path}}'
       destination:

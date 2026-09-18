@@ -142,7 +142,7 @@ V1 checks:
 - Hub and companion OpenShift API access
 - ClusterOperator health
 - L40S/L4 GPU labels and capacity
-- Core GitOps, Kafka, Vault, MLflow, KubeVirt, and storage resources, including readiness where the API exposes it
+- Core GitOps, Kafka, Vault, MLflow, and storage resources, including readiness where the API exposes it; KubeVirt is optional for hosted-SNO `basic-infra`, `demo-workload`, and `agentic` profiles
 - Profile-specific Hub and Companion Deployment readiness
 - Selected projected secrets
 - ACM companion registration

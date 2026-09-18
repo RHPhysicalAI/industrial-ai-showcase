@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fake-camera
+  namespace: warehouse-edge
+spec:
+  template:
+    spec:
+      containers:
+        - name: fake-camera
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: mission-dispatcher-config
+                  key: kafka.bootstrap.servers

@@ -157,9 +157,8 @@ The checker must never perform destructive actions or mutate secrets without a s
 
 - API is reachable through the companion kubeconfig.
 - SNO node is Ready and has sufficient CPU, memory, and storage.
-- KubeVirt/HyperConverged is healthy.
-- LVMS/storage is healthy.
-- Compliance Operator and image-policy prerequisites are present.
+- Hosted SNO storage is healthy; the provider's Ceph-backed classes are sufficient for the initial workload slice.
+- KubeVirt/HyperConverged, LVMS, Compliance Operator, and self-managed image-policy prerequisites are optional for the hosted `demo-workload` path and are not blocking checks.
 - FIPS and STIG state are reported with caveats, not reduced to a generic green status.
 - Required namespaces, service accounts, and policies are present.
 - ACM reports the companion as joined and available.
