@@ -16,7 +16,12 @@ class WmsStubSettings(ServiceSettings):
         default="warehouse.cameras.commands",
         description="Kafka topic for camera state-change commands consumed by fake-camera.",
     )
+    alerts_topic: str = Field(
+        default="fleet.safety.alerts",
+        description="Safety-alert topic consumed by Fleet Manager and the digital twin.",
+    )
     camera_id: str = Field(default="cam-aisle-3")
+    camera_aisle_id: str = Field(default="aisle-3")
 
     default_robot_id: str = "fl-07"
     default_route_aisle: str = "aisle-3"
