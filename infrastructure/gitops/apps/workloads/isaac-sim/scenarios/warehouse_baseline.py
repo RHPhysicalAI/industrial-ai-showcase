@@ -48,12 +48,16 @@ OBSTRUCTION_PRIMS = [
     "/Root/Warehouse/Assets/Box_19581/SM_CardBoxD_03",
 ]
 FALLEN_POSES = [
-    ((-1.18085, 0.0, -2.5), (-2.441, -34.975, -1.4)),
-    ((-2.56227, -1.87009, -2.65), (-69.77561, -86.7106, 208.01714)),
-    ((-3.0, 0.0, -3.01), (0.0, 0.0, -52.0)),
+    # Keep the scripted obstruction on the visible aisle-3 route.  The CDN
+    # warehouse uses Z as height; the previous negative-Z poses put the
+    # objects below the floor and made Drop Pallet look like a no-op.
+    ((-21.5, 5.8, 0.5), (0.0, 0.0, -8.0)),
+    ((-20.0, 6.1, 0.5), (0.0, 0.0, 18.0)),
+    ((-18.5, 5.5, 0.5), (0.0, 0.0, -24.0)),
 ]
 
 ROUTE_PATH_PRIM = "/Root/route_display"
+DROPPED_PALLET_ROOT = "/Root/forklift/DroppedPallet"
 ROUTE_PATH_HEIGHT = 0.02
 ROUTE_STRIP_WIDTH = 0.25
 
@@ -152,6 +156,74 @@ async def _open_scene() -> None:
     result, err = await ctx.open_stage_async(url)
     if not result:
         raise RuntimeError(f"failed to open CDN stage: {err}")
+
+
+def _resolve_scene_prims() -> None:
+    """Resolve managed prims against the currently loaded USD stage.
+
+    The public warehouse asset can change its hierarchy between Isaac Sim
+    releases. Keep the authored paths as the first choice, but discover the
+    corresponding mesh/xform paths when the asset uses a different layout.
+    """
+    global FORKLIFT_PRIM, OBSTRUCTION_PRIMS
+
+    stage = omni.usd.get_context().get_stage()
+    if stage is None:
+        print("[warehouse_baseline] scene prim resolution skipped: stage is None", flush=True)
+        return
+
+    paths = [str(prim.GetPath()) for prim in stage.Traverse()]
+    valid_paths = set(paths)
+
+    if FORKLIFT_PRIM not in valid_paths:
+        forklift_candidates = [
+            path for path in paths
+            if "forklift" in path.lower()
+            and path.lower().split("/")[-1] not in {"materials", "material"}
+        ]
+        if forklift_candidates:
+            forklift_candidates.sort(key=lambda path: (
+                0 if path.lower().split("/")[-1] == "forklift" else 1,
+                path.count("/"),
+                len(path),
+            ))
+            FORKLIFT_PRIM = forklift_candidates[0]
+            print(
+                f"[warehouse_baseline] resolved forklift prim: {FORKLIFT_PRIM} "
+                f"(candidates={forklift_candidates[:8]})",
+                flush=True,
+            )
+        else:
+            print(
+                "[warehouse_baseline] forklift prim not found; "
+                "telemetry movement will be unavailable",
+                flush=True,
+            )
+
+    resolved_obstructions = [path for path in OBSTRUCTION_PRIMS if path in valid_paths]
+    obstruction_candidates = [
+        path for path in paths
+        if any(token in path.lower().split("/")[-1] for token in ("pallet", "palette", "box"))
+        and not any(token in path.lower() for token in ("material", "collision", "physics"))
+    ]
+    for path in sorted(obstruction_candidates, key=lambda value: (value.count("/"), len(value), value)):
+        if path not in resolved_obstructions:
+            resolved_obstructions.append(path)
+        if len(resolved_obstructions) >= 3:
+            break
+
+    if resolved_obstructions:
+        OBSTRUCTION_PRIMS = resolved_obstructions[:3]
+        print(
+            f"[warehouse_baseline] resolved obstruction prims: {OBSTRUCTION_PRIMS}",
+            flush=True,
+        )
+    else:
+        print(
+            "[warehouse_baseline] obstruction prims not found; "
+            "pallet visualization will be unavailable",
+            flush=True,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -473,6 +545,7 @@ def _apply_updates(_event) -> None:
         _diag_obstruction_cmds += 1
 
         if obstructed:
+            _ensure_dropped_pallet(stage)
             for i, prim_path in enumerate(OBSTRUCTION_PRIMS):
                 prim = stage.GetPrimAtPath(prim_path)
                 if not prim or not prim.IsValid():
@@ -483,8 +556,10 @@ def _apply_updates(_event) -> None:
                 xformable.ClearXformOpOrder()
                 xformable.AddTranslateOp().Set(Gf.Vec3d(*pos))
                 xformable.AddRotateXYZOp().Set(Gf.Vec3f(*rot))
-                xformable.AddScaleOp().Set(Gf.Vec3f(0.01, 0.01, 0.01))
                 UsdGeom.Imageable(prim).MakeVisible()
+            dropped_pallet = stage.GetPrimAtPath(DROPPED_PALLET_ROOT)
+            if dropped_pallet and dropped_pallet.IsValid():
+                UsdGeom.Imageable(dropped_pallet).MakeVisible()
             print(f"[baseline_diag] OBSTRUCTION applied — pallets moved to fallen positions", flush=True)
 
         else:
@@ -521,11 +596,40 @@ def _capture_original_xforms() -> None:
     stage = omni.usd.get_context().get_stage()
     if stage is None:
         return
+    _ensure_dropped_pallet(stage)
     for prim_path in [FORKLIFT_PRIM] + OBSTRUCTION_PRIMS:
         prim = stage.GetPrimAtPath(prim_path)
         if prim and prim.IsValid():
             _original_xforms[prim_path] = UsdGeom.Xformable(prim).GetLocalTransformation()
     print(f"[warehouse_baseline] captured {len(_original_xforms)} original xforms", flush=True)
+
+
+def _ensure_dropped_pallet(stage) -> None:
+    """Create a visible fallback pallet for CDN scenes without pallet assets."""
+    from pxr import Gf, UsdGeom
+
+    root = stage.GetPrimAtPath(DROPPED_PALLET_ROOT)
+    if not root or not root.IsValid():
+        root_xform = UsdGeom.Xform.Define(stage, DROPPED_PALLET_ROOT)
+        # The fixed demo camera targets this aisle area, keeping the fallback
+        # pallet inside the Digital Twin viewport.
+        UsdGeom.XformCommonAPI(root_xform).SetTranslate(Gf.Vec3d(2.5, 0.0, 0.5))
+        parts = (
+            ("deck", (0.0, 0.0, 0.12), (1.4, 0.9, 0.12), (0.55, 0.24, 0.08)),
+            ("load", (0.0, 0.0, 0.62), (0.9, 0.65, 0.55), (0.85, 0.55, 0.18)),
+            ("runner_a", (0.0, -0.55, 0.02), (1.25, 0.08, 0.12), (0.42, 0.16, 0.05)),
+            ("runner_b", (0.0, 0.0, 0.02), (1.25, 0.08, 0.12), (0.42, 0.16, 0.05)),
+            ("runner_c", (0.0, 0.55, 0.02), (1.25, 0.08, 0.12), (0.42, 0.16, 0.05)),
+        )
+        for name, translate, scale, color in parts:
+            cube = UsdGeom.Cube.Define(stage, f"{DROPPED_PALLET_ROOT}/{name}")
+            api = UsdGeom.XformCommonAPI(cube)
+            api.SetTranslate(Gf.Vec3d(*translate))
+            api.SetScale(Gf.Vec3f(*scale))
+            cube.CreateDisplayColorAttr().Set([Gf.Vec3f(*color)])
+        root = stage.GetPrimAtPath(DROPPED_PALLET_ROOT)
+    if root and root.IsValid():
+        UsdGeom.Imageable(root).MakeInvisible()
 
 
 def _reset_scene() -> None:
@@ -546,6 +650,10 @@ def _reset_scene() -> None:
         return
 
     _remove_route_path(stage)
+
+    dropped_pallet = stage.GetPrimAtPath(DROPPED_PALLET_ROOT)
+    if dropped_pallet and dropped_pallet.IsValid():
+        UsdGeom.Imageable(dropped_pallet).MakeInvisible()
 
     restored = 0
     for prim_path, mat in _original_xforms.items():
@@ -610,6 +718,7 @@ async def _run() -> None:
         _register_nucleus_auth()
         await _open_scene()
         print("[warehouse_baseline] scene opened successfully", flush=True)
+        _resolve_scene_prims()
 
         _capture_original_xforms()
         _reset_camera_state()
@@ -658,9 +767,11 @@ def _install_camera_setup() -> None:
         return
 
     camera_path = "/OmniverseKit_Persp"
-    cam_pos = Gf.Vec3d(-12.766, -6.168, 6.569)
-    cam_axis = Gf.Vec3d(0.998, 0.0387, 0.0504)
-    cam_angle = 75.14
+    # Keep the route start and the approach point in front of the camera.
+    # The public warehouse asset places the forklift near x=-22.8; the
+    # previous camera at x=-12.8 left the forklift behind the viewpoint.
+    cam_pos = Gf.Vec3d(-31.0, -14.0, 11.0)
+    cam_target = Gf.Vec3d(-10.0, 10.0, 0.0)
     _applied = [False]
 
     def _tick(_event) -> None:
@@ -675,10 +786,11 @@ def _install_camera_setup() -> None:
             cam = stage.GetPrimAtPath(camera_path)
             if not cam or not cam.IsValid():
                 return
-            rot = Gf.Rotation(cam_axis, cam_angle)
-            mat = Gf.Matrix4d()
-            mat.SetRotate(rot)
-            mat.SetTranslateOnly(cam_pos)
+            mat = Gf.Matrix4d().SetLookAt(
+                cam_pos,
+                cam_target,
+                Gf.Vec3d(0.0, 0.0, 1.0),
+            )
             xformable = UsdGeom.Xformable(cam)
             xformable.ClearXformOpOrder()
             op = xformable.AddTransformOp()
@@ -697,5 +809,3 @@ def _install_camera_setup() -> None:
 
 
 _install_camera_setup()
-
-

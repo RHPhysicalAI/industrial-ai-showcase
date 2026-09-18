@@ -1,5 +1,7 @@
 # Preflight checker
 
+**Roadmap:** [Project roadmap](../../roadmaps/README.md) · [Prerequisite roadmap](../../roadmaps/prereq.md)
+
 ## Environment terminology
 
 The checker uses four supported scopes:

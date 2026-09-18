@@ -1,5 +1,9 @@
 # companion-install
 
+**Roadmap context:** [Project roadmap](../../roadmaps/README.md). This is the
+historical self-managed Fedora/KVM path; the current supported hosted-demo path
+starts with [Goal 3](../../roadmaps/README.md#goal-3--prepare-the-hosted-companion-sno).
+
 One-time install of the self-managed OpenShift companion cluster per ADR-017. Source material lives here so rebuilds from scratch are reproducible.
 
 This README is the self-managed Fedora/KVM installation path. The canonical hosted SNO setup is documented in [`tools/demo-redhat-sno/`](../demo-redhat-sno/); do not use the hosted path's values as inputs to these VM-install files.

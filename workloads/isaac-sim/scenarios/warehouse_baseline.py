@@ -48,12 +48,16 @@ OBSTRUCTION_PRIMS = [
     "/Root/Warehouse/Assets/Box_19581/SM_CardBoxD_03",
 ]
 FALLEN_POSES = [
-    ((-1.18085, 0.0, -2.5), (-2.441, -34.975, -1.4)),
-    ((-2.56227, -1.87009, -2.65), (-69.77561, -86.7106, 208.01714)),
-    ((-3.0, 0.0, -3.01), (0.0, 0.0, -52.0)),
+    # Keep the scripted obstruction on the visible aisle-3 route.  The CDN
+    # warehouse uses Z as height; the previous negative-Z poses put the
+    # objects below the floor and made Drop Pallet look like a no-op.
+    ((-21.5, 5.8, 0.5), (0.0, 0.0, -8.0)),
+    ((-20.0, 6.1, 0.5), (0.0, 0.0, 18.0)),
+    ((-18.5, 5.5, 0.5), (0.0, 0.0, -24.0)),
 ]
 
 ROUTE_PATH_PRIM = "/Root/route_display"
+DROPPED_PALLET_ROOT = "/Root/forklift/DroppedPallet"
 ROUTE_PATH_HEIGHT = 0.02
 ROUTE_STRIP_WIDTH = 0.25
 
@@ -473,6 +477,7 @@ def _apply_updates(_event) -> None:
         _diag_obstruction_cmds += 1
 
         if obstructed:
+            _ensure_dropped_pallet(stage)
             for i, prim_path in enumerate(OBSTRUCTION_PRIMS):
                 prim = stage.GetPrimAtPath(prim_path)
                 if not prim or not prim.IsValid():
@@ -483,8 +488,10 @@ def _apply_updates(_event) -> None:
                 xformable.ClearXformOpOrder()
                 xformable.AddTranslateOp().Set(Gf.Vec3d(*pos))
                 xformable.AddRotateXYZOp().Set(Gf.Vec3f(*rot))
-                xformable.AddScaleOp().Set(Gf.Vec3f(0.01, 0.01, 0.01))
                 UsdGeom.Imageable(prim).MakeVisible()
+            dropped_pallet = stage.GetPrimAtPath(DROPPED_PALLET_ROOT)
+            if dropped_pallet and dropped_pallet.IsValid():
+                UsdGeom.Imageable(dropped_pallet).MakeVisible()
             print(f"[baseline_diag] OBSTRUCTION applied — pallets moved to fallen positions", flush=True)
 
         else:
@@ -521,11 +528,40 @@ def _capture_original_xforms() -> None:
     stage = omni.usd.get_context().get_stage()
     if stage is None:
         return
+    _ensure_dropped_pallet(stage)
     for prim_path in [FORKLIFT_PRIM] + OBSTRUCTION_PRIMS:
         prim = stage.GetPrimAtPath(prim_path)
         if prim and prim.IsValid():
             _original_xforms[prim_path] = UsdGeom.Xformable(prim).GetLocalTransformation()
     print(f"[warehouse_baseline] captured {len(_original_xforms)} original xforms", flush=True)
+
+
+def _ensure_dropped_pallet(stage) -> None:
+    """Create a visible fallback pallet for CDN scenes without pallet assets."""
+    from pxr import Gf, UsdGeom
+
+    root = stage.GetPrimAtPath(DROPPED_PALLET_ROOT)
+    if not root or not root.IsValid():
+        root_xform = UsdGeom.Xform.Define(stage, DROPPED_PALLET_ROOT)
+        # The fixed demo camera targets this aisle area, keeping the fallback
+        # pallet inside the Digital Twin viewport.
+        UsdGeom.XformCommonAPI(root_xform).SetTranslate(Gf.Vec3d(2.5, 0.0, 0.5))
+        parts = (
+            ("deck", (0.0, 0.0, 0.12), (1.4, 0.9, 0.12), (0.55, 0.24, 0.08)),
+            ("load", (0.0, 0.0, 0.62), (0.9, 0.65, 0.55), (0.85, 0.55, 0.18)),
+            ("runner_a", (0.0, -0.55, 0.02), (1.25, 0.08, 0.12), (0.42, 0.16, 0.05)),
+            ("runner_b", (0.0, 0.0, 0.02), (1.25, 0.08, 0.12), (0.42, 0.16, 0.05)),
+            ("runner_c", (0.0, 0.55, 0.02), (1.25, 0.08, 0.12), (0.42, 0.16, 0.05)),
+        )
+        for name, translate, scale, color in parts:
+            cube = UsdGeom.Cube.Define(stage, f"{DROPPED_PALLET_ROOT}/{name}")
+            api = UsdGeom.XformCommonAPI(cube)
+            api.SetTranslate(Gf.Vec3d(*translate))
+            api.SetScale(Gf.Vec3f(*scale))
+            cube.CreateDisplayColorAttr().Set([Gf.Vec3f(*color)])
+        root = stage.GetPrimAtPath(DROPPED_PALLET_ROOT)
+    if root and root.IsValid():
+        UsdGeom.Imageable(root).MakeInvisible()
 
 
 def _reset_scene() -> None:
@@ -546,6 +582,10 @@ def _reset_scene() -> None:
         return
 
     _remove_route_path(stage)
+
+    dropped_pallet = stage.GetPrimAtPath(DROPPED_PALLET_ROOT)
+    if dropped_pallet and dropped_pallet.IsValid():
+        UsdGeom.Imageable(dropped_pallet).MakeInvisible()
 
     restored = 0
     for prim_path, mat in _original_xforms.items():
@@ -697,5 +737,3 @@ def _install_camera_setup() -> None:
 
 
 _install_camera_setup()
-
-

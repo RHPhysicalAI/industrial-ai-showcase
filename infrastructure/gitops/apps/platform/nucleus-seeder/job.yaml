@@ -55,7 +55,10 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: nucleus-passwords
-                  key: service-password
+                  # The omni.client `omniverse` user authenticates with the
+                  # Nucleus master password, matching Isaac Sim and the
+                  # scene-pack builder.
+                  key: master-password
             - name: NUCLEUS_ROOT
               value: /Projects/showcase/custom
           resources:

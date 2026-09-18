@@ -23,8 +23,8 @@ Co-located with its Kubernetes `Job` + `ConfigMap` in this directory (deployment
 | `ISAAC_VERSION` | `6.0` | Isaac asset-tree version on the CDN. |
 | `LOCAL_STAGING` | `/staging` | Scratch dir (emptyDir volume in the Job). |
 | `NUCLEUS_HOST` | `nucleus-api.omniverse-nucleus.svc.cluster.local:3009` | Nucleus API service. In-cluster — bypasses the Route. |
-| `NUCLEUS_USER` | `omniverse` | Service user in `nucleus-passwords` Secret. |
-| `NUCLEUS_PASS` | — | Pulled from `nucleus-passwords.service-password`. |
+| `NUCLEUS_USER` | `omniverse` | Nucleus client user in the `nucleus-passwords` Secret. |
+| `NUCLEUS_PASS` | — | Pulled from `nucleus-passwords.master-password` for the `omniverse` client user. |
 | `NUCLEUS_ROOT` | `/Projects/showcase/custom` | Path root for the seeded asset tree and `Warehouse_edit.usd` scene used by the standalone Isaac Sim workload. |
 
 ## Re-running

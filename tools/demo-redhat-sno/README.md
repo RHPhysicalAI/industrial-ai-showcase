@@ -1,5 +1,7 @@
 # demo-redhat-sno
 
+**Roadmap:** [Project roadmap — Goals 3–5](../../roadmaps/README.md#goal-3--prepare-the-hosted-companion-sno)
+
 Hosted Single-Node OpenShift setup supplied through `demo.redhat.com`.
 
 This directory is the hosted counterpart to [`tools/companion-install/`](../companion-install/). It does not provision OpenShift, create a VM, install Fedora, generate an agent ISO, or configure bare-metal networking. The demo provider supplies the SNO; this directory records and validates how we adapt that cluster for the Industrial AI Showcase.

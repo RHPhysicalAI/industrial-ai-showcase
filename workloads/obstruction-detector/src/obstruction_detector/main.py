@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from uuid import uuid4
 
 from common_lib.events import CameraFrameEvent
 from common_lib.kafka import JsonConsumer, JsonProducer
@@ -35,11 +36,13 @@ async def lifespan(app: FastAPI):
         aisle=settings.aisle_id,
     )
 
+    consumer_group = f"{settings.consumer_group}-{uuid4().hex[:8]}"
     consumer = JsonConsumer[CameraFrameEvent](
         bootstrap_servers=settings.kafka_bootstrap_servers,
-        group_id=settings.consumer_group,
+        group_id=consumer_group,
         topic=settings.frames_topic,
         model=CameraFrameEvent,
+        auto_offset_reset="latest",
     )
     producer = JsonProducer(settings.kafka_bootstrap_servers, client_id=settings.service_name)
     cosmos = CosmosClient(

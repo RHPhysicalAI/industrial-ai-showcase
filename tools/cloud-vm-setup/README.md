@@ -1,5 +1,7 @@
 # cloud-vm-setup
 
+**Roadmap:** [Project roadmap — Goal 2](../../roadmaps/README.md#goal-2--make-the-cloud-vla-vm-usable)
+
 Provisioning flow for the separate cloud GPU VM used by the hosted `demo.redhat.com` SNO.
 
 This is intentionally separate from [`tools/companion-install/`](../companion-install/) and [`tools/demo-redhat-sno/`](../demo-redhat-sno/):

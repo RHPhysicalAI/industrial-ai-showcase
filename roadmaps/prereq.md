@@ -1,5 +1,9 @@
 # Prerequisite Readiness Roadmap
 
+This is the prerequisite roadmap supporting the broader
+[project roadmap](README.md). It focuses on proving that the local workstation,
+Hub, hosted Companion SNO, and Cloud VLA VM are ready before deployment.
+
 ## Terminology
 
 - **Local workstation** — the developer machine running the checker, Git, and OpenShift client commands.

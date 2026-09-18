@@ -41,7 +41,10 @@ def command_consumer_loop(
     """Blocking loop — run in a daemon thread. Consumes CameraCommand from Kafka."""
     consumer = JsonConsumer(
         bootstrap_servers=settings.kafka_bootstrap_servers,
-        group_id=f"{settings.service_name}-cmd",
+        # Commands are edge-triggered demo controls. A fresh process group
+        # prevents a restart from replaying retained Reset/Drop commands and
+        # oscillating the camera between historical states.
+        group_id=f"{settings.service_name}-cmd-{uuid.uuid4().hex[:8]}",
         topic=settings.command_topic,
         model=CameraCommand,
         auto_offset_reset="latest",

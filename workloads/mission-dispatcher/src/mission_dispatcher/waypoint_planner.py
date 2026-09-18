@@ -108,9 +108,11 @@ class RouteExecution:
     index: int = 0
     paused: bool = False
     cancelled: bool = False
+    clearance_granted: bool = False
     clearance_event: asyncio.Event = field(default_factory=asyncio.Event)
 
     def grant_clearance(self) -> None:
+        self.clearance_granted = True
         self.paused = False
         self.clearance_event.set()
 
@@ -146,6 +148,14 @@ async def execute_route(
 
         wp = execution.waypoints[execution.index]
 
+        # Arm the pause before publishing approach telemetry. Fleet Manager may
+        # grant clearance immediately, so the dispatcher must already be ready
+        # to receive PROCEED when that telemetry reaches the hub.
+        if wp.is_approach_point:
+            execution.paused = True
+            if not execution.clearance_granted:
+                execution.clearance_event.clear()
+
         producer.send(
             telemetry_topic,
             key=execution.robot_id,
@@ -160,17 +170,16 @@ async def execute_route(
         producer.flush(timeout=0.0)
 
         if wp.is_approach_point:
-            execution.paused = True
             log.info(
                 "route.approach_point",
                 robot_id=execution.robot_id,
                 waypoint=wp.name,
                 x=wp.x, y=wp.y,
             )
-            execution.clearance_event.clear()
             await execution.clearance_event.wait()
             if execution.cancelled:
                 return False
+            execution.clearance_granted = False
             log.info("route.clearance_received", robot_id=execution.robot_id)
 
         execution.index += 1

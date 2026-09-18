@@ -12,6 +12,7 @@ class FleetManagerSettings(ServiceSettings):
     missions_topic: str = "fleet.missions"
     alerts_topic: str = "fleet.safety.alerts"
     telemetry_topic: str = "fleet.telemetry"
+    events_topic: str = "fleet.events"
     ops_events_topic: str = "fleet.ops.events"
     mes_orders_topic: str = "mes.orders"
     consumer_group_id: str = "fleet-manager"
