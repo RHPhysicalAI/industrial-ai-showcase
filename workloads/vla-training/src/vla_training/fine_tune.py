@@ -1,5 +1,5 @@
 # This project was developed with assistance from AI tools.
-"""Run GR00T N1.7-3B fine-tuning, export ONNX, upload artifacts to S3."""
+"""Run GR00T N1.7-3B fine-tuning and upload deployable artifacts to S3."""
 
 from __future__ import annotations
 
@@ -232,6 +232,12 @@ def run(
 
     print(f"\n=== Uploading checkpoint to S3 ({checkpoint_prefix}/checkpoint/) ===")
     _upload_artifacts_to_s3(s3, cfg.s3.bucket, f"{checkpoint_prefix}/checkpoint", OUTPUT_DIR)
+
+    # The deployed robot-edge runtime uses GR00T mode and Gr00tPolicy. Keep
+    # the fine-tuned model directory in its native format so that
+    # GROOT_MODEL_PATH can point at this versioned artifact directly.
+    print(f"\n=== Uploading deployable GR00T model to S3 ({checkpoint_prefix}/model/) ===")
+    _upload_artifacts_to_s3(s3, cfg.s3.bucket, f"{checkpoint_prefix}/model", OUTPUT_DIR)
 
     print(f"\n=== Uploading ONNX to S3 ({checkpoint_prefix}/onnx/) ===")
     _upload_artifacts_to_s3(s3, cfg.s3.bucket, f"{checkpoint_prefix}/onnx", ONNX_DIR)

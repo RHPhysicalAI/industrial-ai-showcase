@@ -57,9 +57,9 @@ the initial hosted demo loop.
 | [Goal 2 — Make the Cloud VLA VM usable](#goal-2--make-the-cloud-vla-vm-usable) | Provision and validate the separate NVIDIA VM serving OpenVLA. | ✅ Complete |
 | [Goal 3 — Prepare the hosted Companion SNO](#goal-3--prepare-the-hosted-companion-sno) | Record the SNO contract and keep its setup limited to the hosted-demo scope. | ✅ Complete |
 | [Goal 4 — Connect the Companion SNO to Hub ACM](#goal-4--connect-the-companion-sno-to-hub-acm) | Register the SNO with ACM and verify it is joined and available. | ✅ Complete |
-| [Goal 5 — Deploy the first hosted workload slice](#goal-5--deploy-the-first-hosted-workload-slice) | Run Fake Camera and Mission Dispatcher on the SNO using Hub Kafka and the cloud VLA endpoint. | ⏭️ Next |
-| [Goal 6 — Prove the end-to-end demo loop](#goal-6--prove-the-end-to-end-demo-loop) | Validate the complete camera → Kafka → dispatcher → VLA action path. | ⏸️ Deferred until Goal 5 |
-| [Goal 7 — Move toward the full model lifecycle](#goal-7--move-toward-the-full-model-lifecycle) | Add training, registry, storage, promotion, and production-model serving. | ⏸️ Deferred |
+| [Goal 5 — Deploy the first hosted workload slice](#goal-5--deploy-the-first-hosted-workload-slice) | Run Fake Camera and Mission Dispatcher on the SNO using Hub Kafka and the cloud VLA endpoint. | ✅ Complete |
+| [Goal 6 — Prove the end-to-end demo loop](#goal-6--prove-the-end-to-end-demo-loop) | Validate the complete camera → Kafka → dispatcher → VLA action path. | ✅ Complete |
+| [Goal 7 — Build the ML and training model lifecycle](ml-training.md) | Run training on the Hub, register a versioned model, and validate a safe canary deployment. | ⏭️ Next |
 
 ## Goal 1 — Establish the supported topology
 
@@ -243,21 +243,11 @@ action response.
 - The action response is produced by the real OpenVLA service rather than mock mode.
 - The result can be repeated from documented commands.
 
-## Goal 7 — Move toward the full model lifecycle
+## Goal 7 — Build the ML and training model lifecycle
 
-### Objective
-
-Add the full training and model-management path after the hosted demo loop
-is stable.
-
-### Steps
-
-1. Validate the Hub RHOAI training prerequisites.
-2. Run the GR00T/VLA training pipeline on an appropriate GPU environment.
-3. Upload the resulting model to MinIO/S3.
-4. Register the model in MLflow Model Registry.
-5. Validate the model artifact and metadata.
-6. Update the serving configuration to use a versioned model URI.
+The detailed plan is maintained in [`roadmaps/ml-training.md`](ml-training.md).
+The current hosted demo remains unchanged while the training path is built and
+validated as a separate Hub workstream.
 7. Promote the model through the GitOps/HIL workflow.
 8. Validate rollback and model-version observability.
 

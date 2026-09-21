@@ -45,6 +45,8 @@ components:
           parameterType: STRING
     outputDefinitions:
       parameters:
+        model_s3_prefix:
+          parameterType: STRING
         onnx_s3_prefix:
           parameterType: STRING
   comp-vla-register-model-op:
@@ -61,11 +63,13 @@ components:
           parameterType: NUMBER_INTEGER
         model_name:
           parameterType: STRING
+        model_s3_prefix:
+          parameterType: STRING
         model_version:
           parameterType: STRING
-        s3_bucket:
+        onnx_s3_prefix:
           parameterType: STRING
-        s3_prefix:
+        s3_bucket:
           parameterType: STRING
     outputDefinitions:
       parameters:
@@ -150,17 +154,19 @@ deploymentSpec:
         args:
         - -c
         - "set -euo pipefail\nS3_PREFIX=\"$1\"; EMBODIMENT_TAG=\"$2\"\nMAX_STEPS=\"\
-          $3\"; BATCH_SIZE=\"$4\"; NUM_GPUS=\"$5\"; OUTPUT_FILE=\"$6\"\n\necho \"\
-          === VLA Fine-Tuning ===\"\necho \"S3 prefix: ${S3_PREFIX}\"\necho \"Embodiment:\
-          \ ${EMBODIMENT_TAG}\"\necho \"GPUs: ${NUM_GPUS}\"\necho \"Max steps: ${MAX_STEPS}\"\
-          \necho \"Batch size: ${BATCH_SIZE}\"\necho \"Start time: $(date -u)\"\n\n\
-          export VLA_S3_MODEL_PREFIX=\"${S3_PREFIX}/base-model\"\nexport VLA_S3_DATASET_PREFIX=\"\
-          ${S3_PREFIX}/dataset\"\nexport VLA_S3_CHECKPOINT_PREFIX=\"${S3_PREFIX}\"\
-          \nexport VLA_EMBODIMENT_TAG=\"${EMBODIMENT_TAG}\"\nexport DSPA_RUN_ID=\"\
-          ${DSPA_RUN_ID:-unknown}\"\n\npython -m vla_training.fine_tune \\\n  --max-steps\
-          \ \"${MAX_STEPS}\" \\\n  --global-batch-size \"${BATCH_SIZE}\" \\\n  --num-gpus\
-          \ \"${NUM_GPUS}\"\n\nprintf \"%s\" \"${S3_PREFIX}\" > \"${OUTPUT_FILE}\"\
-          \necho \"End time: $(date -u)\"\necho \"=== VLA Fine-Tuning: COMPLETE ===\""
+          $3\"; BATCH_SIZE=\"$4\"; NUM_GPUS=\"$5\"\nONNX_OUTPUT_FILE=\"$6\"; MODEL_OUTPUT_FILE=\"\
+          $7\"\n\necho \"=== VLA Fine-Tuning ===\"\necho \"S3 prefix: ${S3_PREFIX}\"\
+          \necho \"Embodiment: ${EMBODIMENT_TAG}\"\necho \"GPUs: ${NUM_GPUS}\"\necho\
+          \ \"Max steps: ${MAX_STEPS}\"\necho \"Batch size: ${BATCH_SIZE}\"\necho\
+          \ \"Start time: $(date -u)\"\n\nexport VLA_S3_MODEL_PREFIX=\"${S3_PREFIX}/base-model\"\
+          \nexport VLA_S3_DATASET_PREFIX=\"${S3_PREFIX}/dataset\"\nexport VLA_S3_CHECKPOINT_PREFIX=\"\
+          ${S3_PREFIX}\"\nexport VLA_EMBODIMENT_TAG=\"${EMBODIMENT_TAG}\"\nexport\
+          \ VLA_SERVING_MODE=\"groot\"\nexport DSPA_RUN_ID=\"${DSPA_RUN_ID:-unknown}\"\
+          \n\npython -m vla_training.fine_tune \\\n  --max-steps \"${MAX_STEPS}\"\
+          \ \\\n  --global-batch-size \"${BATCH_SIZE}\" \\\n  --num-gpus \"${NUM_GPUS}\"\
+          \n\nprintf \"%s\" \"${S3_PREFIX}\" > \"${ONNX_OUTPUT_FILE}\"\nprintf \"\
+          %s\" \"${S3_PREFIX}\" > \"${MODEL_OUTPUT_FILE}\"\necho \"End time: $(date\
+          \ -u)\"\necho \"=== VLA Fine-Tuning: COMPLETE ===\""
         - --
         - '{{$.inputs.parameters[''s3_prefix'']}}'
         - '{{$.inputs.parameters[''embodiment_tag'']}}'
@@ -168,6 +174,7 @@ deploymentSpec:
         - '{{$.inputs.parameters[''global_batch_size'']}}'
         - '{{$.inputs.parameters[''num_gpus'']}}'
         - '{{$.outputs.parameters[''onnx_s3_prefix''].output_file}}'
+        - '{{$.outputs.parameters[''model_s3_prefix''].output_file}}'
         command:
         - /bin/bash
         env:
@@ -202,23 +209,28 @@ deploymentSpec:
       container:
         args:
         - -c
-        - "set -euo pipefail\nMODEL_NAME=\"$1\"; MODEL_VERSION=\"$2\"; S3_PREFIX=\"\
-          $3\"\nS3_BUCKET=\"$4\"; BASE_MODEL=\"$5\"; DATASET=\"$6\"\nEMBODIMENT=\"\
-          $7\"; STEPS=\"$8\"; OUTPUT_FILE=\"$9\"\nMODEL_URI=\"s3://${S3_BUCKET}/${S3_PREFIX}/onnx\"\
+        - "set -euo pipefail\nMODEL_NAME=\"$1\"; MODEL_VERSION=\"$2\"; MODEL_S3_PREFIX=\"\
+          $3\"\nONNX_S3_PREFIX=\"$4\"; S3_BUCKET=\"$5\"; BASE_MODEL=\"$6\"; DATASET=\"\
+          $7\"\nEMBODIMENT=\"$8\"; STEPS=\"$9\"; OUTPUT_FILE=\"${10}\"\nMODEL_URI=\"\
+          s3://${S3_BUCKET}/${MODEL_S3_PREFIX}/model\"\nONNX_URI=\"s3://${S3_BUCKET}/${ONNX_S3_PREFIX}/onnx\"\
           \n\nexport VLA_BASE_MODEL_REPO=\"${BASE_MODEL}\"\nexport VLA_DATASET_REPO=\"\
           ${DATASET}\"\nexport VLA_EMBODIMENT_TAG=\"${EMBODIMENT}\"\nexport VLA_MAX_STEPS=\"\
-          ${STEPS}\"\nexport VLA_S3_CHECKPOINT_PREFIX=\"${S3_PREFIX}\"\nexport DSPA_RUN_ID=\"\
-          ${DSPA_RUN_ID:-unknown}\"\n\necho \"=== VLA Model Registration ===\"\necho\
-          \ \"Model: ${MODEL_NAME} v${MODEL_VERSION}\"\necho \"URI: ${MODEL_URI}\"\
-          \necho \"Start time: $(date -u)\"\n\npython -m vla_training.register_model\
-          \ \\\n  --name \"${MODEL_NAME}\" \\\n  --uri \"${MODEL_URI}\" \\\n  --version\
-          \ \"${MODEL_VERSION}\" \\\n  --description \"GR00T N1.7-3B fine-tuned VLA\
-          \ for G1 teleop\"\n\necho \"REGISTERED\" > \"${OUTPUT_FILE}\"\necho \"End\
-          \ time: $(date -u)\"\necho \"=== VLA Model Registration: COMPLETE ===\""
+          ${STEPS}\"\nexport VLA_S3_CHECKPOINT_PREFIX=\"${MODEL_S3_PREFIX}\"\nexport\
+          \ VLA_MODEL_URI=\"${MODEL_URI}\"\nexport VLA_ONNX_URI=\"${ONNX_URI}\"\n\
+          export VLA_SERVING_MODE=\"groot\"\nexport DSPA_RUN_ID=\"${DSPA_RUN_ID:-unknown}\"\
+          \n\necho \"=== VLA Model Registration ===\"\necho \"Model: ${MODEL_NAME}\
+          \ v${MODEL_VERSION}\"\necho \"URI: ${MODEL_URI}\"\necho \"Start time: $(date\
+          \ -u)\"\n\npython -m vla_training.register_model \\\n  --name \"${MODEL_NAME}\"\
+          \ \\\n  --uri \"${MODEL_URI}\" \\\n  --version \"${MODEL_VERSION}\" \\\n\
+          \  --format-name \"gr00t\" \\\n  --description \"GR00T N1.7-3B fine-tuned\
+          \ VLA for G1 teleop\"\n\necho \"REGISTERED\" > \"${OUTPUT_FILE}\"\necho\
+          \ \"End time: $(date -u)\"\necho \"=== VLA Model Registration: COMPLETE\
+          \ ===\""
         - --
         - '{{$.inputs.parameters[''model_name'']}}'
         - '{{$.inputs.parameters[''model_version'']}}'
-        - '{{$.inputs.parameters[''s3_prefix'']}}'
+        - '{{$.inputs.parameters[''model_s3_prefix'']}}'
+        - '{{$.inputs.parameters[''onnx_s3_prefix'']}}'
         - '{{$.inputs.parameters[''s3_bucket'']}}'
         - '{{$.inputs.parameters[''base_model_repo'']}}'
         - '{{$.inputs.parameters[''dataset_repo'']}}'
@@ -332,14 +344,18 @@ root:
               componentInputParameter: max_steps
             model_name:
               componentInputParameter: model_name
+            model_s3_prefix:
+              taskOutputParameter:
+                outputParameterKey: model_s3_prefix
+                producerTask: vla-fine-tune-and-export-op
             model_version:
               componentInputParameter: model_version
-            s3_bucket:
-              componentInputParameter: s3_bucket
-            s3_prefix:
+            onnx_s3_prefix:
               taskOutputParameter:
                 outputParameterKey: onnx_s3_prefix
                 producerTask: vla-fine-tune-and-export-op
+            s3_bucket:
+              componentInputParameter: s3_bucket
         taskInfo:
           name: vla-register-model-op
       vla-validate-onnx-op:
@@ -438,6 +454,9 @@ platforms:
             sizeLimit: 16Gi
             volumeName: dshm
           imagePullPolicy: Always
+          nodeSelector:
+            labels:
+              nvidia.com/gpu.product: NVIDIA-L40S
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID

@@ -1,5 +1,5 @@
 # This project was developed with assistance from AI tools.
-"""Register fine-tuned VLA ONNX model with RHOAI Model Registry."""
+"""Register a fine-tuned VLA artifact with RHOAI Model Registry."""
 
 from __future__ import annotations
 
@@ -103,6 +103,9 @@ def _lineage_metadata() -> dict:
         "VLA_BASE_MODEL_REPO": "base_model_repo",
         "VLA_MAX_STEPS": "training_steps",
         "VLA_EMBODIMENT_TAG": "embodiment_tag",
+        "VLA_MODEL_URI": "model_uri",
+        "VLA_ONNX_URI": "onnx_uri",
+        "VLA_SERVING_MODE": "serving_mode",
     }
     for env_key, meta_key in env_map.items():
         val = os.environ.get(env_key, "")
