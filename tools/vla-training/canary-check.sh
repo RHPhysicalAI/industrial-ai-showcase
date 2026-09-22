@@ -8,6 +8,9 @@ canary_name="${VLA_CANARY_NAME:-openvla-smoke-canary}"
 artifact_uri="${VLA_CANARY_ARTIFACT_URI:-}"
 local_port="${VLA_CANARY_LOCAL_PORT:-18000}"
 mode="${VLA_CANARY_MODE:-groot}"
+model_cache_dir="${VLA_CANARY_MODEL_CACHE_DIR:-/models}"
+canary_image="${VLA_CANARY_IMAGE:-}"
+use_live_image="${VLA_CANARY_USE_LIVE_IMAGE:-false}"
 keep=false
 
 usage() {
@@ -18,7 +21,10 @@ The canary validates the original GR00T serving contract by default. Use
 --mode onnx only for the optional legacy ONNX adapter diagnostic.
 Resources are deleted automatically unless --keep is used. Optional
 environment variables: VLA_OC_CONTEXT, VLA_CANARY_NAMESPACE,
-VLA_CANARY_NAME, VLA_CANARY_LOCAL_PORT, and VLA_CANARY_MODE.
+VLA_CANARY_NAME, VLA_CANARY_LOCAL_PORT, VLA_CANARY_MODE, and
+VLA_CANARY_MODEL_CACHE_DIR, and VLA_CANARY_IMAGE. The canary requires an
+explicit fork-built image. Set VLA_CANARY_USE_LIVE_IMAGE=true only when
+intentionally testing the currently deployed image.
 EOF
 }
 
@@ -79,8 +85,17 @@ if oc_cmd -n "$namespace" get deployment/"$canary_name" >/dev/null 2>&1 ||
   exit 2
 fi
 
-image="$(oc_cmd -n "$namespace" get deployment/openvla-server -o jsonpath='{.spec.template.spec.containers[?(@.name=="openvla-server")].image}')"
-[[ -n "$image" ]] || { echo "BLOCKED: original openvla-server image could not be resolved." >&2; exit 2; }
+if [[ -z "$canary_image" ]]; then
+  if [[ "$use_live_image" == true ]]; then
+    canary_image="$(oc_cmd -n "$namespace" get deployment/openvla-server -o jsonpath='{.spec.template.spec.containers[?(@.name=="openvla-server")].image}')"
+    [[ -n "$canary_image" ]] || { echo "BLOCKED: live openvla-server image could not be resolved." >&2; exit 2; }
+    echo "WARNING: using the live image by explicit request; repository changes are not being tested."
+  else
+    echo "BLOCKED: VLA_CANARY_IMAGE is required; provide the fork-built serving image." >&2
+    echo "Set VLA_CANARY_USE_LIVE_IMAGE=true only for an intentional upstream/runtime baseline check." >&2
+    exit 2
+  fi
+fi
 
 port_log="$(mktemp -t vla-canary-port-forward.XXXXXX)"
 port_forward_pid=""
@@ -116,7 +131,7 @@ spec:
       - {key: nvidia.com/gpu, operator: Exists, effect: NoSchedule}
       containers:
       - name: openvla-server
-        image: $image
+        image: $canary_image
         imagePullPolicy: IfNotPresent
         env:
         - {name: SERVICE_NAME, value: $canary_name}
@@ -124,10 +139,12 @@ spec:
         - {name: OPENVLA_WEIGHTS, value: $artifact_uri}
         - {name: GROOT_MODEL_PATH, value: $artifact_uri}
         - {name: GROOT_EMBODIMENT_TAG, value: "NEW_EMBODIMENT"}
+        - {name: GROOT_VIDEO_KEY, value: "rs_view"}
         - {name: PORT, value: "8000"}
         - {name: OPENVLA_DEVICE, value: "cuda"}
         - {name: S3_ENDPOINT, value: "http://minio.mlflow.svc:9000"}
-        - {name: MODEL_CACHE_DIR, value: "/models"}
+        - {name: MODEL_CACHE_DIR, value: "$model_cache_dir"}
+        - {name: HF_HOME, value: "/tmp/hf_cache"}
         - name: AWS_ACCESS_KEY_ID
           valueFrom: {secretKeyRef: {name: storage-config, key: AWS_ACCESS_KEY_ID}}
         - name: AWS_SECRET_ACCESS_KEY
@@ -154,7 +171,7 @@ metadata:
   namespace: $namespace
   labels: {app: $canary_name, component: vla-canary}
 spec:
-  selector: {app: $$canary_name}
+  selector: {app: $canary_name}
   ports: [{name: http, port: 8000, targetPort: 8000}]
 EOF
 

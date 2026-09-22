@@ -10,7 +10,4 @@ spec:
         - name: fake-camera
           env:
             - name: KAFKA_BOOTSTRAP_SERVERS
-              valueFrom:
-                configMapKeyRef:
-                  name: mission-dispatcher-config
-                  key: kafka.bootstrap.servers
+              value: ${HUB_KAFKA_ROUTE}:443

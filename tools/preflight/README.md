@@ -10,6 +10,7 @@ The checker uses four supported scopes:
 - `cloud-vm` — separate Ubuntu/NVIDIA VM running the VLA service
 - `companion` — Companion SNO OpenShift cluster
 - `hub` — primary OSD/OpenShift cluster
+- `ml-training` — fork-side ML pipeline contract and Hub training prerequisites
 
 “SNO” describes the Companion topology; it is not a second name for the Hub.
 
@@ -53,6 +54,9 @@ python3 tools/preflight/check.py --scope cloud-vm \
   --cloud-vm-user "$VLA_VM_SSH_USER" \
   --cloud-vm-key "$VLA_VM_SSH_KEY" \
   --cloud-vm-gpu-model "$VLA_GPU_MODEL"
+
+# Validate the ML pipeline without submitting a run.
+python3 tools/preflight/check.py --scope ml-training --explain --color always
 ```
 
 The cloud VM scope checks SSH reachability, Ubuntu, Podman, NVIDIA driver and
@@ -151,3 +155,24 @@ V1 checks:
 - Cloud VLA mode and optional workstation-originated endpoint check
 
 V1 deliberately does not attempt a real mission, inspect secret values, or install missing prerequisites. Those are later roadmap milestones.
+
+## ML training validation scope
+
+The `ml-training` scope is a safety gate around the original upstream
+pipeline. It does not replace or rewrite the training implementation, submit a
+Kubeflow Pipeline run, allocate a GPU, change serving deployments, or print
+secret values.
+
+It validates:
+
+- Required training source files and the committed compiled pipeline artifact
+- Availability of the KFP compiler in the selected isolated Python environment
+- The training BuildConfig points at this fork's origin repository
+- Hub access, `vla-training`, DSPA, the pipeline image, MLflow, and Model Registry
+- Required secret objects by name only
+- Presence of NVIDIA L40S capacity
+
+The value is that configuration and infrastructure failures are found before a
+GPU-consuming run. It also creates an explicit boundary between unchanged
+upstream training logic and fork-specific repository/topology configuration.
+For compilation details, see [`tools/vla-training/README.md`](../vla-training/README.md).

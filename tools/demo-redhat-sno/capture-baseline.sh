@@ -22,8 +22,10 @@ if [[ -n "${DEMO_SNO_KUBECONFIG:-}" ]]; then
   export KUBECONFIG="$DEMO_SNO_KUBECONFIG"
 fi
 
+: "${DEMO_SNO_CONTEXT:?Set DEMO_SNO_CONTEXT in .env}"
+
 oc_run() {
-  oc "$@" 2>&1 || true
+  oc --context="$DEMO_SNO_CONTEXT" "$@" 2>&1 || true
 }
 
 section() {

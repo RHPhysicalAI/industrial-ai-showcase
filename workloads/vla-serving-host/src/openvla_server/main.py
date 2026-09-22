@@ -72,6 +72,7 @@ async def lifespan(app: FastAPI):
         model_cache_dir=settings.model_cache_dir,
         groot_model_path=settings.groot_model_path,
         groot_embodiment_tag=settings.groot_embodiment_tag,
+        groot_video_key=settings.groot_video_key,
     )
     app.state.settings = settings
     app.state.log = log

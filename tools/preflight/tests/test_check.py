@@ -178,3 +178,8 @@ def test_fedora_scope_is_explicitly_unsupported() -> None:
     assert selected_scopes("host") == {"unsupported"}
     assert "cloud-vm" in selected_scopes("all")
     assert "fedora" not in selected_scopes("all")
+
+
+def test_ml_training_scope_is_explicit() -> None:
+    assert selected_scopes("ml-training") == {"ml-training"}
+    assert "ml-training" not in selected_scopes("all")

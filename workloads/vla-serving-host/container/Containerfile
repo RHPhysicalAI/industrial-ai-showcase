@@ -40,12 +40,16 @@ COPY workloads/vla-serving-host/src /opt/app/vla-serving-host/src
 # Install service-level deps. In :slim we install everything except torch/torchvision
 # (the service defaults to VLA_MODE=mock which never imports torch). In :rocm the
 # base already has torch; we install --no-deps to avoid overwriting it.
+# Keep the NVIDIA base image's matched Torch/CUDA stack intact. GR00T and timm
+# use the already-installed Torch packages; resolving timm's dependencies here
+# would pull a newer PyPI Torch/CUDA stack over them.
 RUN pip3 install --no-cache-dir \
         fastapi "uvicorn[standard]" \
         pydantic pydantic-settings \
-        structlog pillow numpy boto3 "timm>=0.9.10,<1.0.0" \
+        structlog pillow numpy boto3 \
+    && pip3 install --no-cache-dir --no-deps "timm>=0.9.10,<1.0.0" \
     && pip3 install --no-cache-dir --no-deps /opt/app/vla-serving-host \
-    && chown -R 1001:0 /opt/app
+        && chown -R 1001:0 /opt/app
 
 # GR00T N1.7 SDK + inference deps (cuda only).
 # The base image ships a matched set of torch + transformer_engine + flash-attn +

@@ -52,6 +52,9 @@ source .env
 ```
 
 Do not commit `.env` or a kubeconfig. The hosted SNO values must not be replaced with the self-managed values from `tools/companion-install/`.
+When the kubeconfig contains both Hub and Companion contexts, set
+`DEMO_SNO_CONTEXT` explicitly; the deployment script uses that context for
+every SNO operation.
 
 ## Capture the SNO baseline
 

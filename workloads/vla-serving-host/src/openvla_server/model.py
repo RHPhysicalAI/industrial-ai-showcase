@@ -166,6 +166,11 @@ _G1_STATE_DIMS = {
 }
 _G1_ACTION_KEYS = list(_G1_STATE_DIMS.keys())
 
+_TELEOP_G1_STATE_DIMS = {
+    "left_leg": 6, "right_leg": 6, "waist": 3,
+    "left_arm": 7, "left_hand": 7, "right_arm": 7, "right_hand": 7,
+}
+
 
 def _build_g1_state_placeholder() -> dict[str, np.ndarray]:
     """Build a numerically safe placeholder state for REAL_G1.
@@ -185,17 +190,32 @@ def _build_g1_state_placeholder() -> dict[str, np.ndarray]:
     return state
 
 
+def _build_teleop_g1_state_placeholder() -> dict[str, np.ndarray]:
+    """Build a zero state matching the Teleop-G1 43-DOF joint schema."""
+    return {
+        part: np.zeros((1, 1, dim), dtype=np.float32)
+        for part, dim in _TELEOP_G1_STATE_DIMS.items()
+    }
+
+
 class GR00TAdapter:
     """GR00T N1.7 adapter using Gr00tPolicy for real VLA inference."""
 
     _BUILTIN_TAGS = {"REAL_G1", "XDOF", "XDOF_SUBTASK", "OXE_DROID_RELATIVE_EEF_RELATIVE_JOINT"}
 
-    def __init__(self, model_path: str, embodiment_tag: str = "REAL_G1", device: str = "cuda") -> None:
+    def __init__(
+        self,
+        model_path: str,
+        embodiment_tag: str = "REAL_G1",
+        device: str = "cuda",
+        video_key: str = "ego_view",
+    ) -> None:
         self._model_path = model_path
         self._embodiment_tag = embodiment_tag
         self._device = device
         self._policy = None
-        self._video_key = "ego_view"
+        self._video_key = video_key
+        self._video_horizon = 2
         self.model_version = f"groot-{Path(model_path).name}"
 
     def _register_custom_embodiment(self) -> None:
@@ -230,6 +250,7 @@ class GR00TAdapter:
         from gr00t.policy.gr00t_policy import Gr00tPolicy  # type: ignore[import-not-found]
 
         if self._embodiment_tag not in self._BUILTIN_TAGS:
+            self._video_horizon = 1
             self._register_custom_embodiment()
         self._policy = Gr00tPolicy(
             embodiment_tag=self._embodiment_tag,
@@ -244,12 +265,16 @@ class GR00TAdapter:
         img_arr = np.array(image, dtype=np.uint8)
         if img_arr.ndim == 2:
             img_arr = np.stack([img_arr] * 3, axis=-1)
-        # REAL_G1 uses delta_indices=[0,1] for video (2 frames) and [0] for state.
-        # Duplicate the single frame to fill the temporal horizon.
-        video_frames = np.stack([img_arr, img_arr], axis=0)  # (T=2, H, W, C)
+        # REAL_G1 uses delta_indices=[0,1]; the custom Teleop-G1 modality uses
+        # delta_indices=[0]. Duplicate only when the selected modality requires it.
+        video_frames = np.stack([img_arr] * self._video_horizon, axis=0)
         obs: dict = {
-            "video": {self._video_key: video_frames[np.newaxis, ...]},  # (B=1, T=2, H, W, C)
-            "state": _build_g1_state_placeholder(),
+            "video": {self._video_key: video_frames[np.newaxis, ...]},
+            "state": (
+                _build_teleop_g1_state_placeholder()
+                if self._embodiment_tag == "NEW_EMBODIMENT"
+                else _build_g1_state_placeholder()
+            ),
             "language": {"annotation.human.task_description": [[instruction]]},
         }
 
@@ -292,6 +317,7 @@ def build_adapter(
     model_cache_dir: str = "/tmp/model_cache",
     groot_model_path: str = "",
     groot_embodiment_tag: str = "NEW_EMBODIMENT",
+    groot_video_key: str = "ego_view",
 ) -> VlaAdapter:
     mode = mode.lower()
     if mode == "mock":
@@ -299,7 +325,12 @@ def build_adapter(
     if mode == "groot":
         model_path = groot_model_path or weights
         resolved = _resolve_weights(model_path, s3_endpoint=s3_endpoint, model_cache_dir=model_cache_dir)
-        return GR00TAdapter(model_path=resolved, embodiment_tag=groot_embodiment_tag, device=device)
+        return GR00TAdapter(
+            model_path=resolved,
+            embodiment_tag=groot_embodiment_tag,
+            device=device,
+            video_key=groot_video_key,
+        )
     if mode in ("openvla", "onnx"):
         resolved = _resolve_weights(weights, s3_endpoint=s3_endpoint, model_cache_dir=model_cache_dir)
         if _is_onnx_dir(resolved) or mode == "onnx":

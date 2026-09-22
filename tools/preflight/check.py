@@ -28,6 +28,7 @@ PROFILES = {
     "agentic": "agentic operations workload",
 }
 SCOPES = {"local", "hub", "companion", "cloud-vm"}
+SPECIAL_SCOPES = {"ml-training"}
 LEGACY_SCOPES = {"fedora", "host"}
 DEFAULT_COMPANION_KUBECONFIG = Path.home() / ".kube" / "companion.kubeconfig"
 SUPPORTED_TOPOLOGY = "local workstation + Hub + hosted Companion SNO + separate cloud VLA VM"
@@ -75,6 +76,25 @@ REQUIRED_REPO_PATHS = (
 GITOPS_APPSET_PATHS = (
     "infrastructure/gitops/clusters/hub/appsets/workloads.yaml",
     "infrastructure/gitops/apps/hub-acm/appset-companion/applicationset.yaml",
+)
+
+ML_TRAINING_PATHS = (
+    "workloads/vla-training/src/vla_training/pipeline.py",
+    "workloads/vla-training/src/vla_training/config.py",
+    "workloads/vla-training/src/vla_training/constants.py",
+    "workloads/vla-training/src/vla_training/data_prep.py",
+    "workloads/vla-training/src/vla_training/fine_tune.py",
+    "workloads/vla-training/src/vla_training/validate_onnx.py",
+    "workloads/vla-training/src/vla_training/register_model.py",
+    "workloads/vla-training/src/vla_training/promote.py",
+    "workloads/vla-training/vla_finetune_pipeline.yaml",
+    "infrastructure/gitops/apps/platform/dspa/dspa.yaml",
+    "infrastructure/gitops/apps/platform/mlflow/mlflow.yaml",
+    "infrastructure/gitops/apps/platform/model-registry/model-registry.yaml",
+)
+
+ML_TRAINING_GIT_SOURCE_PATHS = (
+    "infrastructure/gitops/apps/platform/dspa/buildconfig.yaml",
 )
 
 
@@ -186,6 +206,8 @@ class PreflightChecker:
             self.check_cloud_vm()
         if "unsupported" in self.scopes:
             self.check_unsupported_path()
+        if "ml-training" in self.scopes:
+            self.check_ml_training()
         return self.results
 
     def check_local(self) -> None:
@@ -541,6 +563,92 @@ class PreflightChecker:
             detail="This checker validates the hosted Companion SNO plus separate cloud NVIDIA VLA VM topology only.",
             action="Use --scope cloud-vm for the VLA VM. The old Fedora/libvirt/ROCm path is outside the supported deployment.",
             source="tools/cloud-vm-setup/README.md",
+        )
+
+    def check_ml_training(self) -> None:
+        """Validate the ML pipeline contract without submitting a pipeline run."""
+        for relative_path in ML_TRAINING_PATHS:
+            path = self.repo_root / relative_path
+            exists = path.is_file()
+            self.add(
+                f"ml-training.repo-path.{relative_path.replace('/', '.')}",
+                "ml-training",
+                "blocking",
+                "pass" if exists else "fail",
+                f"ML training path exists: {relative_path}" if exists else f"ML training path is missing: {relative_path}",
+                action="Restore the upstream-aligned training path or update the fork before compiling.",
+                source=relative_path,
+            )
+
+        compiler = self.runner.run(
+            [
+                sys.executable,
+                "-c",
+                "import kfp; print(getattr(kfp, '__version__', 'installed'))",
+            ]
+        )
+        compiler_ok = compiler.returncode == 0
+        self.add(
+            "ml-training.kfp-compiler",
+            "ml-training",
+            "blocking",
+            "pass" if compiler_ok else "fail",
+            "KFP compiler is available" if compiler_ok else "KFP compiler is not available",
+            detail=clean_error(compiler.stderr or compiler.stdout),
+            action="Use the isolated compiler environment described in tools/vla-training/README.md; do not install into the system Python.",
+            source="workloads/vla-training/pyproject.toml",
+        )
+
+        self.check_ml_training_git_source()
+
+        if self.check_oc_access("ml-training", self.hub_kubeconfig):
+            self.check_resources(
+                "ml-training",
+                self.hub_kubeconfig,
+                (
+                    ("ml-training.namespace", "namespace/vla-training", None),
+                    ("ml-training.dspa", "dspa/dspa", "vla-training"),
+                    ("ml-training.image", "imagestream/vla-training", "vla-training"),
+                    ("ml-training.mlflow", "namespace/mlflow", None),
+                    ("ml-training.registry", "namespace/rhoai-model-registries", None),
+                ),
+            )
+            self.check_secrets(
+                "ml-training",
+                self.hub_kubeconfig,
+                (
+                    ("ml-training.secret.hf", "hf-credentials", "vla-training"),
+                    ("ml-training.secret.minio", "minio-credentials", "vla-training"),
+                    ("ml-training.secret.git", "git-source-secret", "vla-training"),
+                ),
+            )
+            self.check_gpu_capacity(self.hub_kubeconfig)
+
+    def check_ml_training_git_source(self) -> None:
+        origin_result = self.runner.run(["git", "config", "--get", "remote.origin.url"])
+        origin = origin_result.stdout.strip()
+        origin_key = normalize_repo_url(origin)
+        configured: set[str] = set()
+        for relative_path in ML_TRAINING_GIT_SOURCE_PATHS:
+            path = self.repo_root / relative_path
+            if not path.exists():
+                continue
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if "uri:" not in line:
+                    continue
+                value = line.split("uri:", 1)[1].strip().strip("\"'")
+                if value.startswith(("http://", "https://", "git@")):
+                    configured.add(value)
+        aligned = bool(origin_key and configured and origin_key in {normalize_repo_url(value) for value in configured})
+        self.add(
+            "ml-training.git-source",
+            "ml-training",
+            "blocking",
+            "pass" if aligned else "fail",
+            "Training image BuildConfig points at this fork" if aligned else "Training image BuildConfig does not point at this fork",
+            detail=f"origin={origin or 'unavailable'}; configured={', '.join(sorted(configured)) or 'not found'}",
+            action="Update only the fork-specific BuildConfig repository URL; keep the upstream training code unchanged.",
+            source=", ".join(ML_TRAINING_GIT_SOURCE_PATHS),
         )
 
 
@@ -917,6 +1025,11 @@ def resource_readiness(resource: str, data: dict[str, Any]) -> tuple[bool, str]:
             return False, "status.conditions is not populated"
         return ready and not degraded, f"ready={ready}, degraded={degraded}"
 
+    if kind == "dspa":
+        conditions = status.get("conditions", []) or []
+        ready = any(condition.get("type") == "Ready" and condition.get("status") == "True" for condition in conditions)
+        return ready, f"Ready={ready}"
+
     if kind == "virtualmachine":
         printable = str(status.get("printableStatus", "")).lower()
         ready = any(
@@ -967,9 +1080,9 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--scope",
-        choices=["all", *sorted(SCOPES), *sorted(LEGACY_SCOPES)],
+        choices=["all", *sorted(SCOPES | SPECIAL_SCOPES), *sorted(LEGACY_SCOPES)],
         default="all",
-        help="supported scopes: local, hub, companion, cloud-vm; fedora/host are reported as unsupported",
+        help="supported scopes: local, hub, companion, cloud-vm, ml-training; fedora/host are reported as unsupported",
     )
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--hub-kubeconfig", default=os.environ.get("KUBECONFIG"))
@@ -1016,6 +1129,7 @@ SCOPE_COLORS = {
     "hub": "cyan",
     "cloud-vm": "magenta",
     "unsupported": "yellow",
+    "ml-training": "magenta",
 }
 
 

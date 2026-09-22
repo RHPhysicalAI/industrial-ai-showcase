@@ -21,6 +21,17 @@ missing object-store credentials, or absent GPU can fail the run before useful
 training starts. This validation step catches those conditions earlier and
 provides a repeatable record of what was checked.
 
+The MLflow MinIO claim is sized at **200Gi** for the training workflow. A run
+temporarily retains the downloaded base model and dataset, fine-tuning
+checkpoints, the native GR00T model used by serving, and the secondary ONNX
+export. The smaller 120Gi claim reached MinIO's minimum-free-space threshold
+while uploading checkpoints, even though training and export had succeeded.
+
+The training image pins `model-registry==0.3.14` because this Hub currently
+serves the Model Registry `v1alpha3` API. Do not broaden this dependency range
+without first upgrading the cluster-side registry: newer clients may call the
+`v1` API and fail registration after the GPU work has already completed.
+
 It also protects the working hosted demo: validation is read-only and does not
 submit runs, scale workloads, modify secrets, sync GitOps, or replace the Cloud
 VLA VM.
@@ -106,10 +117,20 @@ bash tools/vla-training/canary-check.sh \
   --artifact-uri s3://vla-training/vla-finetune-smoke-20260921/model
 ```
 
-The helper uses the existing serving image, storage configuration, model-cache
-PVC, and L40S scheduling conventions. It creates a uniquely named temporary
+The helper uses the fork-built serving image, storage configuration, model-cache
+PVC, and L40S scheduling conventions. Set `VLA_CANARY_IMAGE` to the image built
+from this checkout; it refuses to silently fall back to the live upstream image.
+`VLA_CANARY_USE_LIVE_IMAGE=true` is available only for an intentional baseline
+comparison. The helper creates a uniquely named temporary
 Deployment and Service, sets `VLA_MODE=groot`, checks `/healthz` and `/readyz`,
 then sends one representative `/act` request through a local port-forward.
+For the Teleop-G1 artifact, it sets `GROOT_VIDEO_KEY=rs_view`; the live
+`REAL_G1` deployment retains its original `ego_view` default.
+Set `VLA_CANARY_MODEL_CACHE_DIR` to a new directory under the mounted cache PVC
+when validating a changed artifact or recovering from an interrupted download;
+the serving loader treats any non-empty cache directory as complete.
+The canary also sets the same writable `HF_HOME` used by the live deployment;
+without it, Hugging Face can fall back to the unwritable `/.cache` path.
 The canary injects the existing `robot-edge/hf-token` Secret because GR00T
 loads the gated `nvidia/Cosmos-Reason2-2B` backbone on first inference. The
 token must have access to that repository. Resources are deleted automatically
