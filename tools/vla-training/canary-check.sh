@@ -14,6 +14,7 @@ video_key="${VLA_CANARY_VIDEO_KEY:-rs_view}"
 inference_timeout="${VLA_CANARY_INFERENCE_TIMEOUT:-300}"
 canary_image="${VLA_CANARY_IMAGE:-}"
 use_live_image="${VLA_CANARY_USE_LIVE_IMAGE:-false}"
+allow_tag_image="${VLA_CANARY_ALLOW_TAG_IMAGE:-false}"
 keep=false
 
 usage() {
@@ -26,10 +27,12 @@ Resources are deleted automatically unless --keep is used. Optional
 environment variables: VLA_OC_CONTEXT, VLA_CANARY_NAMESPACE,
 VLA_CANARY_NAME, VLA_CANARY_LOCAL_PORT, VLA_CANARY_MODE, and
 VLA_CANARY_MODEL_CACHE_DIR, VLA_CANARY_EMBODIMENT_TAG,
-VLA_CANARY_VIDEO_KEY, VLA_CANARY_INFERENCE_TIMEOUT, and VLA_CANARY_IMAGE.
+VLA_CANARY_VIDEO_KEY, VLA_CANARY_INFERENCE_TIMEOUT, VLA_CANARY_IMAGE, and
+VLA_CANARY_ALLOW_TAG_IMAGE.
 The canary requires an explicit fork-built image. Set
 VLA_CANARY_USE_LIVE_IMAGE=true only when intentionally testing the currently
-deployed image.
+deployed image. Image references must be immutable digests unless
+VLA_CANARY_ALLOW_TAG_IMAGE=true is explicitly set for a controlled diagnostic.
 EOF
 }
 
@@ -61,6 +64,12 @@ if [[ -z "$artifact_uri" || ! "$artifact_uri" =~ ^s3://[A-Za-z0-9._-]+/[A-Za-z0-
   exit 2
 fi
 
+if [[ "$mode" == "groot" && ! "$artifact_uri" =~ /model/?$ ]]; then
+  echo "BLOCKED: GR00T canary requires the native .../model artifact, not .../onnx or .../checkpoint." >&2
+  echo "Use the versioned serving URI ending in /model." >&2
+  exit 2
+fi
+
 oc_args=()
 [[ -n "${VLA_OC_CONTEXT:-}" ]] && oc_args+=(--context "$VLA_OC_CONTEXT")
 oc_cmd() { oc "${oc_args[@]}" "$@"; }
@@ -70,10 +79,23 @@ if ! oc_cmd whoami >/dev/null 2>&1; then
   exit 2
 fi
 
-live_replicas="$(oc_cmd -n "$namespace" get deployment/openvla-server -o jsonpath='{.spec.replicas}')"
+if ! live_replicas="$(oc_cmd -n "$namespace" get deployment/openvla-server -o jsonpath='{.spec.replicas}')"; then
+  echo "BLOCKED: $namespace/openvla-server is missing; refusing to infer the live-demo state." >&2
+  exit 2
+fi
 if [[ "$live_replicas" != "0" ]]; then
   echo "BLOCKED: $namespace/openvla-server has replicas=$live_replicas." >&2
   echo "The live serving deployment must remain stopped during this isolated check." >&2
+  exit 2
+fi
+
+if ! gpu_nodes="$(oc_cmd get nodes -l nvidia.com/gpu.product=NVIDIA-L40S --no-headers 2>/dev/null | awk 'NF {count++} END {print count+0}')"; then
+  echo "BLOCKED: unable to inspect the NVIDIA-L40S node pool." >&2
+  exit 2
+fi
+if [[ "$gpu_nodes" -lt 1 ]]; then
+  echo "BLOCKED: no NVIDIA-L40S node is currently registered for the canary." >&2
+  echo "Do not consume a GPU run until the intended Hub GPU pool is available." >&2
   exit 2
 fi
 
@@ -82,6 +104,18 @@ for resource in secret/storage-config secret/hf-token pvc/model-cache; do
     echo "BLOCKED: $namespace/$resource is missing." >&2
     exit 2
   }
+done
+
+if [[ "$mode" == "groot" && -z "$(oc_cmd -n "$namespace" get secret/hf-token -o jsonpath='{.data.token}')" ]]; then
+  echo "BLOCKED: $namespace/secret/hf-token has no non-empty token key." >&2
+  echo "Provide the approved Hugging Face credential without printing it." >&2
+  exit 2
+fi
+for storage_key in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+  if [[ -z "$(oc_cmd -n "$namespace" get secret/storage-config -o jsonpath="{.data.${storage_key}}")" ]]; then
+    echo "BLOCKED: $namespace/secret/storage-config has no non-empty ${storage_key} key." >&2
+    exit 2
+  fi
 done
 
 if oc_cmd -n "$namespace" get deployment/"$canary_name" >/dev/null 2>&1 ||
@@ -102,6 +136,13 @@ if [[ -z "$canary_image" ]]; then
   fi
 fi
 
+if [[ "$canary_image" != *@sha256:* && "$allow_tag_image" != true ]]; then
+  echo "BLOCKED: VLA_CANARY_IMAGE must be an immutable @sha256 image digest." >&2
+  echo "Resolve the fork ImageStream tag to its digest before running the canary." >&2
+  echo "Set VLA_CANARY_ALLOW_TAG_IMAGE=true only for an intentional diagnostic." >&2
+  exit 2
+fi
+
 port_log="$(mktemp -t vla-canary-port-forward.XXXXXX)"
 port_forward_pid=""
 cleanup() {
@@ -116,6 +157,38 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
+
+init_container_yaml=""
+if [[ "$mode" == "groot" ]]; then
+  init_container_yaml="$(cat <<'EOF'
+      initContainers:
+      - name: hf-access-check
+        image: curlimages/curl:8.12.1
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/sh", "-ec"]
+        args:
+        - |
+          status="$(curl -sS --connect-timeout 10 --max-time 30 \
+            -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${HF_TOKEN}" \
+            https://huggingface.co/api/models/nvidia/Cosmos-Reason2-2B)"
+          if [ "$status" = 200 ]; then exit 0; fi
+          if [ "$status" = 401 ]; then
+            echo "Hugging Face token authentication failed (HTTP 401)." >&2
+            exit 1
+          fi
+          if [ "$status" = 403 ]; then
+            echo "Hugging Face account has not accepted the gated model terms (HTTP 403)." >&2
+            exit 1
+          fi
+          echo "Hugging Face model access preflight failed (HTTP $status)." >&2
+          exit 1
+        env:
+        - name: HF_TOKEN
+          valueFrom: {secretKeyRef: {name: hf-token, key: token}}
+EOF
+)"
+fi
 
 oc_cmd apply -f - <<EOF
 apiVersion: apps/v1
@@ -134,6 +207,7 @@ spec:
       nodeSelector: {nvidia.com/gpu.product: NVIDIA-L40S}
       tolerations:
       - {key: nvidia.com/gpu, operator: Exists, effect: NoSchedule}
+$init_container_yaml
       containers:
       - name: openvla-server
         image: $canary_image
@@ -212,6 +286,24 @@ image_b64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBA
 act_response="$(curl -fsS --max-time "$inference_timeout" -X POST "http://localhost:${local_port}/act" \
   -H 'Content-Type: application/json' \
   -d "{\"image\":\"${image_b64}\",\"instruction\":\"pick up the pallet\",\"trace_id\":\"vla-smoke-canary\"}")"
+
+if ! printf '%s' "$act_response" | python3 -c '
+import json
+import math
+import sys
+
+response = json.load(sys.stdin)
+action = response.get("action")
+if not isinstance(action, list) or len(action) != 7:
+    raise SystemExit(f"expected exactly 7 action values, got {len(action) if isinstance(action, list) else type(action).__name__}")
+if not all(isinstance(value, (int, float)) and math.isfinite(value) for value in action):
+    raise SystemExit("action contains a non-finite or non-numeric value")
+if not response.get("model_version") or response.get("trace_id") != "vla-smoke-canary":
+    raise SystemExit("response metadata is incomplete or trace_id was not preserved")
+'; then
+  echo "FAIL: /act returned an invalid legacy response contract: $act_response" >&2
+  exit 1
+fi
 
 echo "PASS: original openvla-server ${mode} canary responded"
 echo "Health: $health"

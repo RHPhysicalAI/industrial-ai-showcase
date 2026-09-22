@@ -38,6 +38,17 @@ uses a 43-DOF joint state/action schema and the `rs_view` video key. `UNITREE_G1
 is a different locomotion schema and must not be substituted without a matching
 modality definition.
 
+GR00T also loads the gated `nvidia/Cosmos-Reason2-2B` VLM backbone during
+inference. Before running the canary, accept the model's terms while signed in
+to the Hugging Face account that owns the token used by the Hub Secret:
+
+<https://huggingface.co/nvidia/Cosmos-Reason2-2B>
+
+Model-page approval and token authentication are separate requirements. A
+valid token without account approval returns HTTP 403; an invalid token returns
+HTTP 401. Keep the token in the local ignored environment/cluster Secret only;
+never commit or print it.
+
 It also protects the working hosted demo: validation is read-only and does not
 submit runs, scale workloads, modify secrets, sync GitOps, or replace the Cloud
 VLA VM.
@@ -135,6 +146,11 @@ bash tools/vla-training/canary-check.sh \
 The helper uses the fork-built serving image, storage configuration, model-cache
 PVC, and L40S scheduling conventions. Set `VLA_CANARY_IMAGE` to the image built
 from this checkout; it refuses to silently fall back to the live upstream image.
+Provide the image as an immutable `@sha256:` digest so a moving tag cannot
+silently test an older image. `VLA_CANARY_ALLOW_TAG_IMAGE=true` is reserved for
+an explicitly intentional diagnostic. The helper also refuses a GR00T artifact
+unless its URI ends in `/model`, checks that an L40S node is registered, and
+checks the required Secret keys without revealing their values.
 `VLA_CANARY_USE_LIVE_IMAGE=true` is available only for an intentional baseline
 comparison. The helper creates a uniquely named temporary
 Deployment and Service, sets `VLA_MODE=groot`, checks `/healthz` and `/readyz`,
@@ -158,8 +174,13 @@ The canary also sets the same writable `HF_HOME` used by the live deployment;
 without it, Hugging Face can fall back to the unwritable `/.cache` path.
 The canary injects the existing `robot-edge/hf-token` Secret because GR00T
 loads the gated `nvidia/Cosmos-Reason2-2B` backbone on first inference. The
-token must have access to that repository. Resources are deleted automatically
-on exit. Use `--keep` only when debugging.
+token must have access to that repository. For GR00T, a lightweight init
+container checks the gated-model HTTP access before the GPU-serving container
+starts, distinguishing invalid credentials (401) from missing model approval
+(403) without printing the token. The final `/act` response is also checked
+for the established seven-value JSON shape, finite numeric values, and trace
+metadata. Resources are deleted automatically on exit. Use `--keep` only when
+debugging.
 
 The ONNX bundle remains a secondary TensorRT/component artifact. The optional
 legacy adapter diagnostic can still be run explicitly:
@@ -187,6 +208,20 @@ preserves the versioned GR00T model directory, exports the secondary ONNX
 bundle, validates the ONNX components, and registers the GR00T model URI.
 Serving acceptance is a separate staging gate using the original GR00T
 runtime.
+
+The first fork-side end-to-end proof is complete: a bounded KFP run completed
+training, export, validation, and registration, and the native GR00T canary
+then passed `/healthz`, `/readyz`, and one `/act` inference request using the
+versioned `.../model` artifact. This proves the train-to-artifact-to-inference
+contract; it does not yet prove robot-control semantics or promotion to the
+live deployment.
+
+The next integration gate is the action-space contract. The trained Teleop-G1
+policy is validated as a 43-DOF, 16-step action chunk before the server keeps
+the existing seven-value HTTP response for compatibility. That seven-value
+response is deliberately treated as a shape-preserving compatibility projection
+only; a real mapping to the downstream robot-control command must be designed
+and validated separately before promotion.
 
 ## Lessons now encoded in the fork
 

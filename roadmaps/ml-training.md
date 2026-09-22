@@ -1,6 +1,6 @@
 # Goal 7 — ML and Training Model Lifecycle
 
-Status: ⏭️ Next
+Status: 🔄 In progress
 
 ## Objective
 
@@ -76,6 +76,15 @@ that the next run must follow:
 - A successful canary is an artifact-load/inference proof, not proof that the
   43-DOF trained action has been mapped into the live 7-value robot-edge API.
   That downstream action-space integration is a separate gate.
+- The fork now validates the Teleop-G1 action keys, per-modality widths, and
+  shared 16-step horizon in the serving adapter. The existing seven-value
+  response remains unchanged as a compatibility projection; no semantic
+  43-DOF-to-7-DOF mapping is claimed.
+- The canary now gates the expensive path on a native `/model` URI, an
+  immutable serving-image digest, an available L40S node, non-empty required
+  Secret keys, and gated Hugging Face access before the GPU container starts.
+  It also validates the final seven-value response and cleans temporary
+  resources automatically.
 
 ## Next-week work plan
 
@@ -128,6 +137,15 @@ that the next run must follow:
   serving manifests.
 - Generate a GitOps change that updates only the intended model version.
 - Validate Argo sync and rollback using a canary target first.
+
+### 7. Validate the downstream action mapping
+
+- Identify the actual downstream robot/simulation command contract for the
+  target embodiment.
+- Implement a named, tested 43-DOF-to-command mapping rather than relying on
+  positional truncation.
+- Exercise that mapping against simulation or a non-actuating test harness
+  before changing the live Mission Dispatch path.
 
 ## Definition of done
 

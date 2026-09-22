@@ -7,9 +7,16 @@ import base64
 import io
 import random
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, ClassVar, Protocol
 
 import numpy as np
+
+from openvla_server.action_contract import (
+    TELEOP_G1_ACTION_DIMS,
+    TELEOP_G1_ACTION_KEYS,
+    legacy_7_value_compatibility_projection,
+    validate_teleop_g1_action_chunk,
+)
 
 if TYPE_CHECKING:
     from PIL.Image import Image
@@ -54,7 +61,10 @@ class OpenvlaAdapter:
             return
         # Deferred import — PyTorch + transformers are heavy and only pulled when we need them.
         import torch  # type: ignore[import-not-found]
-        from transformers import AutoModelForVision2Seq, AutoProcessor  # type: ignore[import-not-found]
+        from transformers import (  # type: ignore[import-not-found]
+            AutoModelForVision2Seq,
+            AutoProcessor,
+        )
 
         dtype = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp32": torch.float32}[self._torch_dtype]
         self._processor = AutoProcessor.from_pretrained(self._weights, trust_remote_code=True)
@@ -166,10 +176,7 @@ _G1_STATE_DIMS = {
 }
 _G1_ACTION_KEYS = list(_G1_STATE_DIMS.keys())
 
-_TELEOP_G1_STATE_DIMS = {
-    "left_leg": 6, "right_leg": 6, "waist": 3,
-    "left_arm": 7, "left_hand": 7, "right_arm": 7, "right_hand": 7,
-}
+_TELEOP_G1_STATE_DIMS = TELEOP_G1_ACTION_DIMS
 
 
 def _build_g1_state_placeholder() -> dict[str, np.ndarray]:
@@ -208,7 +215,9 @@ class GR00TAdapter:
     validated; this adapter must not silently change the live demo contract.
     """
 
-    _BUILTIN_TAGS = {"REAL_G1", "XDOF", "XDOF_SUBTASK", "OXE_DROID_RELATIVE_EEF_RELATIVE_JOINT"}
+    _BUILTIN_TAGS: ClassVar[set[str]] = {
+        "REAL_G1", "XDOF", "XDOF_SUBTASK", "OXE_DROID_RELATIVE_EEF_RELATIVE_JOINT"
+    }
 
     def __init__(
         self,
@@ -226,25 +235,31 @@ class GR00TAdapter:
         self.model_version = f"groot-{Path(model_path).name}"
 
     def _register_custom_embodiment(self) -> None:
-        from gr00t.configs.data.embodiment_configs import register_modality_config  # type: ignore[import-not-found]
+        from gr00t.configs.data.embodiment_configs import (  # type: ignore[import-not-found]
+            register_modality_config,
+        )
         from gr00t.data.embodiment_tags import EmbodimentTag  # type: ignore[import-not-found]
         from gr00t.data.types import (  # type: ignore[import-not-found]
-            ActionConfig, ActionFormat, ActionRepresentation, ActionType, ModalityConfig,
+            ActionConfig,
+            ActionFormat,
+            ActionRepresentation,
+            ActionType,
+            ModalityConfig,
         )
 
         config = {
             "video": ModalityConfig(delta_indices=[0], modality_keys=[self._video_key]),
-            "state": ModalityConfig(delta_indices=[0], modality_keys=_G1_ACTION_KEYS),
+            "state": ModalityConfig(delta_indices=[0], modality_keys=list(TELEOP_G1_ACTION_KEYS)),
             "action": ModalityConfig(
                 delta_indices=list(range(16)),
-                modality_keys=_G1_ACTION_KEYS,
+                modality_keys=list(TELEOP_G1_ACTION_KEYS),
                 action_configs=[
                     ActionConfig(
                         rep=ActionRepresentation.RELATIVE if k in ("left_arm", "right_arm")
                         else ActionRepresentation.ABSOLUTE,
                         type=ActionType.NON_EEF, format=ActionFormat.DEFAULT,
                     )
-                    for k in _G1_ACTION_KEYS
+                    for k in TELEOP_G1_ACTION_KEYS
                 ],
             ),
             "language": ModalityConfig(delta_indices=[0], modality_keys=["annotation.human.task_description"]),
@@ -286,6 +301,8 @@ class GR00TAdapter:
         }
 
         action_chunk, _ = self._policy.get_action(obs)
+        if self._embodiment_tag == "NEW_EMBODIMENT":
+            validate_teleop_g1_action_chunk(action_chunk)
         action: list[float] = []
         for key in action_chunk:
             vals = action_chunk[key]
@@ -293,7 +310,7 @@ class GR00TAdapter:
                 action.extend(vals.flatten().tolist())
             elif isinstance(vals, list):
                 action.extend(vals)
-        return action[:7] if len(action) >= 7 else action
+        return legacy_7_value_compatibility_projection(action)
 
 
 def _is_onnx_dir(path: str) -> bool:
