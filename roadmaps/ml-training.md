@@ -76,6 +76,11 @@ that the next run must follow:
 - A successful canary is an artifact-load/inference proof, not proof that the
   43-DOF trained action has been mapped into the live 7-value robot-edge API.
   That downstream action-space integration is a separate gate.
+- The action-space audit found that the current demo has no downstream
+  manipulation-command topic or simulator subscriber. Isaac Sim moves the
+  forklift from `fleet.telemetry` pose updates emitted by the waypoint planner;
+  the mission dispatcher records the VLA response and emits lifecycle events.
+  No VLA action is currently applied to a robot or twin actuator.
 - The fork now validates the Teleop-G1 action keys, per-modality widths, and
   shared 16-step horizon in the serving adapter. The existing seven-value
   response remains unchanged as a compatibility projection; no semantic
@@ -140,8 +145,12 @@ that the next run must follow:
 
 ### 7. Validate the downstream action mapping
 
-- Identify the actual downstream robot/simulation command contract for the
-  target embodiment.
+- Decide whether the trained manipulation action is intended to actuate a
+  robot in this showcase. The current twin contract is navigation telemetry,
+  not a VLA action command interface.
+- If actuation is in scope, identify and document the actual downstream
+  robot/simulation command contract for the target embodiment before writing a
+  mapping.
 - Implement a named, tested 43-DOF-to-command mapping rather than relying on
   positional truncation.
 - Exercise that mapping against simulation or a non-actuating test harness

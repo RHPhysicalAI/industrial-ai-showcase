@@ -125,6 +125,11 @@ These are implementation dependencies, not secrets:
 - Before promoting beyond inference validation, reconcile the Teleop-G1
   43-DOF action space with the existing 7-value robot-edge API. Do not claim
   robot-control correctness from an HTTP 200 alone.
+- Current audit result: the dispatcher validates and records the existing
+  seven-value response, while Isaac Sim consumes `fleet.telemetry` poses from
+  the waypoint planner. No repository-defined manipulation command schema or
+  action consumer exists yet, so promotion to actuation is intentionally
+  blocked pending that design decision.
 
 ## Explicit non-goals for the first training run
 
