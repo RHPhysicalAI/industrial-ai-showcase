@@ -22,6 +22,17 @@ OUTPUT_DIR = Path("/tmp/vla-output")
 DATASET_DIR = Path("/tmp/vla-dataset")
 ONNX_DIR = Path("/tmp/vla-onnx")
 
+# These files are useful for resuming training, but are not part of the
+# deployable GR00T model and can consume tens of GiB in object storage.
+TRAINING_STATE_FILES = frozenset({
+    "optimizer.pt",
+    "rng_state.pth",
+    "scheduler.pt",
+    "trainer_state.json",
+    "training_args.bin",
+    "wandb_config.json",
+})
+
 
 def _parse_loss_values(stdout: str) -> list[float]:
     """Extract loss values from GR00T training stdout."""
@@ -80,10 +91,16 @@ def _log_training_to_mlflow(
         print(f"MLflow run logged: {run.info.run_id} ({len(losses)} loss values)")
 
 
-def _upload_artifacts_to_s3(s3, bucket: str, prefix: str, local_dir: Path) -> list[str]:
+def _upload_artifacts_to_s3(
+    s3,
+    bucket: str,
+    prefix: str,
+    local_dir: Path,
+    excluded_names: frozenset[str] = frozenset(),
+) -> list[str]:
     uploaded: list[str] = []
     for local_path in sorted(local_dir.rglob("*")):
-        if not local_path.is_file():
+        if not local_path.is_file() or local_path.name in excluded_names:
             continue
         rel_path = local_path.relative_to(local_dir)
         s3_key = f"{prefix}/{rel_path}"
@@ -92,6 +109,49 @@ def _upload_artifacts_to_s3(s3, bucket: str, prefix: str, local_dir: Path) -> li
         s3.upload_file(str(local_path), bucket, s3_key)
         uploaded.append(s3_key)
     return uploaded
+
+
+def _latest_checkpoint_dir(output_dir: Path) -> Path:
+    """Return the highest numbered GR00T checkpoint directory."""
+    candidates: list[tuple[int, Path]] = []
+    for path in output_dir.glob("checkpoint-*"):
+        if not path.is_dir():
+            continue
+        try:
+            step = int(path.name.removeprefix("checkpoint-"))
+        except ValueError:
+            continue
+        candidates.append((step, path))
+    if not candidates:
+        raise RuntimeError(f"No checkpoint-* directory found under {output_dir}")
+    return max(candidates, key=lambda item: item[0])[1]
+
+
+def _validate_deployable_model_dir(model_dir: Path) -> None:
+    """Fail before upload if the serving prefix cannot load a GR00T model."""
+    required = ["config.json", "processor_config.json"]
+    missing = [name for name in required if not (model_dir / name).is_file()]
+    has_sharded_weights = False
+    index_path = model_dir / "model.safetensors.index.json"
+    if index_path.is_file():
+        try:
+            weight_map = json.loads(index_path.read_text()).get("weight_map", {})
+            referenced_files = set(weight_map.values())
+            has_sharded_weights = bool(referenced_files) and all(
+                (model_dir / name).is_file() for name in referenced_files
+            )
+        except (AttributeError, OSError, TypeError, ValueError):
+            has_sharded_weights = False
+    has_single_weights = any(
+        (model_dir / name).is_file() for name in ("model.safetensors", "pytorch_model.bin")
+    )
+    if not has_sharded_weights and not has_single_weights:
+        missing.append("model weights (model-*.safetensors, model.safetensors, or pytorch_model.bin)")
+    if missing:
+        raise RuntimeError(
+            "Latest checkpoint is not a complete deployable GR00T model: "
+            + ", ".join(missing)
+        )
 
 
 def _download_from_s3(s3, bucket: str, prefix: str, local_dir: Path) -> None:
@@ -162,7 +222,7 @@ def run(
         str(FINETUNE_SCRIPT),
         "--base-model-path", str(base_model_dir),
         "--dataset-path", str(dataset_path),
-        "--embodiment-tag", "NEW_EMBODIMENT",
+        "--embodiment-tag", cfg.embodiment_tag,
         "--modality-config-path", str(MODALITY_CONFIG),
         "--output-dir", str(OUTPUT_DIR),
         "--max-steps", str(max_steps),
@@ -221,7 +281,7 @@ def run(
         "--export-mode", "full_pipeline",
         "--precision", "bf16",
         "--steps", "export",
-        "--embodiment-tag", "NEW_EMBODIMENT",
+        "--embodiment-tag", cfg.embodiment_tag,
         "--dataset-path", str(dataset_path),
     ]
 
@@ -234,10 +294,20 @@ def run(
     _upload_artifacts_to_s3(s3, cfg.s3.bucket, f"{checkpoint_prefix}/checkpoint", OUTPUT_DIR)
 
     # The deployed robot-edge runtime uses GR00T mode and Gr00tPolicy. Keep
-    # the fine-tuned model directory in its native format so that
-    # GROOT_MODEL_PATH can point at this versioned artifact directly.
+    # only the latest checkpoint's model/configuration files under /model so
+    # GROOT_MODEL_PATH can point at this versioned artifact directly. The full
+    # output remains under /checkpoint for resume/debug purposes.
+    deployable_model_dir = _latest_checkpoint_dir(OUTPUT_DIR)
+    _validate_deployable_model_dir(deployable_model_dir)
     print(f"\n=== Uploading deployable GR00T model to S3 ({checkpoint_prefix}/model/) ===")
-    _upload_artifacts_to_s3(s3, cfg.s3.bucket, f"{checkpoint_prefix}/model", OUTPUT_DIR)
+    print(f"Serving checkpoint: {deployable_model_dir}")
+    _upload_artifacts_to_s3(
+        s3,
+        cfg.s3.bucket,
+        f"{checkpoint_prefix}/model",
+        deployable_model_dir,
+        excluded_names=TRAINING_STATE_FILES,
+    )
 
     print(f"\n=== Uploading ONNX to S3 ({checkpoint_prefix}/onnx/) ===")
     _upload_artifacts_to_s3(s3, cfg.s3.bucket, f"{checkpoint_prefix}/onnx", ONNX_DIR)

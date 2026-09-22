@@ -45,14 +45,14 @@ This is a planning snapshot and must be refreshed before implementation starts.
 | Training image | [Containerfile](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/container/Containerfile) | Same path; currently aligned | Clones `https://github.com/NVIDIA/Isaac-GR00T.git`; installs GPU ONNX Runtime from the documented package index | Verify build network access and package compatibility before building. |
 | Runtime configuration | [config.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/config.py) and [constants.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/constants.py) | Same paths; currently aligned | MinIO endpoint `http://minio.mlflow.svc:9000`; MLflow endpoint `https://mlflow.redhat-ods-applications.svc:8443`; Model Registry endpoint `http://wbc-model-registry.rhoai-model-registries.svc:8080` | Verify these services resolve and authenticate from `vla-training`. |
 | Data preparation | [data_prep.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/data_prep.py) | Same path; currently aligned | Downloads/caches the base model and dataset, then writes to S3-compatible storage under configured prefixes | Run only after storage and HF access checks pass. |
-| Fine-tuning/export | [fine_tune.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/fine_tune.py) | Same path; currently aligned | Produces checkpoints and ONNX output under the versioned pipeline prefix; GPU and step count must be explicit for a smoke run | Start with a short, bounded smoke run. |
+| Fine-tuning/export | [fine_tune.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/fine_tune.py) | Fork adds serving-artifact hardening | Produces full resume state under `checkpoint/`, a validated clean GR00T serving directory under `model/`, and ONNX under `onnx/`; GPU and step count must be explicit for a smoke run | Start with a short, bounded smoke run and verify the model prefix contains weights at its root. |
 | ONNX validation | [validate_onnx.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/validate_onnx.py) | Same path; currently aligned | Reads the generated ONNX artifact from S3-compatible storage and validates model inputs/outputs | Make this the first post-training acceptance gate. |
 | Model registration | [register_model.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/register_model.py) | Same path; currently aligned | Registers `g1-vla-finetune` with a version and URI in the RHOAI Model Registry; records lineage metadata | Verify registry API and database readiness before the run. |
 | Promotion tooling | [promote.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/promote.py) | Same path; contract not yet approved | Existing code assumes an older promotion/serving shape; it must not be run blindly | Reconcile it with the active Deployment-based serving manifests. |
 | DSPA/KFP platform | [platform/dspa](https://github.com/RHPhysicalAI/industrial-ai-showcase/tree/main/infrastructure/gitops/apps/platform/dspa) | Same structure; fork BuildConfig source points to `https://github.com/rhkp/industrial-ai-showcase.git` | Namespace `vla-training`; pipeline image `vla-training:latest`; secrets `git-source-secret`, `minio-credentials`, and `hf-credentials` | Verify DSPA, BuildConfig, image, service account, and secret projections. |
 | MLflow/MinIO | [platform/mlflow](https://github.com/RHPhysicalAI/industrial-ai-showcase/tree/main/infrastructure/gitops/apps/platform/mlflow) | Same path; currently aligned | Artifact destination `s3://mlflow-artifacts/`; MinIO service is in namespace `mlflow`; credentials are Vault-sourced | Verify pods, bucket initialization, S3 credentials, and tracking health. |
 | Model Registry | [platform/model-registry](https://github.com/RHPhysicalAI/industrial-ai-showcase/tree/main/infrastructure/gitops/apps/platform/model-registry) | Same path; currently aligned | Registry `wbc-model-registry` in `rhoai-model-registries`; database secret is externalized | Verify service, database, and registry API health. |
-| Serving manifests | [factory-b workloads](https://github.com/RHPhysicalAI/industrial-ai-showcase/tree/main/infrastructure/gitops/apps/workloads/factory-b) and [robot-edge workloads](https://github.com/RHPhysicalAI/industrial-ai-showcase/tree/main/infrastructure/gitops/apps/workloads/robot-edge) | Same paths; currently aligned with upstream | Current manifests use `openvla-server` Deployments, model cache PVCs, `policy-version`, and `s3://vla-training/vla-finetune/...` model paths | Select an isolated canary target; do not alter the live Cloud VLA VM. |
+| Serving manifests | [factory-b workloads](https://github.com/RHPhysicalAI/industrial-ai-showcase/tree/main/infrastructure/gitops/apps/workloads/factory-b) and [robot-edge workloads](https://github.com/RHPhysicalAI/industrial-ai-showcase/tree/main/infrastructure/gitops/apps/workloads/robot-edge) | Same paths; fork adds isolated canary helper | Current manifests use `openvla-server` Deployments, model cache PVCs, `policy-version`, and `s3://vla-training/vla-finetune/...` model paths | Select an isolated canary target; do not alter the live Cloud VLA VM. |
 | Deployment-mode contract | [vla-model-deployment-modes.md](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/docs/vla-model-deployment-modes.md) | Same path; documentation needs reconciliation | Describes KServe `InferenceService` examples, while active manifests use `openvla-server` Deployments | Update documentation only after the serving target is selected and verified. |
 
 ## External URLs and access contracts
@@ -117,6 +117,15 @@ These are implementation dependencies, not secrets:
 - Keep the Cloud VLA VM and hosted Mission Dispatch/Drop Pallet path intact.
 - Only after acceptance, decide whether promotion automation needs changes.
 
+### Gate 6 — Repeatability and action-space review
+
+- Repeat the canary using only the versioned `.../model` URI and the fork-built
+  CUDA image; no manual cache cleanup or in-place pod patch should be needed.
+- Capture the canary's model version, readiness response, and `/act` result.
+- Before promoting beyond inference validation, reconcile the Teleop-G1
+  43-DOF action space with the existing 7-value robot-edge API. Do not claim
+  robot-control correctness from an HTTP 200 alone.
+
 ## Explicit non-goals for the first training run
 
 - No replacement of the Cloud VLA VM.
@@ -137,4 +146,3 @@ These are implementation dependencies, not secrets:
 - ONNX validation result.
 - MLflow run ID and Model Registry version.
 - Canary endpoint readiness and representative response.
-

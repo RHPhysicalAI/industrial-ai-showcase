@@ -9,6 +9,9 @@ artifact_uri="${VLA_CANARY_ARTIFACT_URI:-}"
 local_port="${VLA_CANARY_LOCAL_PORT:-18000}"
 mode="${VLA_CANARY_MODE:-groot}"
 model_cache_dir="${VLA_CANARY_MODEL_CACHE_DIR:-/models}"
+embodiment_tag="${VLA_CANARY_EMBODIMENT_TAG:-NEW_EMBODIMENT}"
+video_key="${VLA_CANARY_VIDEO_KEY:-rs_view}"
+inference_timeout="${VLA_CANARY_INFERENCE_TIMEOUT:-300}"
 canary_image="${VLA_CANARY_IMAGE:-}"
 use_live_image="${VLA_CANARY_USE_LIVE_IMAGE:-false}"
 keep=false
@@ -22,9 +25,11 @@ The canary validates the original GR00T serving contract by default. Use
 Resources are deleted automatically unless --keep is used. Optional
 environment variables: VLA_OC_CONTEXT, VLA_CANARY_NAMESPACE,
 VLA_CANARY_NAME, VLA_CANARY_LOCAL_PORT, VLA_CANARY_MODE, and
-VLA_CANARY_MODEL_CACHE_DIR, and VLA_CANARY_IMAGE. The canary requires an
-explicit fork-built image. Set VLA_CANARY_USE_LIVE_IMAGE=true only when
-intentionally testing the currently deployed image.
+VLA_CANARY_MODEL_CACHE_DIR, VLA_CANARY_EMBODIMENT_TAG,
+VLA_CANARY_VIDEO_KEY, VLA_CANARY_INFERENCE_TIMEOUT, and VLA_CANARY_IMAGE.
+The canary requires an explicit fork-built image. Set
+VLA_CANARY_USE_LIVE_IMAGE=true only when intentionally testing the currently
+deployed image.
 EOF
 }
 
@@ -138,8 +143,8 @@ spec:
         - {name: VLA_MODE, value: "$mode"}
         - {name: OPENVLA_WEIGHTS, value: $artifact_uri}
         - {name: GROOT_MODEL_PATH, value: $artifact_uri}
-        - {name: GROOT_EMBODIMENT_TAG, value: "NEW_EMBODIMENT"}
-        - {name: GROOT_VIDEO_KEY, value: "rs_view"}
+        - {name: GROOT_EMBODIMENT_TAG, value: "$embodiment_tag"}
+        - {name: GROOT_VIDEO_KEY, value: "$video_key"}
         - {name: PORT, value: "8000"}
         - {name: OPENVLA_DEVICE, value: "cuda"}
         - {name: S3_ENDPOINT, value: "http://minio.mlflow.svc:9000"}
@@ -184,7 +189,7 @@ port_forward_pid=$!
 
 ready=false
 for _ in {1..30}; do
-  if curl -fsS "http://127.0.0.1:${local_port}/healthz" >/dev/null 2>&1; then
+  if curl -fsS "http://localhost:${local_port}/healthz" >/dev/null 2>&1; then
     ready=true
     break
   fi
@@ -196,15 +201,15 @@ if [[ "$ready" != true ]]; then
   exit 1
 fi
 
-health="$(curl -fsS "http://127.0.0.1:${local_port}/healthz")"
-ready_response="$(curl -fsS "http://127.0.0.1:${local_port}/readyz")"
+health="$(curl -fsS --max-time 30 "http://localhost:${local_port}/healthz")"
+ready_response="$(curl -fsS --max-time 30 "http://localhost:${local_port}/readyz")"
 [[ "$ready_response" == *"\"vla_mode\":\"${mode}\""* ]] || {
   echo "FAIL: readiness did not report VLA_MODE=${mode}: $ready_response" >&2
   exit 1
 }
 
 image_b64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-act_response="$(curl -fsS -X POST "http://127.0.0.1:${local_port}/act" \
+act_response="$(curl -fsS --max-time "$inference_timeout" -X POST "http://localhost:${local_port}/act" \
   -H 'Content-Type: application/json' \
   -d "{\"image\":\"${image_b64}\",\"instruction\":\"pick up the pallet\",\"trace_id\":\"vla-smoke-canary\"}")"
 

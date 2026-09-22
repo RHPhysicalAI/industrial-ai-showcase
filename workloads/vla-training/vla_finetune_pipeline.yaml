@@ -4,7 +4,7 @@
 # Inputs:
 #    base_model_repo: str [Default: 'nvidia/GR00T-N1.7-3B']
 #    dataset_repo: str [Default: 'nvidia/PhysicalAI-Robotics-GR00T-Teleop-G1']
-#    embodiment_tag: str [Default: 'UNITREE_G1']
+#    embodiment_tag: str [Default: 'NEW_EMBODIMENT']
 #    global_batch_size: int [Default: 64.0]
 #    max_steps: int [Default: 2000.0]
 #    model_name: str [Default: 'g1-vla-finetune']
@@ -383,7 +383,7 @@ root:
         isOptional: true
         parameterType: STRING
       embodiment_tag:
-        defaultValue: UNITREE_G1
+        defaultValue: NEW_EMBODIMENT
         isOptional: true
         parameterType: STRING
       global_batch_size:

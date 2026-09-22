@@ -1,5 +1,5 @@
 # This project was developed with assistance from AI tools.
-"""VLA model adapters — each returns a 7-DOF action vector for a given (image, instruction)."""
+"""VLA model adapters — each preserves the public 7-value action API."""
 
 from __future__ import annotations
 
@@ -199,7 +199,14 @@ def _build_teleop_g1_state_placeholder() -> dict[str, np.ndarray]:
 
 
 class GR00TAdapter:
-    """GR00T N1.7 adapter using Gr00tPolicy for real VLA inference."""
+    """GR00T N1.7 adapter using Gr00tPolicy for real VLA inference.
+
+    The Teleop-G1 training contract is wider than the existing robot-edge
+    HTTP contract: its state/action modality has 43 joint values, while the
+    deployed Mission Dispatcher integration consumes the established 7-value
+    response. Keep that boundary explicit until downstream action mapping is
+    validated; this adapter must not silently change the live demo contract.
+    """
 
     _BUILTIN_TAGS = {"REAL_G1", "XDOF", "XDOF_SUBTASK", "OXE_DROID_RELATIVE_EEF_RELATIVE_JOINT"}
 

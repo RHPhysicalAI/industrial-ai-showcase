@@ -267,7 +267,7 @@ def vla_register_model_op(
 def vla_finetune_pipeline(
     base_model_repo: str = "nvidia/GR00T-N1.7-3B",
     dataset_repo: str = "nvidia/PhysicalAI-Robotics-GR00T-Teleop-G1",
-    embodiment_tag: str = "UNITREE_G1",
+    embodiment_tag: str = "NEW_EMBODIMENT",
     max_steps: int = 2000,
     global_batch_size: int = 64,
     num_gpus: int = GPU_LIMIT,

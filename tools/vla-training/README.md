@@ -10,8 +10,8 @@ under [`workloads/vla-training/`](../../workloads/vla-training/). It verifies
 that the source, compiled artifact, Hub services, secret objects, and GPU
 capacity agree before a pipeline run is submitted.
 
-It is not a new training pipeline and it does not change the upstream training
-logic.
+It is not a new training pipeline. The fork keeps the upstream training flow
+and adds narrowly scoped artifact/serving-contract hardening around it.
 
 ## Why it matters
 
@@ -31,6 +31,12 @@ The training image pins `model-registry==0.3.14` because this Hub currently
 serves the Model Registry `v1alpha3` API. Do not broaden this dependency range
 without first upgrading the cluster-side registry: newer clients may call the
 `v1` API and fail registration after the GPU work has already completed.
+
+The pipeline's default embodiment is `NEW_EMBODIMENT`, matching the bundled
+`nvidia/PhysicalAI-Robotics-GR00T-Teleop-G1` modality definition. That dataset
+uses a 43-DOF joint state/action schema and the `rs_view` video key. `UNITREE_G1`
+is a different locomotion schema and must not be substituted without a matching
+modality definition.
 
 It also protects the working hosted demo: validation is read-only and does not
 submit runs, scale workloads, modify secrets, sync GitOps, or replace the Cloud
@@ -99,6 +105,15 @@ the artifact consumed by the deployed GR00T serving contract. A future
 staging validation should point the original runtime at the versioned
 `.../model` URI with `VLA_MODE=groot` and issue the existing `/act` request.
 
+The full training output, including optimizer and scheduler state for resume or
+debugging, remains under `.../checkpoint`. It is intentionally not copied into
+`.../model`: the earlier run uploaded a nested `checkpoint-10` tree and
+training state into the serving prefix, which made the artifact unnecessarily
+large and obscured the files that `Gr00tPolicy` loads. The fine-tuning step now
+selects the highest numbered `checkpoint-*`, validates its configuration,
+processor metadata, and weights, and uploads only that model directory to the
+serving prefix.
+
 ## Serving canary
 
 The fork includes a temporary canary for the original `openvla-server`
@@ -126,9 +141,19 @@ Deployment and Service, sets `VLA_MODE=groot`, checks `/healthz` and `/readyz`,
 then sends one representative `/act` request through a local port-forward.
 For the Teleop-G1 artifact, it sets `GROOT_VIDEO_KEY=rs_view`; the live
 `REAL_G1` deployment retains its original `ego_view` default.
-Set `VLA_CANARY_MODEL_CACHE_DIR` to a new directory under the mounted cache PVC
-when validating a changed artifact or recovering from an interrupted download;
-the serving loader treats any non-empty cache directory as complete.
+The canary's embodiment and video key are configurable with
+`VLA_CANARY_EMBODIMENT_TAG` and `VLA_CANARY_VIDEO_KEY`, but the Teleop-G1
+defaults should remain `NEW_EMBODIMENT` and `rs_view`. Its `/act` request has a
+bounded timeout controlled by `VLA_CANARY_INFERENCE_TIMEOUT` (default 300
+seconds).
+
+The serving loader now uses an exact-prefix completion marker and checks for
+model metadata plus weight files (or an ONNX file) before reusing a cache. A
+partial or interrupted download is removed and retried automatically. This
+replaces the old unsafe rule that any non-empty cache directory was complete;
+manual deletion of stale cache directories is no longer part of the normal
+train-to-canary workflow. Cleanup is scoped to the requested artifact, not the
+PVC or other model caches.
 The canary also sets the same writable `HF_HOME` used by the live deployment;
 without it, Hugging Face can fall back to the unwritable `/.cache` path.
 The canary injects the existing `robot-edge/hf-token` Secret because GR00T
@@ -148,7 +173,7 @@ bash tools/vla-training/canary-check.sh \
 The ONNX diagnostic is not the production acceptance gate: GR00T's exported
 BF16 ONNX bundle is intended for its TensorRT path, while the generic legacy
 ONNX adapter expects FP32 inputs.
-is necessary; it leaves the canary resources in `robot-edge` for inspection.
+It is a secondary diagnostic and does not replace the native GR00T canary.
 
 This is a validation aid, not promotion. It does not change the live Mission
 Dispatch / Drop Pallet deployment or update GitOps.
@@ -162,3 +187,26 @@ preserves the versioned GR00T model directory, exports the secondary ONNX
 bundle, validates the ONNX components, and registers the GR00T model URI.
 Serving acceptance is a separate staging gate using the original GR00T
 runtime.
+
+## Lessons now encoded in the fork
+
+These are the concrete failures and fixes from the first end-to-end canary, so
+a future run does not depend on shell patches or operator memory:
+
+| Observation | Permanent guard/fix |
+| --- | --- |
+| A slim serving image failed with `No module named gr00t`. | Build the fork serving image with the CUDA base (`BASE_FLAVOR=cuda`) and use that explicit image for the canary; the helper refuses an implicit live-image fallback. |
+| The first model download left configuration files but not all weights. | `s3_loader.py` validates metadata and weights, writes a completion marker only after a full download, and removes an exact-prefix partial cache before retrying. |
+| An invalid or missing gated-model credential caused Cosmos loading to fail. | The Hub `hf-token` Secret remains an external prerequisite; its value is never committed or printed. The canary injects the existing Secret and the runtime reports the actual model-load error. |
+| The Teleop-G1 model rejected the default `ego_view` key. | The training default and isolated canary use `NEW_EMBODIMENT` with `rs_view`; the live `REAL_G1` deployment keeps its existing contract. |
+| The custom modality expects one video frame, while the built-in REAL_G1 path expects two. | `GR00TAdapter` chooses the observation horizon from the selected embodiment instead of duplicating frames for every model. |
+| The pipeline previously hard-coded `NEW_EMBODIMENT` while its configuration default said `UNITREE_G1`. | Fine-tuning/export now use `VLA_EMBODIMENT_TAG`, and the pipeline default matches the Teleop-G1 modality. |
+| Training state inflated the serving prefix and made its layout ambiguous. | The latest numeric checkpoint is validated and copied cleanly to `.../model`; resume/debug state stays under `.../checkpoint`. |
+| Successful HTTP inference did not prove robot behavior. | The canary is explicitly an inference-contract gate. The existing public API remains 7 values; mapping the Teleop-G1 43-DOF action space to downstream robot controls is a separate integration gate. |
+| The original model-registry client tried a newer API than the Hub exposes. | Keep `model-registry==0.3.14` pinned until the cluster registry is upgraded. |
+| A 120Gi object-store claim reached the free-space threshold during checkpoint upload. | The fork uses a 200Gi MinIO claim and retains cleanup/retention as an operational follow-up rather than deleting unknown artifacts. |
+
+The canary proves that a versioned trained artifact can be downloaded, loaded,
+and queried by the original GR00T serving runtime. It does not claim that the
+trained 43-DOF policy is already wired into the live 7-value Mission
+Dispatcher/Drop Pallet control path.

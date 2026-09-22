@@ -28,8 +28,9 @@ been validated.
 
 - A KFP v2 pipeline under `workloads/vla-training/`:
   data preparation → GR00T fine-tuning → ONNX validation → model registration.
-- The fine-tuning step preserves a deployable GR00T model directory at a
-  versioned `.../model` URI and keeps ONNX as a secondary validation artifact.
+- The fine-tuning step preserves a clean deployable GR00T model directory at a
+  versioned `.../model` URI, keeps full resume/debug state under `.../checkpoint`,
+  and keeps ONNX as a secondary validation artifact.
 - A compiled pipeline YAML at
   `workloads/vla-training/vla_finetune_pipeline.yaml`.
 - GitOps resources for DSPA, the `vla-training` namespace, MinIO access,
@@ -52,6 +53,29 @@ been validated.
    must be treated as a candidate for alignment, not used blindly.
 5. GPU scheduling must explicitly target the intended L40S pool for training;
    the compiled pipeline currently leaves the GPU node selector implicit.
+
+## Baseline findings and permanent fixes
+
+The first successful train-to-canary cycle exposed the operational contract
+that the next run must follow:
+
+- Build the serving image from this fork with the CUDA/GR00T flavor. A slim
+  image can start its HTTP server but cannot load `gr00t`.
+- Treat `.../model` as a clean serving prefix, not a copy of the complete
+  training workspace. The pipeline now selects and validates the latest
+  numeric checkpoint and excludes optimizer/scheduler/trainer state from that
+  prefix.
+- Treat a model-cache directory as valid only when its required weights and
+  metadata are present. Interrupted downloads are removed and retried by the
+  loader; no manual cache deletion should be required for a normal run.
+- Use the Teleop-G1 contract consistently: `NEW_EMBODIMENT`, `rs_view`, one
+  video frame, and the 43-DOF state keys from the committed modality config.
+  The existing live `REAL_G1`/`ego_view` contract remains unchanged.
+- Keep Hugging Face access external through the Hub Secret and keep Model
+  Registry client version `0.3.14` while the Hub exposes `v1alpha3`.
+- A successful canary is an artifact-load/inference proof, not proof that the
+  43-DOF trained action has been mapped into the live 7-value robot-edge API.
+  That downstream action-space integration is a separate gate.
 
 ## Next-week work plan
 
