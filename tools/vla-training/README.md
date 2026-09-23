@@ -125,6 +125,19 @@ selects the highest numbered `checkpoint-*`, validates its configuration,
 processor metadata, and weights, and uploads only that model directory to the
 serving prefix.
 
+## Runtime topology verified
+
+The active demo path remains the legacy-style topology:
+
+```text
+Companion SNO mission-dispatcher -> AWS VM VLA service
+```
+
+The trained artifact and hardened fork image were also verified successfully
+with the Hub `robot-edge/openvla-server`. That is an optional in-cluster serving
+path and validation target; it is not currently the endpoint used by the
+Companion SNO mission flow.
+
 ## Serving canary
 
 The fork includes a temporary canary for the original `openvla-server`
