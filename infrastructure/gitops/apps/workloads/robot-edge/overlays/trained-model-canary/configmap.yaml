@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openvla-trained-model-canary
+  labels:
+    app.kubernetes.io/name: openvla-trained-model-canary
+    app.kubernetes.io/part-of: robot-edge
+    showcase.redhat.com/component: vla-canary
+data:
+  model-version: smoke-20260922-2
+  model-uri: s3://vla-training/vla-finetune-smoke-20260922-2/smoke-20260922-2/model
+  groot-embodiment-tag: NEW_EMBODIMENT
+  groot-video-key: rs_view
