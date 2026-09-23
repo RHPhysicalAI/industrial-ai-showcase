@@ -57,7 +57,7 @@ spec:
         - name: HF_TOKEN
           valueFrom:
             secretKeyRef:
-              name: hf-token
+            name: hf-token-trained-model
               key: token
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
