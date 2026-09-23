@@ -24,6 +24,7 @@ configMapGenerator:
     files:
       - warehouse_baseline.py=scenarios/warehouse_baseline.py
       - viewport_mjpeg.py=scenarios/viewport_mjpeg.py
+      - cosmos_capture.py=scenarios/cosmos_capture.py
 
 generatorOptions:
   disableNameSuffixHash: true

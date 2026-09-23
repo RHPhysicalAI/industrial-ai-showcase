@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Hosted Companion overlay. The base resources are reused, but all
+# self-managed Fedora/bare-metal assumptions stay outside this path.
+resources:
+  - ../companion/fake-camera
+  - ../workloads/mission-dispatcher
+  - policy-version.yaml
+
+patches:
+  - path: patches/fake-camera-buildconfig.yaml
+  - path: patches/fake-camera-deployment.yaml
+  - path: patches/fake-camera-route.yaml
+    target:
+      group: route.openshift.io
+      version: v1
+      kind: Route
+      name: fake-camera
+      namespace: warehouse-edge
+  - path: patches/mission-dispatcher-buildconfig.yaml
+  - path: patches/mission-dispatcher-configmap-delete.yaml

@@ -23,9 +23,12 @@ if TYPE_CHECKING:
 
 COORDS: dict[str, tuple[float, float, float, float]] = {
     "dock-a": (-22.82, 5.8, 0.0, 90.0),
-    "aisle-3-approach": (-16.82, 5.8, 0.0, 90.0),
+    # These names match workloads/warehouse/warehouse-topology.yaml.  The
+    # coordinates remain in the scene overlay's authored frame.
+    "aisle-3-west": (-16.82, 5.8, 0.0, 90.0),
     "aisle-3-end": (-7.82, 5.8, 0.0, 90.0),
-    "dock-b-3": (4.18, 5.8, 0.0, 90.0),
+    "dock-b": (4.18, 5.8, 0.0, 90.0),
+    "aisle-4-west": (-16.82, 5.8, 0.0, 90.0),
     "aisle-4-turn-in": (-7.82, 5.8, 0.0, 180.0),
     "aisle-4-end": (-7.82, 27.8, 0.0, 180.0),
     "aisle-4-turn-out": (-7.82, 27.8, 0.0, 90.0),
@@ -33,14 +36,14 @@ COORDS: dict[str, tuple[float, float, float, float]] = {
 }
 
 ROUTES: dict[str, list[str]] = {
-    "aisle-3": ["dock-a", "aisle-3-approach", "aisle-3-end", "dock-b-3"],
+    "aisle-3": ["dock-a", "aisle-3-west", "aisle-3-end", "dock-b"],
     "aisle-4": [
-        "aisle-3-approach", "aisle-3-end", "aisle-4-turn-in",
+        "dock-a", "aisle-4-west", "aisle-3-end", "aisle-4-turn-in",
         "aisle-4-end", "aisle-4-turn-out", "aisle-4-exit",
     ],
 }
 
-APPROACH_POINTS = {"aisle-3-approach"}
+APPROACH_POINTS = {"aisle-3-west", "aisle-4-west"}
 
 ANGULAR_SPEED_DPS = 90.0
 
@@ -108,9 +111,11 @@ class RouteExecution:
     index: int = 0
     paused: bool = False
     cancelled: bool = False
+    clearance_granted: bool = False
     clearance_event: asyncio.Event = field(default_factory=asyncio.Event)
 
     def grant_clearance(self) -> None:
+        self.clearance_granted = True
         self.paused = False
         self.clearance_event.set()
 
@@ -146,6 +151,14 @@ async def execute_route(
 
         wp = execution.waypoints[execution.index]
 
+        # Arm the pause before publishing approach telemetry. Fleet Manager may
+        # grant clearance immediately, so the dispatcher must already be ready
+        # to receive PROCEED when that telemetry reaches the hub.
+        if wp.is_approach_point:
+            execution.paused = True
+            if not execution.clearance_granted:
+                execution.clearance_event.clear()
+
         producer.send(
             telemetry_topic,
             key=execution.robot_id,
@@ -160,17 +173,16 @@ async def execute_route(
         producer.flush(timeout=0.0)
 
         if wp.is_approach_point:
-            execution.paused = True
             log.info(
                 "route.approach_point",
                 robot_id=execution.robot_id,
                 waypoint=wp.name,
                 x=wp.x, y=wp.y,
             )
-            execution.clearance_event.clear()
             await execution.clearance_event.wait()
             if execution.cancelled:
                 return False
+            execution.clearance_granted = False
             log.info("route.clearance_received", robot_id=execution.robot_id)
 
         execution.index += 1

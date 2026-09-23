@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: openvla-trained-model-canary
+  labels:
+    app: openvla-trained-model-canary
+    app.kubernetes.io/name: openvla-trained-model-canary
+    app.kubernetes.io/part-of: robot-edge
+    showcase.redhat.com/component: vla-canary
+spec:
+  selector:
+    app: openvla-trained-model-canary
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http

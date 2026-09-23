@@ -26,8 +26,8 @@ spec:
         effect: NoSchedule
       containers:
       - name: openvla-server
-        image: quay.io/ecosystem-appeng/openvla-server:groot-n1.7-v1
-        imagePullPolicy: Always
+        image: image-registry.openshift-image-registry.svc:5000/robot-edge/openvla-server@sha256:dde6685e7973480cb88d403110654a86704ad42ddff5542278e26a49bc5bd096
+        imagePullPolicy: IfNotPresent
         env:
         - name: VLA_MODE
           value: "groot"
@@ -43,9 +43,11 @@ spec:
               name: policy-version
               key: model-uri
         - name: GROOT_MODEL_PATH
-          value: "s3://vla-training/vla-finetune/base-model"
+          value: "s3://vla-training/vla-finetune-smoke-20260922-2/smoke-20260922-2/model"
         - name: GROOT_EMBODIMENT_TAG
-          value: "REAL_G1"
+          value: "NEW_EMBODIMENT"
+        - name: GROOT_VIDEO_KEY
+          value: "rs_view"
         - name: S3_ENDPOINT
           value: "http://minio.mlflow.svc:9000"
         - name: MODEL_CACHE_DIR
@@ -55,7 +57,7 @@ spec:
         - name: HF_TOKEN
           valueFrom:
             secretKeyRef:
-              name: hf-token
+              name: hf-token-trained-model
               key: token
         - name: AWS_ACCESS_KEY_ID
           valueFrom:

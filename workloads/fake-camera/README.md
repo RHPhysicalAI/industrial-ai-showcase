@@ -43,6 +43,8 @@ The Session-18 demo story is "on-site edge captures real camera frames, hub-side
 - `GET /state` — current state name
 - `POST /state {"state":"obstructed"}` — switches emitted frame; 400 if unknown state
 
+The command consumer uses a fresh per-process group and starts at the live tail, so restarting the service does not replay retained historical camera commands.
+
 ## Deploy
 
 GitOps manifests at `infrastructure/gitops/apps/companion/fake-camera/`. Target companion kubeconfig:

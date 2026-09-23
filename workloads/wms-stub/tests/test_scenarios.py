@@ -1,12 +1,12 @@
 # This project was developed with assistance from AI tools.
 """Tests for the wms-stub scenario catalog and dispatch logic."""
 
-from unittest.mock import MagicMock
-
 import pytest
 
-from common_lib.events import FleetMission, MissionKind
+from common_lib.events import FleetMission, MissionKind, SafetyAlert
 from wms_stub.scenarios import AISLE_3_OBSTRUCTION, get_scenario, list_scenarios
+from wms_stub.scene import build_scene_alert
+from wms_stub.settings import WmsStubSettings
 
 
 def test_list_scenarios_contains_aisle3() -> None:
@@ -54,3 +54,17 @@ def test_dispatch_creates_correct_mission() -> None:
     assert mission.robot_id == "fl-07"
     assert mission.params["route_aisle"] == "aisle-3"
     assert mission.params["destination"] == "dock-b"
+
+
+def test_scripted_pallet_alert_represents_obstruction() -> None:
+    """The deterministic pallet transition uses the alert contract consumed by the twin."""
+    alert = build_scene_alert(WmsStubSettings(), "test-trace", "obstructed")
+    assert isinstance(alert, SafetyAlert)
+    assert alert.obstructed is True
+    assert alert.aisle_id == "aisle-3"
+    assert alert.source_model == "wms-stub"
+
+
+def test_unsupported_camera_state_does_not_emit_safety_alert() -> None:
+    """Unknown camera states retain the old command-only behavior."""
+    assert build_scene_alert(WmsStubSettings(), "test-trace", "unknown") is None

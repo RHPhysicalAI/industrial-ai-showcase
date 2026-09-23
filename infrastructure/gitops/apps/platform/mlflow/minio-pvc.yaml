@@ -8,5 +8,8 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 50Gi
+      # Training retains staging data, checkpoints, native GR00T weights, and
+      # the secondary ONNX export during a run; 120Gi reached MinIO's free-
+      # space threshold before checkpoint upload completed.
+      storage: 200Gi
   storageClassName: gp3

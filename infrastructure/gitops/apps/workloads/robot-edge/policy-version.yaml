@@ -7,6 +7,6 @@ metadata:
     app.kubernetes.io/part-of: robot-edge
     showcase.redhat.com/component: policy-version
 data:
-  version: g1-vla-finetune-v1
-  model-uri: s3://vla-training/vla-finetune/onnx
-  promoted-at: '2026-08-04T17:59:56.087410+00:00'
+  version: groot-vla-finetune-smoke-20260922-2
+  model-uri: s3://vla-training/vla-finetune-smoke-20260922-2/smoke-20260922-2/model
+  promoted-at: '2026-09-23'

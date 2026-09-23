@@ -1,10 +1,11 @@
 # This project was developed with assistance from AI tools.
 """HTTP client for the host-native VLA serving endpoint (per ADR-026)."""
 
+import math
 from typing import Any
 
 import httpx
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -16,9 +17,23 @@ from tenacity import (
 class VlaAction(BaseModel):
     """Response shape from POST /act on the host VLA server."""
 
-    action: list[float] = Field(description="7-DOF action vector: dx, dy, dz, droll, dpitch, dyaw, dgrasp.")
+    model_config = ConfigDict(protected_namespaces=())
+
+    action: list[float] = Field(
+        min_length=7,
+        max_length=7,
+        description="7-DOF action vector: dx, dy, dz, droll, dpitch, dyaw, dgrasp.",
+    )
     model_version: str
     trace_id: str
+
+    @field_validator("action")
+    @classmethod
+    def action_values_must_be_finite(cls, values: list[float]) -> list[float]:
+        """Reject malformed model output before it reaches a future actuator."""
+        if not all(math.isfinite(value) for value in values):
+            raise ValueError("action values must be finite numbers")
+        return values
 
 
 class VlaClient:

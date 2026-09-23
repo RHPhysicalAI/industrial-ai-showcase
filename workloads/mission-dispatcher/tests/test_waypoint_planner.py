@@ -3,12 +3,14 @@
 
 import asyncio
 from unittest.mock import MagicMock
+from uuid import uuid4
 
 import structlog
 
 from mission_dispatcher.waypoint_planner import (
     COORDS,
     RouteExecution,
+    Waypoint,
     _build_waypoints,
     execute_route,
     plan_route,
@@ -72,3 +74,65 @@ def test_route_execution_grant_clearance() -> None:
     ex.grant_clearance()
     assert not ex.paused
     assert ex.clearance_event.is_set()
+
+
+def test_route_arms_clearance_before_approach_telemetry() -> None:
+    """Immediate PROCEED responses cannot race the approach-point pause."""
+    execution = RouteExecution(
+        robot_id="fl-07",
+        trace_id="t1",
+        mission_id=str(uuid4()),
+        route_name="aisle-3",
+        waypoints=[
+            Waypoint(x=-22.82, y=5.8, z=0.0),
+            Waypoint(x=-16.82, y=5.8, z=0.0, is_approach_point=True, name="approach"),
+            Waypoint(x=4.18, y=5.8, z=0.0),
+        ],
+    )
+
+    class ImmediateClearanceProducer:
+        saw_paused = False
+
+        def send(self, _topic: str, *, key: str, value: object) -> None:
+            if execution.waypoints[execution.index].is_approach_point:
+                self.saw_paused = execution.paused
+                execution.grant_clearance()
+
+        def flush(self, *, timeout: float = 0.0) -> None:
+            pass
+
+    producer = ImmediateClearanceProducer()
+    completed = asyncio.run(
+        asyncio.wait_for(
+            execute_route(execution, producer, "fleet.telemetry", 100.0, "v1", log),
+            timeout=1.0,
+        )
+    )
+
+    assert completed
+    assert producer.saw_paused
+
+
+def test_route_preserves_clearance_granted_before_approach_wait() -> None:
+    """A valid early PROCEED remains latched until the approach-point wait."""
+    execution = RouteExecution(
+        robot_id="fl-07",
+        trace_id="t1",
+        mission_id=str(uuid4()),
+        route_name="aisle-3",
+        waypoints=[
+            Waypoint(x=-22.82, y=5.8, z=0.0),
+            Waypoint(x=-16.82, y=5.8, z=0.0, is_approach_point=True, name="approach"),
+            Waypoint(x=4.18, y=5.8, z=0.0),
+        ],
+    )
+    execution.grant_clearance()
+
+    completed = asyncio.run(
+        asyncio.wait_for(
+            execute_route(execution, MagicMock(), "fleet.telemetry", 100.0, "v1", log),
+            timeout=1.0,
+        )
+    )
+
+    assert completed

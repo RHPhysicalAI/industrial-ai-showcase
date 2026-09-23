@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openvla-trained-model-canary
+  labels:
+    app: openvla-trained-model-canary
+    app.kubernetes.io/name: openvla-trained-model-canary
+    app.kubernetes.io/part-of: robot-edge
+    showcase.redhat.com/component: vla-canary
+  annotations:
+    showcase.redhat.com/model-version: smoke-20260922-2
+    showcase.redhat.com/model-uri: s3://vla-training/vla-finetune-smoke-20260922-2/smoke-20260922-2/model
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: openvla-trained-model-canary
+  template:
+    metadata:
+      labels:
+        app: openvla-trained-model-canary
+        app.kubernetes.io/name: openvla-trained-model-canary
+        app.kubernetes.io/part-of: robot-edge
+    spec:
+      nodeSelector:
+        nvidia.com/gpu.product: NVIDIA-L40S
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: openvla-server
+        image: image-registry.openshift-image-registry.svc:5000/robot-edge/openvla-server@sha256:dde6685e7973480cb88d403110654a86704ad42ddff5542278e26a49bc5bd096
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: VLA_MODE
+          value: groot
+        - name: SERVICE_NAME
+          value: openvla-trained-model-canary
+        - name: LOG_LEVEL
+          value: INFO
+        - name: PORT
+          value: "8000"
+        - name: OPENVLA_WEIGHTS
+          valueFrom:
+            configMapKeyRef:
+              name: openvla-trained-model-canary
+              key: model-uri
+        - name: GROOT_MODEL_PATH
+          valueFrom:
+            configMapKeyRef:
+              name: openvla-trained-model-canary
+              key: model-uri
+        - name: GROOT_EMBODIMENT_TAG
+          valueFrom:
+            configMapKeyRef:
+              name: openvla-trained-model-canary
+              key: groot-embodiment-tag
+        - name: GROOT_VIDEO_KEY
+          valueFrom:
+            configMapKeyRef:
+              name: openvla-trained-model-canary
+              key: groot-video-key
+        - name: S3_ENDPOINT
+          value: http://minio.mlflow.svc:9000
+        - name: MODEL_CACHE_DIR
+          value: /models
+        - name: HF_HOME
+          value: /tmp/hf_cache
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token-stage1-20260923
+              key: token
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: storage-config
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: storage-config
+              key: AWS_SECRET_ACCESS_KEY
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        resources:
+          requests:
+            cpu: "2"
+            memory: 8Gi
+            nvidia.com/gpu: "1"
+          limits:
+            cpu: "4"
+            memory: 16Gi
+            nvidia.com/gpu: "1"
+        volumeMounts:
+        - name: model-cache
+          mountPath: /models
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 30
+      volumes:
+      - name: model-cache
+        persistentVolumeClaim:
+          claimName: model-cache

@@ -1,7 +1,10 @@
 # This project was developed with assistance from AI tools.
-"""Unit tests for the dwell-based debounce state machine."""
+"""Unit tests for the debounce state machine and frame-state precedence."""
+
+from unittest.mock import Mock
 
 from obstruction_detector.debounce import DebounceState
+from obstruction_detector.state import effective_obstruction
 
 
 def test_dwell_2_fires_after_two_consecutive():
@@ -48,3 +51,11 @@ def test_alternating_never_fires():
         assert s.observe(True) is False
         assert s.observe(False) is False
     assert s.obstructed is None
+
+
+def test_scripted_obstructed_frame_overrides_false_vlm_verdict() -> None:
+    assert effective_obstruction("obstructed", False, "trace", Mock()) is True
+
+
+def test_live_frame_state_uses_vlm_verdict() -> None:
+    assert effective_obstruction("live", True, "trace", Mock()) is True

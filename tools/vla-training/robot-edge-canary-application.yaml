@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: workloads-robot-edge-trained-model-canary
+  namespace: openshift-gitops
+  labels:
+    app.kubernetes.io/part-of: vla-training
+    showcase.redhat.com/component: vla-canary
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
+    targetRevision: main
+    path: infrastructure/gitops/apps/workloads/robot-edge/overlays/trained-model-canary
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: robot-edge
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=false

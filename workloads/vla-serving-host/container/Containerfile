@@ -40,12 +40,16 @@ COPY workloads/vla-serving-host/src /opt/app/vla-serving-host/src
 # Install service-level deps. In :slim we install everything except torch/torchvision
 # (the service defaults to VLA_MODE=mock which never imports torch). In :rocm the
 # base already has torch; we install --no-deps to avoid overwriting it.
+# Keep the NVIDIA base image's matched Torch/CUDA stack intact. GR00T and timm
+# use the already-installed Torch packages; resolving timm's dependencies here
+# would pull a newer PyPI Torch/CUDA stack over them.
 RUN pip3 install --no-cache-dir \
         fastapi "uvicorn[standard]" \
         pydantic pydantic-settings \
         structlog pillow numpy boto3 \
+    && pip3 install --no-cache-dir --no-deps "timm>=0.9.10,<1.0.0" \
     && pip3 install --no-cache-dir --no-deps /opt/app/vla-serving-host \
-    && chown -R 1001:0 /opt/app
+        && chown -R 1001:0 /opt/app
 
 # GR00T N1.7 SDK + inference deps (cuda only).
 # The base image ships a matched set of torch + transformer_engine + flash-attn +
@@ -55,7 +59,8 @@ RUN pip3 install --no-cache-dir \
 # then install its Python-only dependencies separately without touching torch.
 # ref: https://next.redhat.com/2025/08/26/a-developers-guide-to-pytorch-containers-and-nvidia-solving-the-puzzle/
 ARG GROOT_REF=main
-RUN if [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release; then \
+ARG INSTALL_GROOT=true
+RUN if [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release && [ "${INSTALL_GROOT}" = "true" ]; then \
         apt-get update && apt-get install -y --no-install-recommends git && \
         git clone --depth 1 --branch "${GROOT_REF}" \
             https://github.com/NVIDIA/Isaac-GR00T.git /workspace/Isaac-GR00T && \
@@ -79,6 +84,10 @@ RUN if [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release; then \
         pip3 install --no-cache-dir --no-deps \
             torchcodec==0.8.0 deepspeed==0.17.6 && \
         rm -rf /var/lib/apt/lists/* ; \
+    elif [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release; then \
+        pip3 install --no-cache-dir \
+            transformers==4.40.1 tokenizers==0.19.1 \
+            "accelerate>=1.2.0,<2.0" ; \
     fi
 
 USER 1001

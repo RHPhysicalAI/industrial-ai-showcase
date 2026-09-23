@@ -27,6 +27,8 @@ fleet.safety.alerts        ◄── Kafka ──  SafetyAlert
 
 - **JSON-on-the-wire.** The frame envelope (`CameraFrameEvent`) carries base64 JPEG + metadata. Matches the Phase-1 JSON-over-Kafka convention; Avro lands with Schema Registry in Phase 2.
 - **Dwell-based debounce.** A single-frame VLM hiccup shouldn't wake up Fleet Manager. `dwell_frames: 2` means we need two consecutive same-verdict frames before flipping state. Configurable via env.
+- **Scripted-state precedence.** Fake-camera frames carry an explicit `empty` or `obstructed` state for the deterministic showcase. The detector still calls Cosmos and records its verdict, but uses that explicit state when the model disagrees so a false clear cannot undo the scripted twin update. Unknown/live states continue to use Cosmos.
+- **Live-tail startup.** The detector uses a fresh per-process consumer group with `auto.offset.reset=latest`, so a restart does not resume an old backlog, replay retained historical scene states, or toggle the twin with stale alerts.
 - **Cold-start OK.** Initial state is "unknown"; the first N matching frames establish a baseline silently. Only transitions emit alerts.
 - **Stateful by design.** Each (camera, aisle) needs its own detector instance. Phase-1 ships one instance for aisle-3.
 - **Prompt pinned to what was validated.** The prompt text comes from `workloads/obstruction-detector/trial.py` which was validated on-cluster against Cosmos Reason 2-8B using the 1920×1080 JPEG pair in `test-images/`.

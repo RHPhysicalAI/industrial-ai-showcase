@@ -50,8 +50,6 @@ spec:
                 --/app/window/hideUi=true \
                 --/app/livestream/webrtcEnabled=true \
                 --/app/livestream/nativeStreamerEnabled=true \
-                --/persistent/isaac/asset_root/default="omniverse://nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com/Projects/showcase/assets/Isaac/6.0" \
-                --/persistent/isaac/asset_root/nvidia="omniverse://nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com/Projects/showcase/assets/Isaac/6.0" \
                 --exec /scenarios/warehouse_baseline.py
           env:
             - name: ACCEPT_EULA
@@ -60,10 +58,9 @@ spec:
               value: "Y"
             - name: OMNI_KIT_ACCEPT_EULA
               value: "Y"
-            - name: OMNI_SERVER
-              value: "omniverse://nucleus-api.omniverse-nucleus.svc.cluster.local"
-            - name: SCENE_PACK_URL
-              value: "omniverse://nucleus.apps.g4h4d3j7q1c9f7m.cimo.p1.openshiftapps.com/Projects/showcase/custom/Warehouse_edit.usd"
+            # Default showcase mode uses Isaac Sim's public asset CDN. Set
+            # SCENE_PACK_URL in a site overlay only after Nucleus client/server
+            # compatibility has been validated for that environment.
             - name: NUCLEUS_USER
               value: omniverse
             - name: NUCLEUS_PASS
@@ -128,18 +125,19 @@ spec:
               subPath: kit-logs
             - name: tmp
               mountPath: /tmp
-          # Rendering + asset compile on first cold-start can take 5-10 minutes
-          # before Kit app accepts connections. Wide initial-delay tolerances.
+          # The HLS listener is available once Kit has initialized; keep the
+          # initial delay short so the browser route is not held at 503 while
+          # the scene continues its first-load work.
           readinessProbe:
             tcpSocket:
-              port: tcp-livestream
-            initialDelaySeconds: 120
+              port: tcp-mjpeg
+            initialDelaySeconds: 30
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 40
           livenessProbe:
             tcpSocket:
-              port: tcp-livestream
+              port: tcp-mjpeg
             initialDelaySeconds: 600
             periodSeconds: 30
             timeoutSeconds: 10
