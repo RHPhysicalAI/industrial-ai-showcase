@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from openvla_server import __version__
+from openvla_server.kserve_protocol import KServePredictRequest
 from openvla_server.model import VlaAdapter, build_adapter, decode_image_b64
 from openvla_server.settings import OpenvlaSettings
 
@@ -126,3 +127,28 @@ async def act(req: ActRequest) -> ActResponse:
     return ActResponse(
         action=action, model_version=adapter.model_version, trace_id=req.trace_id, request_id=request_id
     )
+
+
+@app.get("/v1/models/{model_name}")
+async def kserve_model_status(model_name: str) -> dict[str, str | bool]:
+    """Expose the KServe v1 model readiness contract for custom predictors."""
+
+    return {"name": model_name, "ready": True}
+
+
+@app.post("/v1/models/{model_name}:predict")
+async def kserve_predict(model_name: str, req: KServePredictRequest) -> dict[str, list[dict[str, object]]]:
+    """Adapt KServe v1 ``instances`` to the unchanged legacy ``/act`` API."""
+
+    del model_name  # The InferenceService selects the model; the request path is informational.
+    predictions = []
+    for instance in req.instances:
+        response = await act(
+            ActRequest(
+                image=instance.image,
+                instruction=instance.instruction,
+                trace_id=instance.trace_id,
+            )
+        )
+        predictions.append(response.model_dump())
+    return {"predictions": predictions}

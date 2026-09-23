@@ -214,6 +214,28 @@ Dispatch / Drop Pallet deployment or update GitOps.
 The helper refuses to run if the live `openvla-server` has replicas, required
 resource objects are missing, or its own canary name is already present.
 
+For the KServe `InferenceService` contract, use the separate [isolated KServe
+canary runbook](kserve-canary.md). It deploys the fork image and the native
+GR00T artifact in a temporary namespace without changing the live
+Mission Dispatch path, Argo applications, Cosmos, Isaac Sim, or the AWS VM.
+
+The isolated KServe proof passed on 2026-09-23 using the successful trained
+artifact
+`s3://vla-training/vla-finetune-smoke-20260922-2/smoke-20260922-2/model` and
+fork image digest
+`sha256:16deb49254a100a8d4613e115ad41911bc911ab604f0ecfaeb5f30e6e68b7f4e`.
+It verified that the `InferenceService` became Ready, KServe's
+`/v1/models/<name>` endpoint reported readiness, and
+`/v1/models/<name>:predict` returned a finite seven-value action with the
+request trace ID preserved. Isaac Sim was temporarily scaled to zero to
+provide the GPU; the temporary KServe namespace was removed after validation.
+
+The canary helper now carries the legacy MinIO endpoint and storage Secret
+through KServe's storage configuration, attaches the existing private-registry
+pull credential only to the temporary service account, tolerates the Hub's
+L40S taint, and explicitly binds the fork server to KServe's port 8080. These
+are canary setup details, not changes to the live deployment.
+
 ## What success means
 
 For the smoke pipeline, success means a bounded run completes training,
@@ -228,6 +250,12 @@ then passed `/healthz`, `/readyz`, and one `/act` inference request using the
 versioned `.../model` artifact. This proves the train-to-artifact-to-inference
 contract; it does not yet prove robot-control semantics or promotion to the
 live deployment.
+
+The isolated KServe proof is also complete: the same versioned artifact was
+loaded by a temporary KServe `InferenceService` using the fork-built image,
+and the KServe v1 `:predict` contract translated successfully to the existing
+`/act` implementation. This validates KServe consumption of the trained
+artifact; it is not a live KServe promotion or an Argo/HIL change.
 
 The next integration gate is the action-space contract. The trained Teleop-G1
 policy is validated as a 43-DOF, 16-step action chunk before the server keeps
@@ -253,6 +281,11 @@ a future run does not depend on shell patches or operator memory:
 | Successful HTTP inference did not prove robot behavior. | The canary is explicitly an inference-contract gate. The existing public API remains 7 values; mapping the Teleop-G1 43-DOF action space to downstream robot controls is a separate integration gate. |
 | The original model-registry client tried a newer API than the Hub exposes. | Keep `model-registry==0.3.14` pinned until the cluster registry is upgraded. |
 | A 120Gi object-store claim reached the free-space threshold during checkpoint upload. | The fork uses a 200Gi MinIO claim and retains cleanup/retention as an operational follow-up rather than deleting unknown artifacts. |
+| The first isolated KServe pod could not schedule on the shared L40S node. | Put the GPU node selector and `nvidia.com/gpu` toleration on the KServe predictor, where KServe propagates them to the pod. |
+| KServe's storage initializer could not use predictor environment variables for S3. | Reference `storage-config` with `serving.kserve.io/storageSecretName` and carry the legacy MinIO endpoint through storage Secret annotations. |
+| The private Hub image registry was not readable from the temporary namespace. | Copy the existing `robot-edge` image-pull Secret into the canary namespace and attach it only to that namespace's default service account. |
+| The image's default command listened on port 8000 while the KServe contract used 8080. | The canary explicitly starts Uvicorn on port 8080 and forwards directly to the ready predictor pod. |
+| The initial canary artifact example pointed at an obsolete prefix. | Use the successful pipeline's versioned `.../smoke-20260922-2/model` URI and verify the artifact contents before inference. |
 
 The canary proves that a versioned trained artifact can be downloaded, loaded,
 and queried by the original GR00T serving runtime. It does not claim that the
