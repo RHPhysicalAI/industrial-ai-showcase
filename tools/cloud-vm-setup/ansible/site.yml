@@ -16,7 +16,11 @@
     vla_base_flavor_value: "{{ cloud_vla_base_flavor | default('slim') }}"
     build_image_value: "{{ cloud_build_image | default(false) | bool }}"
     force_image_build_value: "{{ cloud_force_image_build | default(false) | bool }}"
+    install_groot_value: "{{ cloud_install_groot | default(true) | bool }}"
     model_weights_value: "{{ cloud_model_weights | default('openvla/openvla-7b') }}"
+    groot_model_path_value: "{{ cloud_groot_model_path | default('') }}"
+    groot_embodiment_tag_value: "{{ cloud_groot_embodiment_tag | default('REAL_G1') }}"
+    groot_video_key_value: "{{ cloud_groot_video_key | default('ego_view') }}"
     allowed_source_cidr_value: "{{ cloud_allowed_source_cidr | default('') }}"
     git_repo_url_value: "{{ cloud_git_repo_url | default('https://github.com/rhkp/industrial-ai-showcase.git') }}"
     git_repo_ref_value: "{{ cloud_git_repo_ref | default('main') }}"
@@ -288,6 +292,7 @@
           podman build
           --network=host
           --build-arg BASE_FLAVOR={{ vla_base_flavor_value }}
+          --build-arg INSTALL_GROOT={{ install_groot_value | ternary('true', 'false') }}
           --file workloads/vla-serving-host/container/Containerfile
           --tag {{ container_image_value }}
           .

@@ -15,6 +15,7 @@ inference_timeout="${VLA_CANARY_INFERENCE_TIMEOUT:-300}"
 canary_image="${VLA_CANARY_IMAGE:-}"
 use_live_image="${VLA_CANARY_USE_LIVE_IMAGE:-false}"
 allow_tag_image="${VLA_CANARY_ALLOW_TAG_IMAGE:-false}"
+hf_secret_name="${VLA_CANARY_HF_SECRET_NAME:-hf-token}"
 keep=false
 
 usage() {
@@ -28,7 +29,7 @@ environment variables: VLA_OC_CONTEXT, VLA_CANARY_NAMESPACE,
 VLA_CANARY_NAME, VLA_CANARY_LOCAL_PORT, VLA_CANARY_MODE, and
 VLA_CANARY_MODEL_CACHE_DIR, VLA_CANARY_EMBODIMENT_TAG,
 VLA_CANARY_VIDEO_KEY, VLA_CANARY_INFERENCE_TIMEOUT, VLA_CANARY_IMAGE, and
-VLA_CANARY_ALLOW_TAG_IMAGE.
+VLA_CANARY_ALLOW_TAG_IMAGE, and VLA_CANARY_HF_SECRET_NAME.
 The canary requires an explicit fork-built image. Set
 VLA_CANARY_USE_LIVE_IMAGE=true only when intentionally testing the currently
 deployed image. Image references must be immutable digests unless
@@ -99,15 +100,15 @@ if [[ "$gpu_nodes" -lt 1 ]]; then
   exit 2
 fi
 
-for resource in secret/storage-config secret/hf-token pvc/model-cache; do
+for resource in secret/storage-config "secret/${hf_secret_name}" pvc/model-cache; do
   oc_cmd -n "$namespace" get "$resource" >/dev/null 2>&1 || {
     echo "BLOCKED: $namespace/$resource is missing." >&2
     exit 2
   }
 done
 
-if [[ "$mode" == "groot" && -z "$(oc_cmd -n "$namespace" get secret/hf-token -o jsonpath='{.data.token}')" ]]; then
-  echo "BLOCKED: $namespace/secret/hf-token has no non-empty token key." >&2
+if [[ "$mode" == "groot" && -z "$(oc_cmd -n "$namespace" get secret "$hf_secret_name" -o jsonpath='{.data.token}')" ]]; then
+  echo "BLOCKED: $namespace/secret/$hf_secret_name has no non-empty token key." >&2
   echo "Provide the approved Hugging Face credential without printing it." >&2
   exit 2
 fi
@@ -185,10 +186,12 @@ if [[ "$mode" == "groot" ]]; then
           exit 1
         env:
         - name: HF_TOKEN
-          valueFrom: {secretKeyRef: {name: hf-token, key: token}}
+          valueFrom: {secretKeyRef: {name: __HF_SECRET_NAME__, key: token}}
 EOF
 )"
 fi
+
+init_container_yaml="${init_container_yaml//__HF_SECRET_NAME__/$hf_secret_name}"
 
 oc_cmd apply -f - <<EOF
 apiVersion: apps/v1
@@ -229,7 +232,9 @@ $init_container_yaml
         - name: AWS_SECRET_ACCESS_KEY
           valueFrom: {secretKeyRef: {name: storage-config, key: AWS_SECRET_ACCESS_KEY}}
         - name: HF_TOKEN
-          valueFrom: {secretKeyRef: {name: hf-token, key: token}}
+          valueFrom: {secretKeyRef: {name: $hf_secret_name, key: token}}
+        - name: HUGGINGFACE_HUB_TOKEN
+          valueFrom: {secretKeyRef: {name: $hf_secret_name, key: token}}
         ports: [{name: http, containerPort: 8000}]
         resources:
           requests: {cpu: "2", memory: 8Gi, nvidia.com/gpu: "1"}

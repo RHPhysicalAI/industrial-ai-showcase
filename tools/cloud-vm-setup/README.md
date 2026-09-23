@@ -109,9 +109,47 @@ After mock mode is healthy:
 2. Confirm Podman CDI exposes `nvidia.com/gpu`.
 3. Set `VLA_BASE_FLAVOR=cuda` and `VLA_CONTAINER_IMAGE=localhost/openvla-server:cuda`.
 4. Set `VLA_MODE=openvla`.
-5. Provide `VLA_HF_TOKEN` locally in `.env` if the selected model requires it.
-6. Keep `VLA_BUILD_IMAGE=true` or pre-load the CUDA image on the VM.
-7. Re-run `./setup.sh`.
+5. Set `VLA_INSTALL_GROOT=false` for the legacy OpenVLA image. This selects
+   the Transformers/tokenizers versions expected by OpenVLA; keep it `true`
+   for the separate GR00T/canary image.
+6. Provide `VLA_HF_TOKEN` locally in `.env` if the selected model requires it.
+7. Keep `VLA_BUILD_IMAGE=true` or pre-load the CUDA image on the VM.
+8. Re-run `./setup.sh`.
+
+## Native GR00T artifact mode
+
+The same VM can serve a native GR00T model produced by the training pipeline.
+Stage the versioned `.../model` directory under `VLA_MODEL_CACHE` and set:
+
+```bash
+VLA_MODE=groot
+VLA_CONTAINER_IMAGE=<fork-built CUDA image>
+VLA_INSTALL_GROOT=true
+VLA_GROOT_MODEL_PATH=/var/cache/vla-models/<artifact-name>/model
+VLA_GROOT_EMBODIMENT_TAG=NEW_EMBODIMENT
+VLA_GROOT_VIDEO_KEY=rs_view
+```
+
+The GR00T path is deliberately explicit: it does not replace the legacy
+OpenVLA defaults, and the existing service can be restored by switching back
+to `VLA_MODE=openvla`, `OPENVLA_WEIGHTS=openvla/openvla-7b`, and the prior
+container image. The HF token remains required because GR00T loads its gated
+Cosmos backbone during the first inference request.
+
+To transfer a native model from the Hub MinIO store to the VM, use the helper:
+
+```bash
+bash tools/cloud-vm-setup/transfer-model.sh \
+  --artifact-uri s3://vla-training/<run-prefix>/model
+```
+
+The Hub MinIO service is ClusterIP-only, so the helper reads objects through
+the authenticated MinIO pod. It stages each object locally, downloads
+multipart safetensors one multipart part per `oc exec` session, verifies the
+exact byte count, and only then copies the complete file to the VM with `scp`.
+This chunking is intentional: a long binary `oc exec` stream can silently
+truncate large model shards. The helper never prints or stores the MinIO
+credentials and refuses to continue when a source/target size check fails.
 
 The CUDA image can be large and may require NVIDIA NGC access because the Containerfile uses an NVIDIA PyTorch base. Model weights are cached under `VLA_MODEL_CACHE`.
 The service loads `openvla/openvla-7b` lazily on the first `/act` request; a

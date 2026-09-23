@@ -59,7 +59,8 @@ RUN pip3 install --no-cache-dir \
 # then install its Python-only dependencies separately without touching torch.
 # ref: https://next.redhat.com/2025/08/26/a-developers-guide-to-pytorch-containers-and-nvidia-solving-the-puzzle/
 ARG GROOT_REF=main
-RUN if [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release; then \
+ARG INSTALL_GROOT=true
+RUN if [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release && [ "${INSTALL_GROOT}" = "true" ]; then \
         apt-get update && apt-get install -y --no-install-recommends git && \
         git clone --depth 1 --branch "${GROOT_REF}" \
             https://github.com/NVIDIA/Isaac-GR00T.git /workspace/Isaac-GR00T && \
@@ -83,6 +84,10 @@ RUN if [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release; then \
         pip3 install --no-cache-dir --no-deps \
             torchcodec==0.8.0 deepspeed==0.17.6 && \
         rm -rf /var/lib/apt/lists/* ; \
+    elif [ -f /etc/os-release ] && grep -q ubuntu /etc/os-release; then \
+        pip3 install --no-cache-dir \
+            transformers==4.40.1 tokenizers==0.19.1 \
+            "accelerate>=1.2.0,<2.0" ; \
     fi
 
 USER 1001

@@ -86,6 +86,9 @@ ansible-playbook \
   -e "cloud_vla_base_flavor=${VLA_BASE_FLAVOR:-slim}" \
   -e "cloud_container_image=${VLA_CONTAINER_IMAGE:-localhost/openvla-server:slim}" \
   -e "cloud_model_weights=${VLA_MODEL_WEIGHTS:-openvla/openvla-7b}" \
+  -e "cloud_groot_model_path=${VLA_GROOT_MODEL_PATH:-}" \
+  -e "cloud_groot_embodiment_tag=${VLA_GROOT_EMBODIMENT_TAG:-REAL_G1}" \
+  -e "cloud_groot_video_key=${VLA_GROOT_VIDEO_KEY:-ego_view}" \
   -e "cloud_model_cache=${VLA_MODEL_CACHE:-/var/cache/vla-models}" \
   -e "cloud_allowed_source_cidr=$VLA_ALLOWED_SOURCE_CIDR" \
   -e "cloud_git_repo_url=${VLA_GIT_REPO_URL:-https://github.com/rhkp/industrial-ai-showcase.git}" \
@@ -93,6 +96,7 @@ ansible-playbook \
   -e "cloud_build_source_mode=$build_source_mode" \
   -e "cloud_build_image=${VLA_BUILD_IMAGE:-false}" \
   -e "cloud_force_image_build=${VLA_FORCE_IMAGE_BUILD:-false}" \
+  -e "cloud_install_groot=${VLA_INSTALL_GROOT:-true}" \
   -e "cloud_hf_token=${VLA_HF_TOKEN:-}" \
   -e "cloud_install_nvidia_driver=${VLA_INSTALL_NVIDIA_DRIVER:-true}" \
   -e "cloud_reboot_after_driver=${VLA_REBOOT_AFTER_DRIVER:-true}" \

@@ -70,19 +70,41 @@ class OpenvlaAdapter:
         self._processor = AutoProcessor.from_pretrained(self._weights, trust_remote_code=True)
         self._model = AutoModelForVision2Seq.from_pretrained(
             self._weights,
+            # OpenVLA's custom model class does not implement Transformers' SDPA capability hook.
+            # Keep the legacy-compatible eager attention path explicit.
             attn_implementation="eager",
             torch_dtype=dtype,
+            # The CUDA image uses low_cpu_mem_usage, which initializes parameters on
+            # the meta device. Let Transformers place the loaded model instead of
+            # calling .to(cuda) on meta-backed parameters afterward.
+            device_map="auto",
             low_cpu_mem_usage=True,
             trust_remote_code=True,
-        ).to(self._device)
+        )
         self._model.eval()
 
     def infer(self, image: Image, instruction: str) -> list[float]:
         self._ensure_loaded()
         assert self._processor is not None and self._model is not None
+        import torch  # type: ignore[import-not-found]
 
         prompt = f"In: What action should the robot take to {instruction}?\nOut:"
         inputs = self._processor(prompt, image).to(self._device, dtype=self._model.dtype)
+
+        # The legacy OpenVLA remote wrapper appends the special empty output token
+        # (29871) to input_ids inside predict_action(), but leaves attention_mask
+        # unchanged.  Transformers then builds a multimodal mask that is one token
+        # shorter than the generated input. Keep the original wrapper contract and
+        # extend only the matching mask before handing inputs to predict_action().
+        input_ids = inputs.get("input_ids")
+        attention_mask = inputs.get("attention_mask")
+        if input_ids is not None and attention_mask is not None:
+            needs_output_token = any(int(token) != 29871 for token in input_ids[:, -1].tolist())
+            if needs_output_token and attention_mask.shape[-1] == input_ids.shape[-1]:
+                inputs["attention_mask"] = torch.cat(
+                    [attention_mask, attention_mask.new_ones((attention_mask.shape[0], 1))], dim=-1
+                )
+
         action = self._model.predict_action(**inputs, unnorm_key=self._unnorm_key, do_sample=False)
         return list(action.tolist() if hasattr(action, "tolist") else action)
 
