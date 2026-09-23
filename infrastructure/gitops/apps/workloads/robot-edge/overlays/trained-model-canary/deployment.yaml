@@ -32,7 +32,7 @@ spec:
         effect: NoSchedule
       containers:
       - name: openvla-server
-        image: image-registry.openshift-image-registry.svc:5000/robot-edge/openvla-server@sha256:695ccbde9ec1aca363f27385222e6dd0efb9230d0cea91008868eb76af293d3e
+        image: image-registry.openshift-image-registry.svc:5000/robot-edge/openvla-server@sha256:dde6685e7973480cb88d403110654a86704ad42ddff5542278e26a49bc5bd096
         imagePullPolicy: IfNotPresent
         env:
         - name: VLA_MODE
