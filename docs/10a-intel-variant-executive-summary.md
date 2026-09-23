@@ -40,7 +40,7 @@ These components are **platform-agnostic** and require **zero changes**:
 ✅ OpenShift Data Foundation storage  
 ✅ AMQ Streams (Kafka) messaging  
 ✅ Service Mesh (Istio) for mTLS and observability  
-✅ All security, provenance, and air-gap patterns  
+✅ All security and provenance patterns  
 ✅ Sigstore admission, FIPS mode, supply-chain attestation  
 
 **Key Insight**: The entire Red Hat substrate is **silicon-agnostic**. The Intel variant validates Red Hat's "run physical AI on your chosen hardware" positioning.
@@ -84,7 +84,7 @@ These components are **platform-agnostic** and require **zero changes**:
 
 | # | Differentiator | NVIDIA | Intel | Status |
 |---|----------------|--------|-------|--------|
-| 1 | On-prem & air-gapped | ✅ | ✅ **(Stronger — fully OSS)** | **Preserved or Enhanced** |
+| 1 | On-prem & air-gapped | ✅ | ✅ | **Preserved** |
 | 2 | Containers + VMs + vGPU workstations | ✅ | ⚠️ (vGPU less mature) | **Degraded** |
 | 3 | Hybrid cloud → edge → robot | ✅ | ✅ (Enhanced with FlightCtl) | **Preserved or Enhanced** |
 | 4 | OpenShift AI MLOps | ✅ | ✅ | **Preserved** |
@@ -110,7 +110,7 @@ These components are **platform-agnostic** and require **zero changes**:
 
 ✅ **Multi-vendor positioning**: "Run physical AI on NVIDIA or Intel — Red Hat federates both"  
 ✅ **Edge compute efficiency**: NPU/iGPU heterogeneous scheduling narrative  
-✅ **Open-source alignment**: Fully OSS stack (MuJoCo, LeRobot, OpenVINO) — stronger air-gap story  
+✅ **Open-source alignment**: Fully OSS stack (MuJoCo, LeRobot, OpenVINO)  
 ✅ **Cost optimization**: Intel edge hardware may be more cost-effective than NVIDIA Jetson at scale  
 ✅ **FlightCtl integration**: Opportunity to showcase Red Hat's emerging edge fleet management tool  
 
@@ -216,7 +216,6 @@ These components are **platform-agnostic** and require **zero changes**:
 ## Additional Resources
 
 - **Full Technical Specification**: `docs/10-intel-variant-architecture.md`
-- **Developer Getting Started Guide**: `docs/10-intel-variant-architecture.md#developer-getting-started-guide` (10-step hands-on path)
 - **Intel Physical AI Spec (Source)**: https://gist.github.com/redhatHameed/441dc8ca5614fa50d9f7977f49424cdd
 - **GitHub PR #91**: https://github.com/RHPhysicalAI/industrial-ai-showcase/pull/91
 
