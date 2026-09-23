@@ -353,44 +353,7 @@ The **Intel Robotics AI Suite** is a collection of **25+ pre-optimized robotics 
 - Whisper (speech recognition for voice commands)
 - LLM/VLM integration hooks for task planning (customer brings their own LLM)
 
-### Deployment Pattern
-
-These models are deployed as **OpenVINO Model Server instances** on OpenShift:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: yolov8-detector
-  namespace: perception
-spec:
-  replicas: 2
-  template:
-    spec:
-      containers:
-      - name: ovms
-        image: openvino/model_server:latest
-        env:
-        - name: MODEL_NAME
-          value: yolov8n
-        - name: MODEL_PATH
-          value: /models/yolov8n  # OpenVINO IR from PVC
-        - name: TARGET_DEVICE
-          value: GPU  # iGPU
-        volumeMounts:
-        - name: model-store
-          mountPath: /models
-          readOnly: true
-        resources:
-          limits:
-            gpu.intel.com/i915: 1
-      volumes:
-      - name: model-store
-        persistentVolumeClaim:
-          claimName: intel-robotics-ai-suite-models
-```
-
-Models are **version-controlled** in the GitOps repo and **promoted** via the same MLflow + Argo CD pattern as custom-trained policies.
+These models are deployed as **OpenVINO Model Server instances** on OpenShift and **version-controlled** in the GitOps repo, promoted via the same MLflow + Argo CD pattern as custom-trained policies.
 
 ### Replacing Cosmos Reason 2-8B (Obstruction Detector)
 
@@ -512,28 +475,7 @@ Reviewing the eight differentiators from `00-project-charter.md`:
 
 ### Scenario 1: Parallel Intel Variant (Recommended)
 
-**Approach**: Maintain the NVIDIA Mega reference as primary; create an Intel variant as a second reference in the same repo under `variants/intel/`.
-
-**Repository Structure**:
-```
-industrial-ai-showcase/
-├── docs/
-│   ├── 00-project-charter.md          # Updated to mention both variants
-│   ├── 01-architecture-overview.md   # NVIDIA variant (primary)
-│   ├── 10-intel-variant-architecture.md  # This document
-│   └── ...
-├── infrastructure/
-│   ├── gitops/                         # Shared GitOps structure
-│   │   ├── apps/
-│   │   │   ├── nvidia-variant/         # NVIDIA-specific apps
-│   │   │   └── intel-variant/          # Intel-specific apps
-│   │   └── platform/                   # Shared platform services (RHOAI, Service Mesh, etc.)
-│   └── ...
-├── components/
-│   ├── nvidia/                          # Isaac Sim, GR00T, Cosmos
-│   └── intel/                           # MuJoCo, LeRobot, OpenVINO
-└── README.md                            # Updated to describe both variants
-```
+**Approach**: Maintain the NVIDIA Mega reference as primary; create an Intel variant as a second reference in the same repo. Variant-specific components isolated in dedicated directories (`components/nvidia/`, `components/intel/`), with shared Red Hat platform layer (GitOps, RHOAI, Service Mesh, ACM) maximizing code reuse.
 
 **Value Proposition**: Red Hat becomes the **only platform with both NVIDIA and Intel Physical AI references** — uniquely positioned to serve customers regardless of silicon choice.
 
