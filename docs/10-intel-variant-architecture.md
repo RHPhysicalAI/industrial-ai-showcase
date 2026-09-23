@@ -582,88 +582,99 @@ industrial-ai-showcase/
 
 **Recommendation**: **Strongly consider this** if the goal is to demonstrate Red Hat's multi-vendor hardware flexibility while preserving the NVIDIA visual and world-model advantages.
 
-## Implementation Roadmap
+## Technical Validation & Research Areas
 
-If proceeding with **Scenario 1 (Parallel Variant)** or **Scenario 3 (Hybrid)**:
+The following areas require investigation and validation before committing to full implementation. These represent **technical unknowns** that should be de-risked through focused R&D and proof-of-concept work.
 
-### Phase 1: Proof of Concept (4-6 weeks)
+### Core Technology Stack Feasibility
 
-**Goal**: Validate that MuJoCo + LeRobot + OpenVINO can deliver Loop 1 (operational inference) and Loop 2 (training/promotion) on OpenShift.
+**MuJoCo + Unitree G1 Simulation**
+- Can MuJoCo simulate Unitree G1 with sufficient fidelity for policy training?
+- Does unitree_mujoco integration support the manipulation tasks needed for warehouse demos?
+- How does MuJoCo visual quality compare to Isaac Sim for customer demos (Archetype A/B/C)?
 
-**Deliverables**:
-1. MuJoCo + unitree_mujoco running in a container on OpenShift
-2. LeRobot training a simple imitation learning policy in OpenShift AI Workbench
-3. PyTorch → ONNX → OpenVINO IR conversion pipeline (manual or simple script)
-4. OpenVINO Model Server serving the converted policy
-5. ROS 2 node consuming the policy and driving a simulated Unitree G1 in MuJoCo
-6. Telemetry flowing to Kafka and visible in a basic dashboard
+**LeRobot Training Framework**
+- Is LeRobot mature enough for production-grade policy training (imitation learning, manipulation)?
+- What gaps exist compared to Isaac Lab (RL algorithms, scenario configuration, training stability)?
+- Can LeRobot scale to multi-GPU training on OpenShift AI?
+- Are there alternative open-source RL frameworks worth evaluating (Stable Baselines3, RLlib)?
 
-**Success Criteria**: End-to-end loop from MuJoCo sim → LeRobot training → OpenVINO serving → ROS 2 execution, all on OpenShift.
+**PyTorch → ONNX → OpenVINO IR Conversion Pipeline**
+- Does the conversion pipeline work end-to-end for typical robotics policies (action chunking, diffusion policies)?
+- What accuracy/latency degradation occurs during ONNX and OpenVINO quantization?
+- Can this pipeline integrate cleanly into Kubeflow Pipelines with MLflow tracking?
 
-### Phase 2: MLOps Integration (6-8 weeks)
+### Intel Hardware Availability and Performance
 
-**Goal**: Integrate LeRobot + OpenVINO into the existing OpenShift AI + MLflow + Kubeflow Pipelines infrastructure.
+**Panther Lake NPU/iGPU Access**
+- Is Panther Lake hardware available for development by Q4 2026 / Q1 2027?
+- What fallback hardware can be used for initial validation (Meteor Lake, Raptor Lake with iGPU only)?
+- Can NPU/iGPU device plugins integrate with OpenShift without custom node configuration?
 
-**Deliverables**:
-1. Kubeflow Pipeline for LeRobot training → ONNX → OpenVINO IR → validation → MLflow registration
-2. MLflow model registry storing OpenVINO IR models with lineage to training runs
-3. GitOps integration: Argo CD ApplicationSet deploying OpenVINO Model Server instances from MLflow-registered models
-4. Staged rollout to MicroShift edge nodes (simulated or real Panther Lake hardware if available)
-5. Rollback capability tested
+**OpenVINO Model Server Performance**
+- How does OpenVINO inference latency compare to vLLM (CUDA) for similar model sizes?
+- Can OpenVINO Model Server handle the inference QPS needed for multi-robot fleet operations?
+- What are the resource limits for NPU vs iGPU vs CPU inference?
 
-**Success Criteria**: Loop 2 (policy training and promotion) fully operational with the same MLOps rigor as the NVIDIA variant.
+### Integration with Existing Platform
 
-### Phase 3: Intel Robotics AI Suite Integration (4-6 weeks)
+**MLflow + OpenShift AI Integration**
+- Can OpenVINO IR models be stored in MLflow model registry with full lineage?
+- Does Kubeflow Pipelines support the PyTorch → ONNX → OpenVINO IR workflow?
+- How do we version and promote OpenVINO models through the same GitOps flow as NVIDIA models?
 
-**Goal**: Replace Cosmos Reason 2-8B with Intel Robotics AI Suite models for Loop 1 perception.
+**ROS 2 + MuJoCo Bridge**
+- Can ROS 2 nodes consume MuJoCo simulation state and actuate the robot in sim?
+- Does the ROS 2 bridge work identically in sim (MuJoCo) and on real hardware (edge MicroShift)?
+- What DDS configuration is needed for ROS 2 on OpenShift (Multus, host network, Cyclone DDS)?
 
-**Deliverables**:
-1. YOLOv8, SAM, Depth Anything V2, CLIP models deployed via OpenVINO Model Server
-2. Obstruction-detector service refactored to call Intel models instead of Cosmos
-3. iGPU targeting validated (workloads land on Intel GPU nodes)
-4. Performance benchmarking: latency and throughput vs. Cosmos Reason baseline (accept degradation if minor)
+**Intel Robotics AI Suite Deployment**
+- Are the 25+ pre-optimized Intel models (YOLOv8, SAM, CLIP, etc.) production-ready?
+- Can they replace Cosmos Reason 2-8B for obstruction detection with acceptable accuracy?
+- How do we manage versioning and updates for Intel-provided models vs. custom-trained policies?
 
-**Success Criteria**: Loop 1 (operational inference) working with Intel perception stack, alerts flowing to fleet manager.
+### Showcase Console & Demo Experience
 
-### Phase 4: Showcase Console Adaptations (6-8 weeks)
+**MuJoCo Viewport Integration**
+- Can MuJoCo render viewport be embedded in the Showcase Console (WebGL, Three.js, or static frames)?
+- Is the visual fidelity acceptable for Archetype A demos, or do we only target Archetype B/C with Intel variant?
+- How do we handle the loss of Kit App Streaming's interactive 3D viewport?
 
-**Goal**: Adapt the Showcase Console to support both NVIDIA and Intel variants.
+**FlightCtl for Edge Fleet Management**
+- Should FlightCtl replace ACM for Intel edge devices, or augment it (two-tier federation)?
+- Is FlightCtl mature enough (GA status) for production demo use cases?
+- Can FlightCtl integrate with the Showcase Console for device enrollment and OTA update visibility?
 
-**Deliverables**:
-1. Variant selector in Console (toggle between NVIDIA and Intel backends)
-2. MuJoCo viewport integration (choose Approach 2 or 3 from earlier section)
-3. Heterogeneous compute utilization dashboard (NPU/iGPU/CPU metrics)
-4. FlightCtl integration (if adopting FlightCtl for Intel edge devices)
-5. Updated demo scripts for all three audience archetypes (A/B/C) targeting Intel variant
+### Loop 3 (Synthetic Data Generation) Gap
 
-**Success Criteria**: Console can drive a complete demo (Loops 1, 2, 4) for the Intel variant with the same audience-mode flexibility as the NVIDIA variant.
+**Critical Question**: Can the Intel variant succeed without Loop 3, or is this a dealbreaker?
+- Are there open-source world model alternatives to Cosmos Predict/Transfer (Genie, diffusion-based models)?
+- Can MuJoCo procedural generation provide limited synthetic scenario expansion?
+- Is Scenario 3 (Hybrid: NVIDIA datacenter for Cosmos + Intel edge for inference) the only viable path if Loop 3 is required?
 
-### Phase 5: Documentation and Sales Enablement (4 weeks)
+### Recommended R&D Approach
 
-**Goal**: Produce customer-ready documentation and sales materials for the Intel variant.
+**Step 1**: Hardware and core stack validation
+- Validate Panther Lake availability; fallback to Meteor Lake if needed
+- Prove MuJoCo + LeRobot + OpenVINO conversion works locally (developer workstation)
+- Benchmark OpenVINO inference performance vs. requirements
 
-**Deliverables**:
-1. Intel variant architecture diagram (equivalent to `06-mega-mapping.svg` for NVIDIA)
-2. Component catalog addendum for Intel-specific components
-3. Deployment quickstart for Intel variant
-4. Differentiator mapping updated to show Intel variant coverage
-5. Talk tracks for sales teams: when to lead with NVIDIA vs. Intel vs. hybrid
-6. Reference customer narratives updated (identify Intel-relevant customer stories)
+**Step 2**: OpenShift integration proof-of-concept
+- Deploy MuJoCo, LeRobot, OpenVINO Model Server to OpenShift
+- Integrate with MLflow and Kubeflow Pipelines
+- Validate ROS 2 + MuJoCo bridge on OpenShift
 
-**Success Criteria**: Sales and field teams can present the Intel variant confidently; SAs can deploy it in customer labs.
+**Step 3**: Perception stack validation
+- Deploy Intel Robotics AI Suite models (YOLOv8, SAM, CLIP)
+- Compare accuracy and latency vs. Cosmos Reason 2-8B baseline
+- Validate end-to-end Loop 1 (camera → perception → fleet manager → robot)
 
-### Phase 6 (Optional): FlightCtl Production Integration (6-8 weeks)
+**Step 4**: Strategic decision checkpoint
+- Based on R&D findings, confirm or adjust strategic scenario (Parallel / Hybrid / Defer)
+- Assess visual fidelity gap (MuJoCo vs. Isaac Sim) and decide if acceptable for target audiences
+- Determine if Loop 3 gap is addressable or requires Scenario 3 (Hybrid)
 
-**Goal**: Replace or augment ACM with FlightCtl for edge device management in the Intel variant.
-
-**Deliverables**:
-1. FlightCtl deployed on spoke clusters
-2. MicroShift edge devices enrolled in FlightCtl
-3. Bootable container OTA updates via FlightCtl
-4. GitOps-driven device config management
-5. FlightCtl observability integrated into Showcase Console
-
-**Success Criteria**: Edge fleet lifecycle (enrollment, update, rollback) managed by FlightCtl, demonstrated in a live Intel variant demo.
+**Next step after R&D validation**: If results are positive, proceed with detailed implementation planning. If critical gaps are found, re-assess strategic fit or defer Intel variant work.
 
 ## Risks and Mitigations
 

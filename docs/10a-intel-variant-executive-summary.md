@@ -129,20 +129,30 @@ These components are **platform-agnostic** and require **zero changes**:
 
 ## Effort Estimate and Timeline
 
-### Scenario 1 (Parallel Variant) — ~60% New Development
-- **Phase 1 PoC**: 4-6 weeks (MuJoCo, LeRobot, OpenVINO validation)
-- **Phase 2 MLOps**: 6-8 weeks (Kubeflow Pipelines, MLflow integration)
-- **Phase 3 Perception**: 4-6 weeks (Intel AI Suite models deployment)
-- **Phase 4 Console**: 6-8 weeks (MuJoCo viewport, Intel compute metrics)
-- **Phase 5 Docs**: 4 weeks (architecture diagrams, deployment guides, sales enablement)
-- **Total**: ~6-8 months (parallel to ongoing NVIDIA work)
+### R&D Validation Phase (All Scenarios) — 4-6 weeks
+**Focus**: De-risk technical unknowns before committing to full implementation
+- MuJoCo + LeRobot + OpenVINO core stack validation (local + OpenShift)
+- Panther Lake hardware availability assessment
+- Performance benchmarking (OpenVINO vs. vLLM baseline)
+- Intel Robotics AI Suite model accuracy validation
+- Visual fidelity gap assessment (MuJoCo vs. Isaac Sim for demos)
 
-### Scenario 3 (Hybrid) — ~30% New Development
-- **Phase 1 PoC**: 4-6 weeks (OpenVINO conversion pipeline, edge deployment)
-- **Phase 2 Edge Integration**: 4-6 weeks (MicroShift + FlightCtl + OpenVINO on Panther Lake)
-- **Phase 3 Console Updates**: 2-4 weeks (Intel compute metrics, FlightCtl status)
-- **Phase 4 Docs**: 2 weeks (hybrid deployment guide)
-- **Total**: ~3-4 months
+**Decision Checkpoint**: Proceed with full implementation, adjust scenario, or defer based on findings.
+
+### Full Implementation (If Proceeding)
+
+**Scenario 1 (Parallel Variant)** — ~60% New Development
+- R&D validation + core technology integration: ~2-3 months
+- MLOps pipeline (Kubeflow, MLflow, GitOps): ~2 months
+- Showcase Console adaptations: ~2 months
+- Documentation and sales enablement: ~1 month
+- **Total**: ~6-8 months from start
+
+**Scenario 3 (Hybrid)** — ~30% New Development
+- R&D validation + OpenVINO conversion pipeline: ~1.5-2 months
+- Edge integration (MicroShift + FlightCtl + Intel hardware): ~1.5-2 months
+- Console updates (Intel metrics, FlightCtl dashboard): ~1 month
+- **Total**: ~3-4 months from start
 
 ---
 
@@ -166,11 +176,12 @@ These components are **platform-agnostic** and require **zero changes**:
 3. **Assess Loop 3 criticality** — do target customers care about synthetic data generation?
 
 ### If Proceeding (Next 4-6 Weeks)
-4. **Start Phase 1 PoC** (developer-led):
-   - Local MuJoCo + LeRobot + OpenVINO validation (no cluster needed)
-   - PyTorch → ONNX → OpenVINO IR conversion pipeline
-   - OpenVINO Model Server deployment to Kind/CRC
-5. **Decision checkpoint** after PoC: proceed to full implementation or defer?
+4. **Start R&D validation** (developer-led, focused investigation):
+   - Validate MuJoCo + LeRobot + OpenVINO core stack works end-to-end
+   - Assess Panther Lake hardware availability and fallback options
+   - Benchmark OpenVINO inference performance vs. requirements
+   - Test Intel Robotics AI Suite model accuracy for perception tasks
+5. **Decision checkpoint** after R&D validation: proceed to full implementation, adjust scenario, or defer?
 
 ### If Deferring
 6. **Preserve this architecture doc** as reference for future work
@@ -204,7 +215,7 @@ These components are **platform-agnostic** and require **zero changes**:
 - Strategic intent is unclear or exploratory
 - Panther Lake hardware unavailable until Q1+ 2027
 - No customer demand or partnership commitment
-- NVIDIA variant needs focused attention to reach Phase 2+ maturity first
+- NVIDIA variant needs focused attention to reach production maturity first
 
 ### ❌ **NO-GO** if:
 - Strategic intent is to replace NVIDIA entirely (Scenario 2) without hard business requirement
