@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import io
 import random
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Protocol
 
@@ -252,6 +253,10 @@ class GR00TAdapter:
         self._embodiment_tag = embodiment_tag
         self._device = device
         self._policy = None
+        # Multiple mission requests can arrive while the first request is loading
+        # the checkpoint. Serialize initialization so custom embodiment
+        # registration and GR00T construction happen exactly once per process.
+        self._load_lock = threading.Lock()
         self._video_key = video_key
         self._video_horizon = 2
         self.model_version = f"groot-{Path(model_path).name}"
@@ -291,16 +296,19 @@ class GR00TAdapter:
     def _ensure_loaded(self) -> None:
         if self._policy is not None:
             return
-        from gr00t.policy.gr00t_policy import Gr00tPolicy  # type: ignore[import-not-found]
+        with self._load_lock:
+            if self._policy is not None:
+                return
+            from gr00t.policy.gr00t_policy import Gr00tPolicy  # type: ignore[import-not-found]
 
-        if self._embodiment_tag not in self._BUILTIN_TAGS:
-            self._video_horizon = 1
-            self._register_custom_embodiment()
-        self._policy = Gr00tPolicy(
-            embodiment_tag=self._embodiment_tag,
-            model_path=self._model_path,
-            device=self._device,
-        )
+            if self._embodiment_tag not in self._BUILTIN_TAGS:
+                self._video_horizon = 1
+                self._register_custom_embodiment()
+            self._policy = Gr00tPolicy(
+                embodiment_tag=self._embodiment_tag,
+                model_path=self._model_path,
+                device=self._device,
+            )
 
     def infer(self, image: Image, instruction: str) -> list[float]:
         self._ensure_loaded()
