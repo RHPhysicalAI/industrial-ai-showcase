@@ -18,7 +18,7 @@ spec:
   source:
     type: Git
     git:
-      uri: https://github.com/rhkp/industrial-ai-showcase.git
+      uri: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
       ref: main
   strategy:
     type: Docker

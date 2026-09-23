@@ -173,6 +173,56 @@ def test_git_remote_forms_normalize_to_same_repository() -> None:
     )
 
 
+def test_gitops_profile_selects_matching_repository_sources() -> None:
+    runner = FakeRunner(
+        {
+            ("git", "config", "--get", "remote.origin.url"): CommandResult(
+                0, "https://github.com/rhkp/industrial-ai-showcase.git\n", ""
+            )
+        }
+    )
+
+    fork_checker = PreflightChecker(
+        repo_root=Path("."),
+        profile="basic-infra",
+        scopes={"local"},
+        hub_kubeconfig=None,
+        companion_kubeconfig=None,
+        vla_health_url=None,
+        gitops_profile="fork",
+        runner=runner,
+    )
+    fork_checker.check_gitops_source()
+    assert fork_checker.results[-1].status == "pass"
+
+    auto_checker = PreflightChecker(
+        repo_root=Path("."),
+        profile="basic-infra",
+        scopes={"local"},
+        hub_kubeconfig=None,
+        companion_kubeconfig=None,
+        vla_health_url=None,
+        gitops_profile="auto",
+        runner=runner,
+    )
+    auto_checker.check_gitops_source()
+    assert auto_checker.results[-1].status == "pass"
+    assert "fork profile" in auto_checker.results[-1].summary
+
+    upstream_checker = PreflightChecker(
+        repo_root=Path("."),
+        profile="basic-infra",
+        scopes={"local"},
+        hub_kubeconfig=None,
+        companion_kubeconfig=None,
+        vla_health_url=None,
+        gitops_profile="upstream",
+        runner=runner,
+    )
+    upstream_checker.check_gitops_source()
+    assert upstream_checker.results[-1].status == "fail"
+
+
 def test_fedora_scope_is_explicitly_unsupported() -> None:
     assert selected_scopes("fedora") == {"unsupported"}
     assert selected_scopes("host") == {"unsupported"}

@@ -5,10 +5,13 @@ registered GR00T artifact without changing the live `openvla-server` or the
 AWS VLA VM.
 
 It deliberately lives below the existing `robot-edge` workload directory so
-the current workload ApplicationSet does not discover it automatically. The
-standalone Argo Application in
-`tools/vla-training/robot-edge-canary-application.yaml` must be applied
-explicitly for the test.
+the current workload ApplicationSet does not discover it automatically. One
+of the standalone Argo Applications must be applied explicitly for the test:
+the upstream-profile
+`tools/vla-training/robot-edge-canary-application.yaml` (after the canary is
+merged upstream) or the fork-profile
+`tools/vla-training/robot-edge-canary-application-rhkp.yaml` while testing this
+fork.
 
 The overlay expects these pre-existing or temporary namespace resources:
 

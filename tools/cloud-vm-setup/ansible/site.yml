@@ -22,7 +22,7 @@
     groot_embodiment_tag_value: "{{ cloud_groot_embodiment_tag | default('REAL_G1') }}"
     groot_video_key_value: "{{ cloud_groot_video_key | default('ego_view') }}"
     allowed_source_cidr_value: "{{ cloud_allowed_source_cidr | default('') }}"
-    git_repo_url_value: "{{ cloud_git_repo_url | default('https://github.com/rhkp/industrial-ai-showcase.git') }}"
+    git_repo_url_value: "{{ cloud_git_repo_url | default('https://github.com/RHPhysicalAI/industrial-ai-showcase.git') }}"
     git_repo_ref_value: "{{ cloud_git_repo_ref | default('main') }}"
     build_source_mode_value: "{{ cloud_build_source_mode | default('git') }}"
     hf_token_value: "{{ cloud_hf_token | default('') }}"

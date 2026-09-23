@@ -91,7 +91,7 @@ ansible-playbook \
   -e "cloud_groot_video_key=${VLA_GROOT_VIDEO_KEY:-ego_view}" \
   -e "cloud_model_cache=${VLA_MODEL_CACHE:-/var/cache/vla-models}" \
   -e "cloud_allowed_source_cidr=$VLA_ALLOWED_SOURCE_CIDR" \
-  -e "cloud_git_repo_url=${VLA_GIT_REPO_URL:-https://github.com/rhkp/industrial-ai-showcase.git}" \
+  -e "cloud_git_repo_url=${VLA_GIT_REPO_URL:-https://github.com/RHPhysicalAI/industrial-ai-showcase.git}" \
   -e "cloud_git_repo_ref=${VLA_GIT_REPO_REF:-main}" \
   -e "cloud_build_source_mode=$build_source_mode" \
   -e "cloud_build_image=${VLA_BUILD_IMAGE:-false}" \

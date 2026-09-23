@@ -33,6 +33,8 @@ LEGACY_SCOPES = {"fedora", "host"}
 DEFAULT_COMPANION_KUBECONFIG = Path.home() / ".kube" / "companion.kubeconfig"
 SUPPORTED_TOPOLOGY = "local workstation + Hub + hosted Companion SNO + separate cloud VLA VM"
 UNSUPPORTED_PATH = "Fedora/bare-metal self-managed Companion and host-native VLA implementation"
+UPSTREAM_REPOSITORY_URL = "https://github.com/RHPhysicalAI/industrial-ai-showcase.git"
+FORK_REPOSITORY_URL = "https://github.com/rhkp/industrial-ai-showcase.git"
 
 DEMO_WORKLOAD_HUB_DEPLOYMENTS = (
     ("fleet-manager", "fleet-ops"),
@@ -73,10 +75,21 @@ REQUIRED_REPO_PATHS = (
     "infrastructure/gitops/apps/workloads/console",
 )
 
-GITOPS_APPSET_PATHS = (
-    "infrastructure/gitops/clusters/hub/appsets/workloads.yaml",
-    "infrastructure/gitops/apps/hub-acm/appset-companion/applicationset.yaml",
-)
+GITOPS_REPOSITORY_PATHS = {
+    "upstream": (
+        "infrastructure/gitops/bootstrap/root-application.yaml",
+        "infrastructure/gitops/clusters/hub/appsets/operators.yaml",
+        "infrastructure/gitops/clusters/hub/appsets/platform.yaml",
+        "infrastructure/gitops/clusters/hub/appsets/observability.yaml",
+        "infrastructure/gitops/clusters/hub/appsets/workloads.yaml",
+        "infrastructure/gitops/clusters/hub/appsets/hub-acm.yaml",
+        "infrastructure/gitops/clusters/hub/vault-static-secret-argocd-repo.yaml",
+        "infrastructure/gitops/apps/hub-acm/appset-companion/applicationset.yaml",
+    ),
+    "fork": (
+        "infrastructure/gitops/bootstrap/root-application-rhkp.yaml",
+    ),
+}
 
 ML_TRAINING_PATHS = (
     "workloads/vla-training/src/vla_training/pipeline.py",
@@ -154,6 +167,7 @@ class PreflightChecker:
         cloud_vm_port: int = 22,
         cloud_vm_gpu_model: str | None = None,
         cloud_vm_vla_port: int = 8000,
+        gitops_profile: str = "auto",
         runner: CommandRunner | None = None,
     ) -> None:
         self.repo_root = repo_root
@@ -168,6 +182,7 @@ class PreflightChecker:
         self.cloud_vm_port = cloud_vm_port
         self.cloud_vm_gpu_model = cloud_vm_gpu_model
         self.cloud_vm_vla_port = cloud_vm_vla_port
+        self.gitops_profile = gitops_profile
         self.runner = runner or CommandRunner()
         self.results: list[CheckResult] = []
 
@@ -270,42 +285,56 @@ class PreflightChecker:
     def check_gitops_source(self) -> None:
         origin_result = self.runner.run(["git", "config", "--get", "remote.origin.url"])
         origin = origin_result.stdout.strip()
+        origin_key = normalize_repo_url(origin)
+        if self.gitops_profile == "auto":
+            fork_key = normalize_repo_url(FORK_REPOSITORY_URL)
+            profile = "fork" if origin_key == fork_key else "upstream"
+        else:
+            profile = self.gitops_profile
         repo_urls: set[str] = set()
-        for relative_path in GITOPS_APPSET_PATHS:
+        source_paths = GITOPS_REPOSITORY_PATHS[profile]
+        missing_paths: list[str] = []
+        for relative_path in source_paths:
             path = self.repo_root / relative_path
             if not path.exists():
+                missing_paths.append(relative_path)
                 continue
             for line in path.read_text(encoding="utf-8").splitlines():
-                if "repoURL:" not in line:
-                    continue
-                value = line.split("repoURL:", 1)[1].strip().strip("\"'")
-                if value:
-                    repo_urls.add(value)
+                for marker in ("repoURL:", "value:"):
+                    if marker not in line or "github.com/" not in line:
+                        continue
+                    value = line.split(marker, 1)[1].strip().strip("\"'")
+                    if value.startswith("https://github.com/"):
+                        repo_urls.add(value)
 
-        origin_key = normalize_repo_url(origin)
         source_keys = {normalize_repo_url(url) for url in repo_urls}
-        aligned = bool(origin_key and source_keys and origin_key in source_keys)
+        aligned = bool(origin_key and source_keys and origin_key in source_keys and not missing_paths)
         if aligned:
             self.add(
                 "local.gitops-source",
                 "local",
                 "blocking",
                 "pass",
-                "GitOps ApplicationSets point at the configured origin repository",
-                detail=origin,
+                f"GitOps {profile} profile points at the configured origin repository",
+                detail=f"profile={profile}; origin={origin}",
                 source=", ".join(sorted(repo_urls)),
             )
             return
-        detail = f"origin={origin or 'unavailable'}; appsets={', '.join(sorted(repo_urls)) or 'not found'}"
+        detail = (
+            f"profile={profile}; origin={origin or 'unavailable'}; "
+            f"sources={', '.join(sorted(repo_urls)) or 'not found'}"
+        )
+        if missing_paths:
+            detail += f"; missing={', '.join(missing_paths)}"
         self.add(
             "local.gitops-source",
             "local",
             "blocking",
             "fail",
-            "GitOps ApplicationSets do not point at this checkout's origin repository",
+            f"GitOps {profile} profile does not point at this checkout's origin repository",
             detail=detail,
-            action="Update the ApplicationSet repoURL values to the repository that should receive and deploy this fork.",
-            source=", ".join(GITOPS_APPSET_PATHS),
+            action="Use the upstream root application for the legacy repository or root-application-rhkp.yaml for the fork profile.",
+            source=", ".join(source_paths),
         )
 
     def check_cloud_vm(self) -> None:
@@ -1085,6 +1114,12 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         help="supported scopes: local, hub, companion, cloud-vm, ml-training; fedora/host are reported as unsupported",
     )
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument(
+        "--gitops-profile",
+        choices=("auto", "upstream", "fork"),
+        default=os.environ.get("GITOPS_REPOSITORY_PROFILE", "auto"),
+        help="GitOps source profile: auto-detect from origin, upstream legacy, or rhkp fork",
+    )
     parser.add_argument("--hub-kubeconfig", default=os.environ.get("KUBECONFIG"))
     parser.add_argument(
         "--companion-kubeconfig",
@@ -1234,6 +1269,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         cloud_vm_port=args.cloud_vm_port,
         cloud_vm_gpu_model=args.cloud_vm_gpu_model,
         cloud_vm_vla_port=args.vla_port,
+        gitops_profile=args.gitops_profile,
     )
     results = checker.run()
     if args.format == "json":

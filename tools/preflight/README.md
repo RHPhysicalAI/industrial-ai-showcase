@@ -124,6 +124,17 @@ colorized.
 
 The checker is read-only. It does not install operators, apply manifests, mutate secrets, sync Argo applications, or modify VMs.
 
+The local repository check validates the GitOps repository profile. By default,
+it auto-detects `rhkp` versus upstream from the checkout's `origin` URL:
+
+```bash
+python3 tools/preflight/check.py --scope local --gitops-profile auto
+python3 tools/preflight/check.py --scope local --gitops-profile fork
+python3 tools/preflight/check.py --scope local --gitops-profile upstream
+```
+
+Set `GITOPS_REPOSITORY_PROFILE=upstream` or `fork` to override auto-detection.
+
 ## Exit codes
 
 - `0` — no blocking failures and no warnings.

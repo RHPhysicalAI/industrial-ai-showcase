@@ -23,7 +23,9 @@ source "$env_file"
 : "${HUB_CONTEXT:?Set HUB_CONTEXT in .env}"
 : "${HUB_KAFKA_ROUTE:?Set HUB_KAFKA_ROUTE in .env}"
 : "${VLA_ENDPOINT_URL:?Set VLA_ENDPOINT_URL in .env}"
+: "${GIT_REPO_URL:?Set GIT_REPO_URL in .env}"
 export HUB_KAFKA_ROUTE VLA_ENDPOINT_URL
+export GIT_REPO_URL
 
 overlay_dir="$repo_root/infrastructure/gitops/apps/demo-redhat-sno"
 hub_kafka_namespace="${HUB_KAFKA_NAMESPACE:-fleet-ops}"
@@ -63,6 +65,10 @@ for name in ("HUB_KAFKA_ROUTE", "VLA_ENDPOINT_URL"):
     if not value:
         raise SystemExit(f"missing required environment variable: {name}")
     text = text.replace("${" + name + "}", value)
+# Direct hosted-SNO deployment renders the overlay outside Argo CD. Keep the
+# source URL in the upstream base and apply the selected fork/environment here.
+source_url = "https://github.com/RHPhysicalAI/industrial-ai-showcase.git"
+text = text.replace(source_url, os.environ["GIT_REPO_URL"])
 sys.stdout.write(text)
 ' | oc_sno apply -f -
 

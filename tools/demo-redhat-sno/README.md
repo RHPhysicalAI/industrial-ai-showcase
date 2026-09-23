@@ -86,8 +86,8 @@ tools/demo-redhat-sno/deploy-workload.sh
 ```
 
 This applies the Fake Camera, Mission Dispatcher, and policy-version resources.
-It builds both images from the public `rhkp` fork, configures the Hub Kafka
-external Route, points Mission Dispatcher at the separate cloud VLA VM, and
+It builds both images from the selected public repository profile, configures
+the Hub Kafka external Route, points Mission Dispatcher at the separate cloud VLA VM, and
 copies only the Hub Kafka CA certificate needed by Fake Camera. The Kafka and
 VLA endpoint values are created as local runtime ConfigMaps from the ignored
 `.env`; they are deliberately not embedded in the GitOps overlay. The script
@@ -120,7 +120,7 @@ The hosted SNO needs only the workload-facing pieces for the first warehouse loo
 
 The VM must be bootstrapped separately before Mission Dispatcher can pass a real action request. Start with `VLA_MODE=mock` to validate network and API wiring, then switch to `VLA_MODE=openvla` after the GPU runtime and model dependencies are ready.
 
-OpenShift's built-in image/build and Route capabilities are sufficient for this initial scope. We do not install a second Kafka cluster on the SNO for this first pass; the current Phase-1 design uses the Hub's external Kafka listener. MirrorMaker2 is a later architecture step.
+OpenShift's built-in image/build and Route capabilities are sufficient for this initial scope. We do not install a second Kafka cluster on the SNO for this first pass; the hosted-demo design uses the Hub's external Kafka listener. MirrorMaker2 is a later architecture step.
 
 ### Explicitly deferred
 
@@ -137,9 +137,12 @@ These are self-managed infrastructure or later factory demonstrations, not requi
 
 ## Repository adaptation required before deployment
 
-The current manifests are not a drop-in hosted-SNO deployment. We need a dedicated hosted-SNO overlay that:
+The hosted-SNO deployment is intentionally a dedicated overlay rather than a
+mutation of the self-managed Companion manifests. It:
 
-1. uses `https://github.com/rhkp/industrial-ai-showcase.git` and the intended ref;
+1. uses the selected repository profile and intended ref. The legacy default is
+   `https://github.com/RHPhysicalAI/industrial-ai-showcase.git`; set
+   `GIT_REPO_URL` to the fork when deploying from the fork;
 2. replaces the hardcoded Hub Kafka hostname with the actual Hub external Route;
 3. uses `SSL` for the cross-cluster Kafka connection;
 4. supplies `hub-kafka-ca` in `warehouse-edge`;

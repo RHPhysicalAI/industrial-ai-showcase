@@ -1,0 +1,158 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hub-root
+  namespace: openshift-gitops
+  labels:
+    phase: phase-0
+    layer: root
+    showcase.redhat.com/repository-profile: fork
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/rhkp/industrial-ai-showcase.git
+    targetRevision: main
+    path: infrastructure/gitops/clusters/hub
+    kustomize:
+      patches:
+        - target:
+            group: argoproj.io
+            version: v1alpha1
+            kind: ApplicationSet
+            name: operators
+          patch: |-
+            - op: replace
+              path: /spec/generators/0/git/repoURL
+              value: https://github.com/rhkp/industrial-ai-showcase.git
+            - op: replace
+              path: /spec/template/spec/source/repoURL
+              value: https://github.com/rhkp/industrial-ai-showcase.git
+            - op: add
+              path: /spec/template/spec/source/kustomize
+              value:
+                patches:
+                  - target:
+                      kind: BuildConfig
+                    patch: |-
+                      - op: replace
+                        path: /spec/source/git/uri
+                        value: https://github.com/rhkp/industrial-ai-showcase.git
+        - target:
+            group: argoproj.io
+            version: v1alpha1
+            kind: ApplicationSet
+            name: platform
+          patch: |-
+            - op: replace
+              path: /spec/generators/0/git/repoURL
+              value: https://github.com/rhkp/industrial-ai-showcase.git
+            - op: replace
+              path: /spec/template/spec/source/repoURL
+              value: https://github.com/rhkp/industrial-ai-showcase.git
+            - op: add
+              path: /spec/template/spec/source/kustomize
+              value:
+                patches:
+                  - target:
+                      kind: BuildConfig
+                    patch: |-
+                      - op: replace
+                        path: /spec/source/git/uri
+                        value: https://github.com/rhkp/industrial-ai-showcase.git
+        - target:
+            group: argoproj.io
+            version: v1alpha1
+            kind: ApplicationSet
+            name: observability
+          patch: |-
+            - op: replace
+              path: /spec/generators/0/git/repoURL
+              value: https://github.com/rhkp/industrial-ai-showcase.git
+            - op: replace
+              path: /spec/template/spec/source/repoURL
+              value: https://github.com/rhkp/industrial-ai-showcase.git
+            - op: add
+              path: /spec/template/spec/source/kustomize
+              value:
+                patches:
+                  - target:
+                      kind: BuildConfig
+                    patch: |-
+                      - op: replace
+                        path: /spec/source/git/uri
+                        value: https://github.com/rhkp/industrial-ai-showcase.git
+        - target:
+            group: argoproj.io
+            version: v1alpha1
+            kind: ApplicationSet
+            name: workloads
+          patch: |-
+            - op: replace
+              path: /spec/generators/0/git/repoURL
+              value: https://github.com/rhkp/industrial-ai-showcase.git
+            - op: replace
+              path: /spec/template/spec/source/repoURL
+              value: https://github.com/rhkp/industrial-ai-showcase.git
+            - op: add
+              path: /spec/template/spec/source/kustomize/patches
+              value:
+                - target:
+                    kind: BuildConfig
+                  patch: |-
+                    - op: replace
+                      path: /spec/source/git/uri
+                      value: https://github.com/rhkp/industrial-ai-showcase.git
+        - target:
+            group: argoproj.io
+            version: v1alpha1
+            kind: ApplicationSet
+            name: hub-acm
+          patch: |-
+            - op: replace
+              path: /spec/generators/0/git/repoURL
+              value: https://github.com/rhkp/industrial-ai-showcase.git
+            - op: replace
+              path: /spec/template/spec/source/repoURL
+              value: https://github.com/rhkp/industrial-ai-showcase.git
+            - op: add
+              path: /spec/template/spec/source/kustomize
+              value:
+                patches:
+                  - target:
+                      group: argoproj.io
+                      version: v1alpha1
+                      kind: ApplicationSet
+                      name: companion-apps
+                    patch: |-
+                      - op: replace
+                        path: /spec/generators/0/matrix/generators/1/git/repoURL
+                        value: https://github.com/rhkp/industrial-ai-showcase.git
+                      - op: replace
+                        path: /spec/template/spec/source/repoURL
+                        value: https://github.com/rhkp/industrial-ai-showcase.git
+                      - op: add
+                        path: /spec/template/spec/source/kustomize
+                        value:
+                          patches:
+                            - target:
+                                kind: BuildConfig
+                              patch: |-
+                                - op: replace
+                                  path: /spec/source/git/uri
+                                  value: https://github.com/rhkp/industrial-ai-showcase.git
+        - target:
+            group: secrets.hashicorp.com
+            version: v1beta1
+            kind: VaultStaticSecret
+            name: argocd-repo-creds
+          patch: |-
+            - op: replace
+              path: /spec/destination/transformation/templates/url/text
+              value: https://github.com/rhkp/industrial-ai-showcase.git
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openshift-gitops
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
