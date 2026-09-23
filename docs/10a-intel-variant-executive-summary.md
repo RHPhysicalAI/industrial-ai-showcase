@@ -109,7 +109,7 @@ These components are **platform-agnostic** and require **zero changes**:
 ### Gains (What Intel Variant Adds)
 
 ✅ **Multi-vendor positioning**: "Run physical AI on NVIDIA or Intel — Red Hat federates both"  
-✅ **Edge compute efficiency**: NPU/iGPU heterogeneous scheduling narrative  
+✅ **Edge compute efficiency**: Intel NPU/iGPU edge compute story  
 ✅ **Open-source alignment**: Fully OSS stack (MuJoCo, LeRobot, OpenVINO)  
 ✅ **Cost optimization**: Intel edge hardware may be more cost-effective than NVIDIA Jetson at scale  
 ✅ **FlightCtl integration**: Opportunity to showcase Red Hat's emerging edge fleet management tool  
@@ -133,14 +133,14 @@ These components are **platform-agnostic** and require **zero changes**:
 - **Phase 1 PoC**: 4-6 weeks (MuJoCo, LeRobot, OpenVINO validation)
 - **Phase 2 MLOps**: 6-8 weeks (Kubeflow Pipelines, MLflow integration)
 - **Phase 3 Perception**: 4-6 weeks (Intel AI Suite models deployment)
-- **Phase 4 Console**: 6-8 weeks (MuJoCo viewport, heterogeneous compute dashboards)
+- **Phase 4 Console**: 6-8 weeks (MuJoCo viewport, Intel compute metrics)
 - **Phase 5 Docs**: 4 weeks (architecture diagrams, deployment guides, sales enablement)
 - **Total**: ~6-8 months (parallel to ongoing NVIDIA work)
 
 ### Scenario 3 (Hybrid) — ~30% New Development
 - **Phase 1 PoC**: 4-6 weeks (OpenVINO conversion pipeline, edge deployment)
 - **Phase 2 Edge Integration**: 4-6 weeks (MicroShift + FlightCtl + OpenVINO on Panther Lake)
-- **Phase 3 Console Updates**: 2-4 weeks (heterogeneous compute metrics, FlightCtl status)
+- **Phase 3 Console Updates**: 2-4 weeks (Intel compute metrics, FlightCtl status)
 - **Phase 4 Docs**: 2 weeks (hybrid deployment guide)
 - **Total**: ~3-4 months
 
