@@ -35,49 +35,7 @@
 
 This phase answers: "Can the Intel stack deliver what the architecture promises?"
 
-### **Validation Focus Areas**
-
-#### 1. Core Technology Stack Feasibility
-
-**MuJoCo + Unitree G1 Simulation**
-- Can MuJoCo simulate Unitree G1 with fidelity sufficient for policy training?
-- Does unitree_mujoco support manipulation tasks needed for warehouse demos?
-- How does visual quality compare to Isaac Sim for customer demos (Archetype A/B/C)?
-
-**LeRobot Training Framework**
-- Is LeRobot mature enough for production-grade policy training?
-- What gaps exist vs. Isaac Lab (RL algorithms, training stability, scenario config)?
-- Can LeRobot scale to multi-GPU training on OpenShift AI?
-
-**PyTorch → ONNX → OpenVINO IR Conversion**
-- Does the conversion pipeline work for robotics policies (ACT, Diffusion Policy)?
-- What accuracy/latency degradation occurs during quantization?
-- Can this integrate cleanly into Kubeflow Pipelines with MLflow tracking?
-
-#### 2. Intel Hardware Performance
-
-**Panther Lake NPU/iGPU Availability**
-- Is hardware accessible for development?
-- What fallback options exist (Meteor Lake iGPU, CPU-only)?
-
-**OpenVINO Inference Benchmarking**
-- How does OpenVINO latency compare to vLLM (CUDA) baseline?
-- Can OpenVINO Model Server handle multi-robot fleet inference QPS?
-- What are NPU vs iGPU vs CPU resource limits?
-
-#### 3. Platform Integration
-
-**MLflow + OpenShift AI**
-- Can OpenVINO IR models store in MLflow with full lineage?
-- Does Kubeflow Pipelines support PyTorch → ONNX → OpenVINO workflow?
-
-**ROS 2 + MuJoCo Bridge**
-- Can ROS 2 nodes consume MuJoCo state and actuate the robot in sim?
-- Does the bridge work identically in sim (MuJoCo) and real hardware (MicroShift)?
-
-**Intel Robotics AI Suite**
-- Are pre-optimized models (YOLOv8, SAM, CLIP) production-ready?
-- Can they replace Cosmos Reason 2-8B for obstruction detection with acceptable accuracy?
+**What to validate:** See detailed technical questions in `docs/10-intel-variant-technical-reference.md` (Technical Validation & Research Areas section).
 
 ---
 
