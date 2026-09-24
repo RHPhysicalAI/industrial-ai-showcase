@@ -10,7 +10,7 @@
 ## 📋 What We've Completed
 
 ### ✅ Strategic Architecture & Evaluation Framework
-- **Intel variant architecture documented** (`docs/10-intel-variant-architecture.md`)
+- **Intel variant architecture documented** (`docs/10-intel-variant-technical-reference.md`)
 - **Component mapping defined** (NVIDIA → Intel across all seven layers)
 - **Three strategic scenarios evaluated**:
   - Scenario 1: Parallel Variant (both NVIDIA + Intel)
@@ -25,7 +25,7 @@
 - **Go/No-Go decision framework** established
 
 **Documents:** 
-- Architecture: `docs/10-intel-variant-architecture.md` (~675 lines, strategic focus)
+- Architecture: `docs/10-intel-variant-technical-reference.md` (~675 lines, strategic focus)
 
 ---
 
@@ -483,7 +483,7 @@ Track questions as they arise during R&D phase:
 ## 🎓 Recommended Learning Path
 
 **Week 1 (Before R&D Starts):**
-- Read architecture document (`10-intel-variant-architecture.md`)
+- Read architecture document (`10-intel-variant-technical-reference.md`)
 - Set up local dev environment (Python, MuJoCo, LeRobot)
 - Run MuJoCo "hello world" simulation
 - Complete LeRobot quickstart tutorial
@@ -531,5 +531,5 @@ Track questions as they arise during R&D phase:
 **Next Review:** After Step 4 R&D validation decision checkpoint  
 **Status:** Ready for R&D validation phase  
 **Related Documents:** 
-- Architecture: `docs/10-intel-variant-architecture.md`
+- Architecture: `docs/10-intel-variant-technical-reference.md`
 - Original Intel spec: https://gist.github.com/redhatHameed/441dc8ca5614fa50d9f7977f49424cdd
