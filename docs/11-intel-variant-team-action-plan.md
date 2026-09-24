@@ -29,32 +29,6 @@
 
 ---
 
-## 🎯 Current Status: Decision Gate
-
-### **Strategic Questions Requiring Answers**
-
-Before proceeding to R&D validation, clarify:
-
-1. **Strategic Intent**
-   - Is this driven by Intel partnership, customer requirement, or exploratory positioning?
-   - What's the business case for Intel variant vs. focusing solely on NVIDIA?
-
-2. **Hardware Availability**
-   - Is Panther Lake (Core Ultra with NPU/iGPU) accessible for Q4 2026 / Q1 2027 development?
-   - What fallback hardware exists (Meteor Lake, Raptor Lake)?
-
-3. **Loop 3 Criticality**
-   - Can the Intel variant succeed without synthetic data generation (Loop 3)?
-   - Is Scenario 3 (Hybrid: NVIDIA datacenter for Cosmos + Intel edge) required?
-
-4. **Resource Allocation**
-   - Can the team support parallel NVIDIA + Intel work, or must we choose?
-   - Does NVIDIA variant need to reach production maturity first?
-
-**Action Required:** Schedule stakeholder alignment meeting to answer these questions.
-
----
-
 ## 🔬 R&D Validation Phase (4-6 Weeks)
 
 **Goal:** De-risk technical unknowns before committing to full implementation.
@@ -363,20 +337,6 @@ This phase answers: "Can the Intel stack deliver what the architecture promises?
 
 ---
 
-## 📅 Proposed R&D Timeline
-
-| Week | Focus | Deliverables | Team Effort |
-|------|-------|--------------|-------------|
-| **1** | Local tech validation | MuJoCo + LeRobot + OpenVINO working locally | 1-2 engineers |
-| **2** | OpenShift integration | Training + serving on OpenShift AI | 2-3 engineers |
-| **3** | Perception + ROS 2 | Intel models + ROS 2 bridge tested | 2-3 engineers |
-| **4** | Decision checkpoint | Go/No-Go decision + findings report | Full team review |
-
-**Total Duration:** 4 weeks (can extend to 6 if needed)  
-**Team Size:** 2-3 engineers (can be part-time if NVIDIA work continues in parallel)
-
----
-
 ## 🎯 Success Metrics (R&D Phase)
 
 ### **Technical Validation Success:**
@@ -463,46 +423,21 @@ This phase answers: "Can the Intel stack deliver what the architecture promises?
 
 ---
 
-## 🔄 What Comes After R&D (If GO Decision)
-
-### **Full Implementation Phases (High-Level)**
-
-**Scenario 1 (Parallel Variant)** — ~6-8 months
-1. Core technology integration (2-3 months)
-2. MLOps pipeline automation (2 months)
-3. Showcase Console adaptations (2 months)
-4. Documentation and sales enablement (1 month)
-
-**Scenario 3 (Hybrid)** — ~3-4 months
-1. R&D validation + OpenVINO conversion pipeline (1.5-2 months)
-2. Edge integration (MicroShift + Intel hardware) (1.5-2 months)
-3. Console updates (Intel metrics, FlightCtl dashboard) (1 month)
-
-**Note:** Detailed project plan deferred until R&D validation completes and Go decision is made.
-
----
-
 ## 🚀 Immediate Action Items (This Week)
 
-### **Priority 1: Strategic Alignment**
-- [ ] Schedule stakeholder meeting to answer strategic questions
-- [ ] Clarify Intel partnership status and commitments
-- [ ] Assess resource availability (can team support parallel work?)
-- [ ] Determine if NVIDIA variant maturity allows Intel work to proceed
-
-### **Priority 2: Hardware & Access**
+### **Priority 1: Hardware & Access**
 - [ ] Request Panther Lake availability timeline from Intel
 - [ ] Identify fallback hardware options (Meteor Lake, Raptor Lake)
 - [ ] Request access to Intel Robotics AI Suite repositories
 - [ ] Set up Intel DevCloud account (if available)
 
-### **Priority 3: Development Environment**
+### **Priority 2: Development Environment**
 - [ ] Provision RHEL 9 workstation for R&D validation
 - [ ] Install Python 3.11, Docker/Podman
 - [ ] Clone LeRobot, MuJoCo, unitree_mujoco repos
 - [ ] Verify OpenShift AI cluster access
 
-### **Priority 4: Team Readiness**
+### **Priority 3: Team Readiness**
 - [ ] Identify 2-3 engineers for R&D phase
 - [ ] Share architecture document for team review
 - [ ] Schedule R&D phase kickoff meeting
@@ -593,8 +528,8 @@ Track questions as they arise during R&D phase:
 ---
 
 **Document Owner:** Red Hat Physical AI Showcase Team  
-**Next Review:** After strategic alignment meeting (this week)  
-**Status:** Pending strategic Go/No-Go on R&D phase  
+**Next Review:** After Step 4 R&D validation decision checkpoint  
+**Status:** Ready for R&D validation phase  
 **Related Documents:** 
 - Architecture: `docs/10-intel-variant-architecture.md`
 - Original Intel spec: https://gist.github.com/redhatHameed/441dc8ca5614fa50d9f7977f49424cdd
