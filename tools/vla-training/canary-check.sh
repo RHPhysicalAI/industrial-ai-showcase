@@ -224,7 +224,7 @@ $init_container_yaml
         - {name: GROOT_VIDEO_KEY, value: "$video_key"}
         - {name: PORT, value: "8000"}
         - {name: OPENVLA_DEVICE, value: "cuda"}
-        - {name: S3_ENDPOINT, value: "http://minio.mlflow.svc:9000"}
+        - {name: S3_ENDPOINT, value: "http://seaweedfs.mlflow.svc:8333"}
         - {name: MODEL_CACHE_DIR, value: "$model_cache_dir"}
         - {name: HF_HOME, value: "/tmp/hf_cache"}
         - name: AWS_ACCESS_KEY_ID

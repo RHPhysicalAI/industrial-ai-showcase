@@ -21,8 +21,8 @@ COPY workloads/fake-camera/src /opt/app-root/src/fake-camera/src
 RUN pip install /opt/app-root/src/fake-camera
 
 # Bake the Phase-1 frame library into the image. Source-of-truth JPEGs live
-# under workloads/obstruction-detector/test-images/ (also uploaded to the
-# hub MinIO warehouse-camera-library bucket). Keeping a copy in the image
+# under workloads/obstruction-detector/test-images/ (the SeaweedFS migration
+# targets the hub warehouse-camera-library bucket). Keeping a copy in the image
 # means the companion doesn't need to reach hub-side object storage to serve
 # frames — the camera is self-sufficient.
 COPY workloads/obstruction-detector/test-images/aisle3_empty.jpg /frames/aisle3_empty.jpg

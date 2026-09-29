@@ -1,5 +1,7 @@
 # Phase 2 Plan — 20-minute Architecture + Fleet Operations
 
+> Storage update (2026-09-29): historical observations below predate SeaweedFS. Current endpoint and Secret names describe the migration target; isolated CPU-only S3 validation in `showcase-storage-canary` passed; live data/consumer cutover remains pending. See the [object-storage guide](../../tools/object-storage/README.md).
+
 This document is the single source of truth for Phase 2 execution. It consolidates all planning, analysis, and decisions made during the Phase 2 planning session. If context is lost, start here.
 
 ## Scope gate
@@ -36,7 +38,7 @@ Phase 2 exists to deliver the 20-minute demo defined in `demos/20-min-architectu
 ### Platform infrastructure (hub)
 
 - AMQ Streams (Kafka): 3-broker cluster in `fleet-ops` with topics `fleet.events`, `fleet.missions`, `fleet.telemetry`, `fleet.ops.events`, `fleet.safety.alerts`, `warehouse.cameras.aisle3`, `warehouse.cameras.commands`
-- MLflow: deployed with Postgres (CNPG) backend + MinIO artifact store — operational but not wired to any training pipeline
+- MLflow: deployed with Postgres (CNPG) backend + S3 artifact store at the time of this plan — operational but not wired to any training pipeline. SeaweedFS is the later migration target, not that historical deployment.
 - Nucleus: Kubernetes-native deployment (ADR-024), scene assets seeded
 - RHOAI 3.4 EA1: installed with all components including KFP (DSPA), Kubeflow Training Operator
 - Vault + Vault Secrets Operator: operational
@@ -108,9 +110,9 @@ The 20-min script's Segment 2 scenario was already flagged as a placeholder ("AM
 
 We borrow structural patterns from the sibling project but maintain no runtime dependency. This project stays self-contained and GitOps-driven. See Workstream B for what we take, what we skip, and what we build ourselves.
 
-### D4: Reuse existing MLflow and MinIO
+### D4: Reuse MLflow and its S3 artifact store
 
-One MLflow instance, one MinIO instance on the hub — not parallel infrastructure. The training pipeline writes to the same MLflow and MinIO that Phase 1 deployed. This makes the "single pane of glass" story real and avoids duplication.
+The training pipeline shares MLflow's S3 endpoint, with a separate `vla-training` bucket. The current migration replaces that store with SeaweedFS while retaining the MLflow service and existing artifact URIs. Observability and warehouse images use their own storage namespaces. Phase 1's historical deployment is not evidence that the replacement is live.
 
 ### D5: Demo shows pre-computed training + live kick-off
 
@@ -279,14 +281,14 @@ Pipeline parameters (runtime-overridable):
 Deploy the pipeline execution infrastructure through Argo CD.
 
 **Deliverables:**
-- `infrastructure/gitops/apps/platform/dspa/` — DSPA CR pointing at existing MLflow and MinIO
+- `infrastructure/gitops/apps/platform/dspa/` — DSPA CR sharing MLflow's S3 store, targeting `seaweedfs.mlflow.svc:8333` after controlled migration
 - `infrastructure/gitops/apps/platform/model-registry/` — RHOAI Model Registry CR (if not already covered by the RHOAI DataScienceCluster)
 - Compiled pipeline YAML stored in the repo
 - Pipeline runs triggered by Console action or pre-demo prep Job
 
 **Secrets needed:**
 - `hf-credentials` — HuggingFace token for gated model downloads. Managed through Vault.
-- Existing MinIO and MLflow credentials reused from Phase 1 infrastructure.
+- Vault-sourced S3 credentials projected into `vla-training/s3-credentials` (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`); MLflow retains `mlflow-s3-credentials`.
 
 ### B.3 — Lineage stitching
 
@@ -309,7 +311,7 @@ Dataset (HF repo) → KFP Run (DSPA) → Training Metrics (MLflow) → ONNX Arti
 | Dataset | KFP run parameters | `dataset_repo` parameter value |
 | Training run | DSPA | `GET /apis/v2beta1/runs/{run_id}` |
 | Training metrics | MLflow | `mlflow.search_runs()` filtered by `dspa_run_id` tag |
-| ONNX artifact | S3 (MinIO) | S3 URI from Model Registry metadata |
+| ONNX artifact | S3 (SeaweedFS) | S3 URI from Model Registry metadata |
 | Validation | KFP step output | Step status + output parameters |
 | Registered model | RHOAI Model Registry | `model-registry` Python SDK |
 
@@ -324,7 +326,7 @@ Show Cosmos Transfer's contribution to synthetic data **as stills in the Lineage
 **Deliverables:**
 - Deploy Cosmos Transfer 2.5 NIM on hub (L40S) — `NGC_API_KEY` available in `.env`
 - Generate a small set of scene variations from existing warehouse sim frames (one-time, pre-computed)
-- Store original/transferred pairs in MinIO
+- Store original/transferred pairs in SeaweedFS
 - Lineage view shows a "Synthetic Variations" node with side-by-side stills (original render vs. transferred variation)
 - Narration: "This policy knows which synthetic variations trained it. The full synthetic-data factory is a Phase 3 conversation."
 

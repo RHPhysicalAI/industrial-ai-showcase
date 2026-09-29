@@ -21,11 +21,20 @@ missing object-store credentials, or absent GPU can fail the run before useful
 training starts. This validation step catches those conditions earlier and
 provides a repeatable record of what was checked.
 
-The MLflow MinIO claim is sized at **200Gi** for the training workflow. A run
+The target MLflow SeaweedFS claim retains **200Gi** for the training workflow. A run
 temporarily retains the downloaded base model and dataset, fine-tuning
 checkpoints, the native GR00T model used by serving, and the secondary ONNX
-export. The smaller 120Gi claim reached MinIO's minimum-free-space threshold
-while uploading checkpoints, even though training and export had succeeded.
+export. The previous storage backend's smaller 120Gi claim reached its free-space
+threshold while uploading checkpoints, even though training and export had
+succeeded. That historical failure does not establish a SeaweedFS threshold.
+
+Storage terminology and endpoints reflect the 2026-09-29 migration target.
+Historical training and GPU inference results below predate this replacement.
+SeaweedFS passed [CPU-only S3 validation](../object-storage/VALIDATION.md) in
+`showcase-storage-canary` and from `vla-training`. Live data/consumer cutover
+remains pending; follow the [controlled copy/cutover guide](../object-storage/README.md).
+Existing upstream-managed stores are shared, and this storage validation must
+not delete them or change GPU workloads.
 
 The training image pins `model-registry==0.3.14` because this Hub currently
 serves the Model Registry `v1alpha3` API. Do not broaden this dependency range
@@ -230,11 +239,13 @@ It verified that the `InferenceService` became Ready, KServe's
 request trace ID preserved. Isaac Sim was temporarily scaled to zero to
 provide the GPU; the temporary KServe namespace was removed after validation.
 
-The canary helper now carries the legacy MinIO endpoint and storage Secret
+The canary helper carries the configured S3 endpoint and storage Secret
 through KServe's storage configuration, attaches the existing private-registry
 pull credential only to the temporary service account, tolerates the Hub's
 L40S taint, and explicitly binds the fork server to KServe's port 8080. These
-are canary setup details, not changes to the live deployment.
+are canary setup details, not changes to the live deployment. Its new
+`http://seaweedfs.mlflow.svc:8333` default still requires validation after
+storage migration; the historical KServe result above does not cover it.
 
 ## What success means
 
@@ -280,9 +291,9 @@ a future run does not depend on shell patches or operator memory:
 | Training state inflated the serving prefix and made its layout ambiguous. | The latest numeric checkpoint is validated and copied cleanly to `.../model`; resume/debug state stays under `.../checkpoint`. |
 | Successful HTTP inference did not prove robot behavior. | The canary is explicitly an inference-contract gate. The existing public API remains 7 values; mapping the Teleop-G1 43-DOF action space to downstream robot controls is a separate integration gate. |
 | The original model-registry client tried a newer API than the Hub exposes. | Keep `model-registry==0.3.14` pinned until the cluster registry is upgraded. |
-| A 120Gi object-store claim reached the free-space threshold during checkpoint upload. | The fork uses a 200Gi MinIO claim and retains cleanup/retention as an operational follow-up rather than deleting unknown artifacts. |
+| A 120Gi object-store claim reached the previous backend's free-space threshold during checkpoint upload. | The SeaweedFS migration retains the repository's 200Gi MLflow capacity; cleanup/retention remains an operational follow-up. Existing shared artifacts must be preserved. |
 | The first isolated KServe pod could not schedule on the shared L40S node. | Put the GPU node selector and `nvidia.com/gpu` toleration on the KServe predictor, where KServe propagates them to the pod. |
-| KServe's storage initializer could not use predictor environment variables for S3. | Reference `storage-config` with `serving.kserve.io/storageSecretName` and carry the legacy MinIO endpoint through storage Secret annotations. |
+| KServe's storage initializer could not use predictor environment variables for S3. | Reference `storage-config` with `serving.kserve.io/storageSecretName` and carry the configured S3 endpoint through storage Secret annotations. The SeaweedFS endpoint requires separate migration validation. |
 | The private Hub image registry was not readable from the temporary namespace. | Copy the existing `robot-edge` image-pull Secret into the canary namespace and attach it only to that namespace's default service account. |
 | The image's default command listened on port 8000 while the KServe contract used 8080. | The canary explicitly starts Uvicorn on port 8080 and forwards directly to the ready predictor pod. |
 | The initial canary artifact example pointed at an obsolete prefix. | Use the successful pipeline's versioned `.../smoke-20260922-2/model` URI and verify the artifact contents before inference. |

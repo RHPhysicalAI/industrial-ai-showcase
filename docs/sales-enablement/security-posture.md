@@ -24,7 +24,7 @@ Kubernetes Secrets via the Vault Secrets Operator (VSO).
 **Credentials managed by Vault (deployed):**
 
 - Argo CD repository credentials (GitHub PAT)
-- MinIO/S3 access keys (MLflow, DSPA, warehouse camera library, observability storage)
+- SeaweedFS/S3 access keys (MLflow, DSPA, warehouse camera library, observability storage)
 - NGC API keys (Isaac Sim, Kit App Streaming, Nucleus)
 - HuggingFace tokens (gated model downloads for VLA training, Cosmos)
 - Nucleus service passwords and crypto material
@@ -202,9 +202,14 @@ Source: [Red Hat ACM Policy documentation](https://docs.redhat.com/en/documentat
 
 ### Object Storage
 
-MinIO provides S3-compatible storage for MLflow artifacts, training data, and
-DSPA pipeline artifacts. Credentials are Vault-managed and rotated independently
-of the workloads that consume them.
+The 2026-09-29 migration targets SeaweedFS for MLflow artifacts, training data,
+DSPA pipeline artifacts, observability, and the warehouse camera library.
+Its three storage namespaces use a shared Kustomize base with one replica each
+and an S3-only Service on port `8333`. Credentials are Vault-managed; no access
+key values are committed. Rotation must be coordinated with consumers that
+load credentials at startup. CPU-only S3 validation passed in the isolated
+namespace and from `vla-training`; see the [evidence](../../tools/object-storage/VALIDATION.md)
+and [controlled copy/cutover guide](../../tools/object-storage/README.md).
 
 ### Database
 

@@ -3,7 +3,7 @@ kind: MLflow
 metadata:
   name: mlflow
   annotations:
-    # Reconcile after the backend (CNPG + MinIO + bucket) is up.
+    # Reconcile after the backend (CNPG + SeaweedFS + bucket) is up.
     argocd.argoproj.io/sync-wave: "3"
 spec:
   replicas: 1
@@ -18,11 +18,13 @@ spec:
   registryStoreUriFrom:
     name: mlflow-db-app
     key: uri
-  # S3 artifact storage via MinIO.
+  # S3 artifact storage via SeaweedFS.
   artifactsDestination: s3://mlflow-artifacts/
   env:
+    - name: AWS_DEFAULT_REGION
+      value: us-east-1
     - name: MLFLOW_S3_ENDPOINT_URL
-      value: http://minio.mlflow.svc.cluster.local:9000
+      value: http://seaweedfs.mlflow.svc.cluster.local:8333
   envFrom:
     - secretRef:
         name: mlflow-s3-credentials

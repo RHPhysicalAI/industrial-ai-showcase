@@ -26,11 +26,12 @@ spec:
           memory: 1Gi
   objectStorage:
     externalStorage:
-      host: minio.mlflow.svc.cluster.local
-      port: "9000"
+      host: seaweedfs.mlflow.svc.cluster.local
+      port: "8333"
+      region: us-east-1
       bucket: vla-training
       scheme: http
       s3CredentialsSecret:
-        secretName: minio-credentials
-        accessKey: MINIO_ROOT_USER
-        secretKey: MINIO_ROOT_PASSWORD
+        secretName: s3-credentials
+        accessKey: AWS_ACCESS_KEY_ID
+        secretKey: AWS_SECRET_ACCESS_KEY

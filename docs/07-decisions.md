@@ -387,24 +387,31 @@ ADR-006 is superseded. All prior references to "Service Mesh v2" in the project 
 
 ---
 
-## ADR-021: MinIO operator for in-cluster S3 on OSD hub; ODF not installed here
+## ADR-021: SeaweedFS for in-cluster S3; ODF not installed here
 
-**Status**: Accepted (first use: Session 03)
+**Status**: Accepted; updated 2026-09-29 for the user-requested object-storage migration.
 
-**Context**: Phase 1+ workloads need an S3-compatible object store — MLflow artifacts (ADR-015 called for "S3-compatible artifact store (ODF or OSD-equivalent)"), USD asset staging for Nucleus-adjacent services, future object consumers. The OSD hub runs on AWS Nitro instances with only AWS EBS-backed StorageClasses (`gp2`, `gp3`); no S3 endpoint exists in-cluster. Session 03 baseline confirmed no ODF / NooBaa / RGW / Ceph CRDs are present.
+**Context**: MLflow artifacts, training data, observability, and the warehouse camera library need an S3-compatible object store. The OSD hub uses EBS-backed StorageClasses (`gp2`, `gp3`); the Session 03 baseline found no ODF / NooBaa / RGW / Ceph CRDs. The original Phase 0 work established the S3 consumer contracts. This update selects their replacement backend; it does not assert that SeaweedFS ran during those historical sessions.
 
-Installing ODF on cloud-managed OSD duplicates EBS block storage behind a Ceph layer whose storage substrate (local disks) doesn't match Nitro cleanly. ADR-015 already hedged "ODF or OSD-equivalent"; this ADR picks the OSD-equivalent.
+**Decision**: Use the shared Kustomize base at `infrastructure/gitops/components/seaweedfs/` for **SeaweedFS**, pinned to `docker.io/chrislusf/seaweedfs:4.48`, running `mini` with one replica per storage namespace. Its `deployment.yaml`, `service.yaml`, `pvc.yaml`, and `networkpolicy.yaml` are referenced by three consumer kustomizations. Warehouse uses the base defaults (`5Gi`, `s3-credentials`); MLflow and observability patch their credential Secret names and capacities. No object-storage operator or commercial license Secret is required. SeaweedFS 4.48 is [Apache-2.0 licensed](https://github.com/seaweedfs/seaweedfs/blob/4.48/LICENSE).
 
-**Decision**: Deploy **community MinIO** as plain manifests (PVC + Deployment + Service on `quay.io/minio/minio:latest`, Apache 2.0) on **both** the OSD hub and the companion cluster when it comes online. Each consumer (MLflow artifact store this session, USD asset bucket later, etc.) gets its own MinIO instance in its own namespace. **ODF is not installed anywhere in this reference.**
+| Namespace | PVC capacity | S3 endpoint | Kubernetes credentials |
+|---|---|---|---|
+| `mlflow` | `200Gi` | `http://seaweedfs.mlflow.svc.cluster.local:8333` | Existing `mlflow-s3-credentials`; training consumers use `vla-training/s3-credentials` |
+| `obs-storage` | `100Gi` (retained) | `http://seaweedfs.obs-storage.svc.cluster.local:8333` | `obs-s3-credentials` |
+| `warehouse-data` | `5Gi` | `http://seaweedfs.warehouse-data.svc.cluster.local:8333` | `s3-credentials`, sourced from Vault path `warehouse/s3` under mount `kv` |
 
-The `minio-object-store-operator` (MinIO AIStor) from the certified catalog was tried first and rejected — it requires a commercial license (`minio-license` Secret) which we do not have and which is not appropriate for a reference implementation. Community MinIO is Apache 2.0 and functionally sufficient for single-instance S3.
+All three expose an S3-only ClusterIP Service named `seaweedfs` on port `8333`; administrative ports are not exposed by that Service. Credentials use `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, projected from Vault; do not commit credential values. Loki's `VaultStaticSecret` projection fixes its endpoint to `http://seaweedfs.obs-storage.svc.cluster.local:8333`, so a stale Vault endpoint cannot override the migration. MLflow keeps `s3://mlflow-artifacts/`, training keeps the `vla-training` bucket, observability keeps its existing buckets, and camera images keep `warehouse-camera-library`.
+
+Bucket initialization and helper Jobs use the official `public.ecr.aws/aws-cli/aws-cli:2.34.0` image with standard `aws s3` / `aws s3api` commands. Bucket-init Jobs run as Argo CD `Sync` hooks in wave `1`, with bounded retries and a 600-second timeout. Creating buckets during Sync avoids a new DSPA waiting for a bucket whose creation would otherwise wait for application health. S3 clients use the new endpoint while preserving bucket names, object keys, and artifact URIs. ODF remains outside this reference deployment; this change does not add storage to the companion cluster.
 
 **Consequences**:
-- MLflow artifact store (ADR-015) is a bucket on the `mlflow` MinIO instance. No change to the `workloads/common/python-lib/tracking/` abstraction.
-- USD asset bucket for Nucleus-adjacent services lives on its own MinIO instance (Phase 1). Keeps the `ovstorage` migration story (ADR-002) on the table — buckets are swappable for `ovstorage` without code change.
-- Backup/DR for object content is PVC-level (EBS snapshots). Acceptable for a reference deployment; production customers bring their own backup story.
-- Air-gap: MinIO tenant images mirror cleanly; compatible with customer sites where AWS S3 is unavailable.
-- Companion cluster gets MinIO too (Session 12 installs the same Subscription); ODF is not revisited.
+
+- Single-replica `mini` is a reference topology with a single point of failure, not an HA storage service. Production sizing, replication, backup, and restore validation remain separate work.
+- Existing cluster stores are upstream-managed and shared. Follow a controlled S3 copy, verification, and consumer cutover; do not delete live stores or reuse their data directories as SeaweedFS storage. Retain source data and rollback configuration. Git history remains intact.
+- SeaweedFS runs under `restricted-v2` with a `5Gi` `gp3` PVC in the isolated `showcase-storage-canary` namespace. On 2026-09-29, the S3 canary passed 15 checks including restart persistence, and 13 checks from `vla-training`. See the [validation evidence](../tools/object-storage/VALIDATION.md) and [controlled migration procedure](../tools/object-storage/README.md). This proves the tested S3 contract; live shared data and consumer cutover remain separate.
+- VM transfer stays **S3 → workstation → SCP → VM local model**. An in-cluster AWS CLI helper reads bounded byte ranges; the workstation verifies and assembles each file before SCP. No direct cluster S3 access is required from the VM.
+- Air-gapped deployments must mirror the pinned SeaweedFS and AWS CLI images. Nucleus and its USD asset workflow remain separate from these three S3 stores.
 
 ---
 
@@ -427,7 +434,7 @@ The `minio-object-store-operator` (MinIO AIStor) from the certified catalog was 
 
 **Status**: Accepted (Session 08)
 
-**Context**: Phase 0 sessions 06, 06b, and 07 all shipped placeholder credentials committed to Git (MinIO root creds for `mlflow`, MinIO root creds for `obs-storage`, MLflow S3 credentials, Loki S3 credentials, and an imperative cross-namespace mirror for `mlflow-db-app`). This is a conscious shortcut — not acceptable as a production pattern. We need a real secrets substrate before Phase 1 workloads ship.
+**Context**: Phase 0 sessions 06, 06b, and 07 all shipped placeholder credentials committed to Git (object-store root credentials for `mlflow` and `obs-storage`, MLflow S3 credentials, Loki S3 credentials, and an imperative cross-namespace mirror for `mlflow-db-app`). This is a conscious shortcut — not acceptable as a production pattern. We need a real secrets substrate before Phase 1 workloads ship.
 
 Options evaluated:
 - **HashiCorp Vault + Vault Secrets Operator (VSO)** — certified in `certified-operators` (`vault-secrets-operator.v1.3.0`). HashiCorp's official K8s client; designed for this use case.
@@ -587,7 +594,7 @@ A second alternative — iGPU passthrough into the SNO VM via VFIO — was consi
 
 **Decision**: For Phase 1, the warehouse-obstruction demo is wired as follows:
 
-- **Hub (OSD, "HQ data center") runs**: Isaac Sim on L40S as digital twin, Cosmos Reason 2-8B on L40S for VQA obstruction detection (see trial note below), a dedicated `obstruction-detector` pod consuming camera frames and calling Cosmos Reason (separate from Fleet Manager — perception is its own service role), Fleet Manager with replan-on-alert logic, WMS-stub, Showcase Console, MinIO for the camera-image library, Nucleus for USD assets.
+- **Hub (OSD, "HQ data center") runs**: Isaac Sim on L40S as digital twin, Cosmos Reason 2-8B on L40S for VQA obstruction detection (see trial note below), a dedicated `obstruction-detector` pod consuming camera frames and calling Cosmos Reason (separate from Fleet Manager — perception is its own service role), Fleet Manager with replan-on-alert logic, WMS-stub, Showcase Console, S3 storage for the camera-image library (SeaweedFS is the 2026-09-29 migration target per ADR-021), Nucleus for USD assets.
 - **Companion ("on-site warehouse edge") runs**: a fake-camera service publishing AI-generated photorealistic warehouse photos to Kafka at ~1 Hz (with an HTTP control endpoint for state switching), the Mission Dispatcher with a new Waypoint Planner module (5 Hz pose emission, configurable), OpenVLA host-native for manipulation policy (not mobile-base navigation — Waypoint Planner handles navigation), and the companion side of Kafka federation.
 - **Digital twin stays on hub** for Phase 1. In real deployments the twin co-locates with GPU hardware; the data-center digital-twin pattern is industry-standard (Siemens Teamcenter Digital Reality Viewer, the Mega Blueprint reference, Foxconn). Architecture is not locked out of moving Isaac Sim to companion when Thor arrives.
 - **Robot is Forklift_A01 (`fl-07`), not Nova Carter.** Forklifts are the right actor for a "retrieve pallet" narrative; AMRs are delivery platforms that don't pick pallets. Nova Carter references throughout scenarios/events/Console UI are retired.

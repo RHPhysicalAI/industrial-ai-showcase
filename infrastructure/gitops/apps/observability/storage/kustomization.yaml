@@ -1,11 +1,25 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+namespace: obs-storage
 resources:
   - namespace.yaml
   - vault-connection.yaml
   - vault-auth.yaml
   - vault-static-secret.yaml
-  - minio-pvc.yaml
-  - minio-deployment.yaml
-  - minio-service.yaml
+  - ../../../components/seaweedfs
   - bucket-init-job.yaml
+patches:
+  - target:
+      kind: Deployment
+      name: seaweedfs
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/envFrom/0/secretRef/name
+        value: obs-s3-credentials
+  - target:
+      kind: PersistentVolumeClaim
+      name: seaweedfs-data
+    patch: |-
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 100Gi

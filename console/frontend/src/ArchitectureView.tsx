@@ -28,7 +28,7 @@ const PURDUE_LEVELS = [
     components: [
       { name: "Training Pipelines (DSPA)", ns: "vla-training", role: "VLA fine-tuning orchestration" },
       { name: "Model Registry", ns: "redhat-ods-applications", role: "Model versioning + lineage" },
-      { name: "MLflow + MinIO", ns: "mlflow", role: "Experiment tracking + artifact storage" },
+      { name: "MLflow + SeaweedFS", ns: "mlflow", role: "Experiment tracking + artifact storage" },
       { name: "AMQ Streams (Hub)", ns: "fleet-ops", role: "Fleet telemetry aggregation & analytics" },
       { name: "Argo CD", ns: "openshift-gitops", role: "GitOps policy rollout" },
       { name: "Advanced Cluster Mgmt", ns: "open-cluster-management", role: "Multi-site cluster governance" },

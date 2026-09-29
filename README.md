@@ -17,6 +17,10 @@ complete, and which goal comes next. Each goal then links to the detailed
 component README, deployment contract, or validation commands needed to do the
 work.
 
+For object storage, start with the [SeaweedFS migration and CPU-only S3 canary](tools/object-storage/README.md).
+It covers deployment, RHOAI connection settings, upload/download verification,
+and safe data migration without running the GPU demo.
+
 ## Layout
 
 ```

@@ -140,7 +140,7 @@ deploymentSpec:
         - name: PYTHONUNBUFFERED
           value: '1'
         - name: S3_ENDPOINT
-          value: http://minio.mlflow.svc:9000
+          value: http://seaweedfs.mlflow.svc:8333
         - name: S3_BUCKET
           value: vla-training
         image: image-registry.openshift-image-registry.svc:5000/vla-training/vla-training:latest
@@ -181,7 +181,7 @@ deploymentSpec:
         - name: PYTHONUNBUFFERED
           value: '1'
         - name: S3_ENDPOINT
-          value: http://minio.mlflow.svc:9000
+          value: http://seaweedfs.mlflow.svc:8333
         - name: S3_BUCKET
           value: vla-training
         - name: MLFLOW_TRACKING_URI
@@ -243,7 +243,7 @@ deploymentSpec:
         - name: PYTHONUNBUFFERED
           value: '1'
         - name: S3_ENDPOINT
-          value: http://minio.mlflow.svc:9000
+          value: http://seaweedfs.mlflow.svc:8333
         - name: S3_BUCKET
           value: vla-training
         - name: MODEL_REGISTRY_ADDRESS
@@ -272,7 +272,7 @@ deploymentSpec:
         - name: PYTHONUNBUFFERED
           value: '1'
         - name: S3_ENDPOINT
-          value: http://minio.mlflow.svc:9000
+          value: http://seaweedfs.mlflow.svc:8333
         - name: S3_BUCKET
           value: vla-training
         image: image-registry.openshift-image-registry.svc:5000/vla-training/vla-training:latest
@@ -426,14 +426,14 @@ platforms:
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
-              secretKey: MINIO_ROOT_USER
+              secretKey: AWS_ACCESS_KEY_ID
             - envVar: AWS_SECRET_ACCESS_KEY
-              secretKey: MINIO_ROOT_PASSWORD
+              secretKey: AWS_SECRET_ACCESS_KEY
             optional: false
-            secretName: minio-credentials
+            secretName: s3-credentials
             secretNameParameter:
               runtimeValue:
-                constant: minio-credentials
+                constant: s3-credentials
           - keyToEnv:
             - envVar: HF_TOKEN
               secretKey: HF_TOKEN
@@ -460,14 +460,14 @@ platforms:
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
-              secretKey: MINIO_ROOT_USER
+              secretKey: AWS_ACCESS_KEY_ID
             - envVar: AWS_SECRET_ACCESS_KEY
-              secretKey: MINIO_ROOT_PASSWORD
+              secretKey: AWS_SECRET_ACCESS_KEY
             optional: false
-            secretName: minio-credentials
+            secretName: s3-credentials
             secretNameParameter:
               runtimeValue:
-                constant: minio-credentials
+                constant: s3-credentials
           - keyToEnv:
             - envVar: HF_TOKEN
               secretKey: HF_TOKEN
@@ -486,14 +486,14 @@ platforms:
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
-              secretKey: MINIO_ROOT_USER
+              secretKey: AWS_ACCESS_KEY_ID
             - envVar: AWS_SECRET_ACCESS_KEY
-              secretKey: MINIO_ROOT_PASSWORD
+              secretKey: AWS_SECRET_ACCESS_KEY
             optional: false
-            secretName: minio-credentials
+            secretName: s3-credentials
             secretNameParameter:
               runtimeValue:
-                constant: minio-credentials
+                constant: s3-credentials
           tolerations:
           - effect: NoSchedule
             key: nvidia.com/gpu
@@ -504,14 +504,14 @@ platforms:
           secretAsEnv:
           - keyToEnv:
             - envVar: AWS_ACCESS_KEY_ID
-              secretKey: MINIO_ROOT_USER
+              secretKey: AWS_ACCESS_KEY_ID
             - envVar: AWS_SECRET_ACCESS_KEY
-              secretKey: MINIO_ROOT_PASSWORD
+              secretKey: AWS_SECRET_ACCESS_KEY
             optional: false
-            secretName: minio-credentials
+            secretName: s3-credentials
             secretNameParameter:
               runtimeValue:
-                constant: minio-credentials
+                constant: s3-credentials
           tolerations:
           - effect: NoSchedule
             key: nvidia.com/gpu

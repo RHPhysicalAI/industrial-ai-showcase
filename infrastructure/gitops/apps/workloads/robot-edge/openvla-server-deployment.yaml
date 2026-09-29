@@ -49,7 +49,7 @@ spec:
         - name: GROOT_VIDEO_KEY
           value: "rs_view"
         - name: S3_ENDPOINT
-          value: "http://minio.mlflow.svc:9000"
+          value: "http://seaweedfs.mlflow.svc:8333"
         - name: MODEL_CACHE_DIR
           value: "/models"
         - name: HF_HOME

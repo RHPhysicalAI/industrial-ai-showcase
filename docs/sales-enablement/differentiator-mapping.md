@@ -79,7 +79,7 @@ For each differentiator: the industrial concern it actually maps to, how it's fr
 - **20-min**: core beat — show a policy being retrained from a scenario, landing in MLflow with metrics, promoted via GitOps PR, rolled out to a spoke.
 - **60-min**: deep — include the rollback flow when validation regresses.
 
-**What stays off the surface**: MLflow schema internals, model registry backend (Postgres), artifact store (MinIO/ODF) — engineers care, customers don't unless asked.
+**What stays off the surface**: MLflow schema internals, model registry backend (Postgres), artifact store (SeaweedFS/ODF) — engineers care, customers don't unless asked.
 
 ---
 

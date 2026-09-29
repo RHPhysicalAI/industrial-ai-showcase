@@ -474,7 +474,7 @@ Entry template:
 
 ### 46c. Fake-Camera Service (companion)
 - **Category**: Runtime service
-- **Purpose**: Python service on the companion cluster. Publishes AI-generated photorealistic warehouse JPEGs to `warehouse.cameras.aisle3` (and siblings) at ~1 Hz, simulating on-site cameras. HTTP `POST /state` endpoint switches the emitted frame (steady: `aisle3_empty.jpg`; triggered: `aisle3_pallet.jpg`). Reads the image library from MinIO on the hub. Per ADR-027.
+- **Purpose**: Python service on the companion cluster. Publishes AI-generated photorealistic warehouse JPEGs to `warehouse.cameras.aisle3` (and siblings) at ~1 Hz, simulating on-site cameras. HTTP `POST /state` endpoint switches the emitted frame (steady: `aisle3_empty.jpg`; triggered: `aisle3_pallet.jpg`). Reads baked-in `/frames/` images; the matching hub S3 library targets SeaweedFS under ADR-021. Per ADR-027.
 - **Source**: `workloads/fake-camera/` (new in Phase 1).
 - **Phase**: 1.
 

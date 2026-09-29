@@ -60,7 +60,8 @@ class S3Config:
             endpoint_url=self.endpoint,
             aws_access_key_id=self.access_key,
             aws_secret_access_key=self.secret_key,
-            config=BotoConfig(s3={"addressing_style": "path"}),
+            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+            config=BotoConfig(signature_version="s3v4", s3={"addressing_style": "path"}),
         )
 
 

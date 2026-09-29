@@ -16,7 +16,7 @@ Six components reference the same aisle / dock / approach-point / camera / forkl
 | `mission-dispatcher` (+ waypoint-planner) | `aisles.*.centerline` to emit 5 Hz pose interpolation |
 | Isaac Sim twin-update subscriber | `robots.fl-07` transform source; `pallets.pallet-a47.obstruction_position` on alert |
 | `obstruction-detector` | `cameras.*.publishes_topic` to know which Kafka topic → which aisle |
-| `fake-camera` service | `cameras.*.frame_library` to pick the right MinIO object per commanded state |
+| `fake-camera` service | `cameras.*.frame_library` to pick the baked-in frame per commanded state; filenames match the target SeaweedFS S3 library |
 | Showcase Console | `scenarios.*.buttons` for the presenter UI wiring |
 
 ## Coordinate frame

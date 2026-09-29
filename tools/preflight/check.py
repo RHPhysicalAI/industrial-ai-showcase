@@ -647,7 +647,7 @@ class PreflightChecker:
                 self.hub_kubeconfig,
                 (
                     ("ml-training.secret.hf", "hf-credentials", "vla-training"),
-                    ("ml-training.secret.minio", "minio-credentials", "vla-training"),
+                    ("ml-training.secret.s3", "s3-credentials", "vla-training"),
                     ("ml-training.secret.git", "git-source-secret", "vla-training"),
                 ),
             )

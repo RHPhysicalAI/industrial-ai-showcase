@@ -4,6 +4,11 @@ This isolated overlay verifies the fork-owned GitOps serving contract for a
 registered GR00T artifact without changing the live `openvla-server` or the
 AWS VLA VM.
 
+This GPU serving overlay is separate from the CPU-only SeaweedFS migration
+canary in `showcase-storage-canary`. [CPU-only S3 validation passed](../../../../../../../tools/object-storage/VALIDATION.md),
+but this GPU overlay has not been run against SeaweedFS. Use the [storage canary and copy/cutover guide](../../../../../../../tools/object-storage/README.md)
+without changing GPU workloads or deleting shared live stores.
+
 It deliberately lives below the existing `robot-edge` workload directory so
 the current workload ApplicationSet does not discover it automatically. One
 of the standalone Argo Applications must be applied explicitly for the test:
@@ -15,7 +20,7 @@ fork.
 
 The overlay expects these pre-existing or temporary namespace resources:
 
-- `robot-edge/storage-config` for the Hub MinIO credentials;
+- `robot-edge/storage-config` for the Hub SeaweedFS credentials;
 - `robot-edge/model-cache` for the model cache;
 - `robot-edge/hf-token-stage1-20260923` with key `token`, created temporarily
   from the approved Hugging Face credential and deleted after the canary.

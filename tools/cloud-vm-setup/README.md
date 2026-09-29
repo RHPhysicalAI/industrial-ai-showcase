@@ -136,20 +136,31 @@ to `VLA_MODE=openvla`, `OPENVLA_WEIGHTS=openvla/openvla-7b`, and the prior
 container image. The HF token remains required because GR00T loads its gated
 Cosmos backbone during the first inference request.
 
-To transfer a native model from the Hub MinIO store to the VM, use the helper:
+To transfer a native model from the Hub SeaweedFS store to the VM, use the helper:
 
 ```bash
 bash tools/cloud-vm-setup/transfer-model.sh \
   --artifact-uri s3://vla-training/<run-prefix>/model
 ```
 
-The Hub MinIO service is ClusterIP-only, so the helper reads objects through
-the authenticated MinIO pod. It stages each object locally, downloads
-multipart safetensors one multipart part per `oc exec` session, verifies the
-exact byte count, and only then copies the complete file to the VM with `scp`.
-This chunking is intentional: a long binary `oc exec` stream can silently
-truncate large model shards. The helper never prints or stores the MinIO
-credentials and refuses to continue when a source/target size check fails.
+The target Hub SeaweedFS S3 Service is ClusterIP-only at
+`http://seaweedfs.mlflow.svc.cluster.local:8333`. The transfer path remains
+**S3 → workstation → SCP → VM local model**. An in-cluster helper pod using
+`public.ecr.aws/aws-cli/aws-cli:2.34.0` receives AWS credentials through a
+Kubernetes Secret reference. It reads bounded chunks with
+[`aws s3api get-object --range bytes=<start>-<end>`](https://docs.aws.amazon.com/cli/latest/reference/s3api/get-object.html).
+The workstation downloads and assembles those chunks, verifies the exact
+byte count, and only then copies the complete file to the VM with `scp`.
+Byte ranges work independently of how the object was originally uploaded.
+A long binary `oc exec` stream can silently truncate large model shards,
+so the helper fails on source/target size mismatches and does not print or
+persist S3 credential values on the workstation or VM.
+
+The [isolated CPU-only storage canary passed](../object-storage/VALIDATION.md).
+The VM transfer rewrite has local regression coverage, but has not been executed
+against live artifacts on SeaweedFS. Complete the [controlled copy/cutover](../object-storage/README.md)
+before using that endpoint for live models. Storage validation does not delete
+shared upstream-managed stores or change GPUs.
 
 The CUDA image can be large and may require NVIDIA NGC access because the Containerfile uses an NVIDIA PyTorch base. Model weights are cached under `VLA_MODEL_CACHE`.
 The service loads `openvla/openvla-7b` lazily on the first `/act` request; a

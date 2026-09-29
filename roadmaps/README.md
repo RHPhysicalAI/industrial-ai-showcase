@@ -45,7 +45,7 @@ Hosted Companion SNO ── HTTP /act ────────► Cloud GPU VM /
 ```
 
 The current VLA path uses a separate NVIDIA cloud VM running pretrained
-OpenVLA-7B. The full training, MLflow registration, MinIO promotion, and
+OpenVLA-7B. The full training, MLflow registration, SeaweedFS promotion, and
 production-model lifecycle are future work; they are not required to prove
 the initial hosted demo loop.
 

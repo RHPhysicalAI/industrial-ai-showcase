@@ -64,7 +64,7 @@ spec:
               name: openvla-trained-model-canary
               key: groot-video-key
         - name: S3_ENDPOINT
-          value: http://minio.mlflow.svc:9000
+          value: http://seaweedfs.mlflow.svc:8333
         - name: MODEL_CACHE_DIR
           value: /models
         - name: HF_HOME

@@ -4,39 +4,66 @@ metadata:
   name: vla-training-bucket-init
   namespace: vla-training
   annotations:
-    argocd.argoproj.io/hook: PostSync
-    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    # Sync wave avoids a PostSync deadlock when consumers require the bucket.
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
 spec:
-  backoffLimit: 10
+  activeDeadlineSeconds: 600
+  backoffLimit: 2
   ttlSecondsAfterFinished: 600
   template:
     spec:
-      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
-        - name: mc
-          image: quay.io/minio/mc:latest
-          command:
-            - /bin/sh
-            - -c
+        - name: s3-init
+          image: public.ecr.aws/aws-cli/aws-cli:2.34.0
+          command: ["/bin/sh", "-ec"]
+          args:
             - |
-              set -e
-              until mc alias set local http://minio.mlflow.svc.cluster.local:9000 \
-                "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do
-                echo "waiting for minio endpoint..."
+              aws configure set default.s3.addressing_style path
+              aws configure set default.s3.signature_version s3v4
+              ready=false
+              for attempt in $(seq 1 60); do
+                if aws --endpoint-url "$S3_ENDPOINT" s3api list-buckets >/dev/null 2>&1; then
+                  ready=true
+                  break
+                fi
                 sleep 5
               done
-              mc mb --ignore-existing local/vla-training
-              echo "bucket ready"
+              "$ready" || { echo "S3 endpoint or credentials unavailable" >&2; exit 1; }
+              for bucket in vla-training; do
+                aws --endpoint-url "$S3_ENDPOINT" s3api head-bucket --bucket "$bucket" 2>/dev/null ||
+                  aws --endpoint-url "$S3_ENDPOINT" s3api create-bucket --bucket "$bucket" >/dev/null
+              done
+              echo "PASS: S3 buckets ready"
           env:
             - name: HOME
               value: /tmp
-            - name: MINIO_ROOT_USER
-              valueFrom:
-                secretKeyRef:
-                  name: minio-credentials
-                  key: MINIO_ROOT_USER
-            - name: MINIO_ROOT_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: minio-credentials
-                  key: MINIO_ROOT_PASSWORD
+            - name: AWS_EC2_METADATA_DISABLED
+              value: "true"
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
+            - name: AWS_PAGER
+              value: ""
+            - name: S3_ENDPOINT
+              value: http://seaweedfs.mlflow.svc.cluster.local:8333
+          envFrom:
+            - secretRef:
+                name: s3-credentials
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi

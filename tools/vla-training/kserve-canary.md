@@ -1,11 +1,17 @@
 # Isolated KServe canary
 
+This GPU inference canary is separate from the CPU-only SeaweedFS migration
+canary in `showcase-storage-canary`. [CPU-only S3 validation passed](../object-storage/VALIDATION.md),
+but live data/consumer cutover is pending. Do not change GPU workloads or delete shared live stores; start with the
+[object-storage canary and controlled copy/cutover guide](../object-storage/README.md).
+Historical KServe results do not validate the new SeaweedFS endpoint.
+
 This canary validates the legacy document's KServe `InferenceService` serving
 contract without changing the working demo path.
 
 It creates a temporary `vla-kserve-canary` namespace, copies the existing
 object-store and approved Hugging Face Secret objects without printing their
-values, preserves the legacy MinIO endpoint through KServe storage annotations,
+values, passes the configured S3 endpoint through KServe storage annotations,
 and attaches a temporary copy of the existing `robot-edge` image-pull Secret,
 and deploys a custom KServe predictor using the fork-built
 `openvla-server` image. KServe's custom-predictor storage initializer downloads
@@ -31,8 +37,8 @@ bash tools/vla-training/kserve-canary.sh \
   --image <fork-image>@sha256:<immutable-digest>
 ```
 
-The endpoint defaults to the repository's existing `http://minio.mlflow.svc:9000`
-contract. Override it with `VLA_KSERVE_S3_ENDPOINT` only when the target Hub
+The endpoint defaults to the migration target `http://seaweedfs.mlflow.svc:8333`.
+Override it with `VLA_KSERVE_S3_ENDPOINT` only when the target Hub
 uses a different object-store endpoint.
 
 Success requires:

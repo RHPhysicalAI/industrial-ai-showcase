@@ -103,7 +103,8 @@ def download_model_from_s3(
         endpoint_url=endpoint,
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
-        config=BotoConfig(s3={"addressing_style": "path"}),
+        region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+        config=BotoConfig(signature_version="s3v4", s3={"addressing_style": "path"}),
     )
 
     paginator = s3.get_paginator("list_objects_v2")

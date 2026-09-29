@@ -33,7 +33,7 @@ been validated.
   and keeps ONNX as a secondary validation artifact.
 - A compiled pipeline YAML at
   `workloads/vla-training/vla_finetune_pipeline.yaml`.
-- GitOps resources for DSPA, the `vla-training` namespace, MinIO access,
+- GitOps resources for DSPA, the `vla-training` namespace, SeaweedFS access,
   Hugging Face credentials, and the pipeline image build.
 - MLflow and RHOAI Model Registry integration code.
 - Hub serving manifests based on `openvla-server` Deployments.
@@ -114,14 +114,14 @@ that the next run must follow:
 
 - Confirm DSPA/Kubeflow Pipelines is available and accepting runs.
 - Confirm the `vla-training` namespace and pipeline image build are healthy.
-- Confirm MinIO bucket access, MLflow tracking, and Model Registry access.
+- Confirm SeaweedFS bucket access, MLflow tracking, and Model Registry access.
 - Confirm Vault-sourced Hugging Face and object-storage credentials exist.
 - Confirm an available L40S GPU and a non-conflicting training window.
 
 ### 4. Run the pipeline incrementally
 
 - Compile and upload the pipeline.
-- Run data preparation first and verify model/dataset objects in MinIO.
+- Run data preparation first and verify model/dataset objects in SeaweedFS.
 - Run a short fine-tuning smoke test with a small step count.
 - Run ONNX validation.
 - Register the versioned GR00T model URI with lineage metadata; retain the
@@ -159,7 +159,7 @@ that the next run must follow:
 ## Definition of done
 
 - A real KFP run completes through registration.
-- Artifacts exist at a versioned MinIO URI.
+- Artifacts exist at a versioned SeaweedFS URI.
 - Metrics and lineage are visible in MLflow/Model Registry.
 - A serving deployment can load and answer with the trained artifact.
 - Promotion changes are GitOps-managed and reversible.

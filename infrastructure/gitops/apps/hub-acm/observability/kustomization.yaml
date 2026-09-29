@@ -4,7 +4,7 @@ kind: Kustomization
 #   1. Copy the cluster pull-secret into this namespace as
 #      multiclusterhub-operator-pull-secret.
 #   2. Create the thanos-object-storage secret (Thanos-format YAML
-#      pointing at MinIO in obs-storage).
+#      pointing at SeaweedFS in obs-storage).
 # Both secrets are imperative to keep credentials out of Git; all
 # other resources (namespace, MultiClusterObservability CR) are
 # reconciled here.

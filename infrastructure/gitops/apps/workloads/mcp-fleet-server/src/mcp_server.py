@@ -35,7 +35,7 @@ CONSOLE_BACKEND_URL = os.getenv("CONSOLE_BACKEND_URL", "http://showcase-console-
 GITHUB_BASE_BRANCH = os.getenv("GITHUB_BASE_BRANCH", "main")
 MODEL_REGISTRY_URL = os.getenv("MODEL_REGISTRY_URL", "http://wbc-model-registry.rhoai-model-registries.svc:8080")
 
-# Showcase mode: use HF models instead of MLflow/MinIO
+# Showcase mode: use HF models instead of MLflow/SeaweedFS
 # Set SHOWCASE_MODE=false for production deployments with real training pipeline
 SHOWCASE_MODE = os.getenv("SHOWCASE_MODE", "true").lower() == "true"
 

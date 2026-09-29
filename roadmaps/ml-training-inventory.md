@@ -1,5 +1,7 @@
 # Goal 7 — Upstream-to-Fork ML Pipeline Inventory
 
+> Storage update (2026-09-29): SeaweedFS endpoints and Secret names below describe the fork migration target, not upstream or live-cluster parity. [CPU-only S3 validation passed](../tools/object-storage/VALIDATION.md) in `showcase-storage-canary` and from `vla-training`; live data/consumer cutover remains pending. Follow the [controlled copy/cutover guide](../tools/object-storage/README.md).
+
 Status: 🔄 Planning
 
 This document is the controlled inventory for the ML/training work. It maps
@@ -43,14 +45,14 @@ This is a planning snapshot and must be refreshed before implementation starts.
 | Pipeline definition | [pipeline.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/pipeline.py) | Same path; currently aligned | Pipeline name `vla-finetune`; default base model `nvidia/GR00T-N1.7-3B`; dataset `nvidia/PhysicalAI-Robotics-GR00T-Teleop-G1`; bucket `vla-training`; prefix `vla-finetune`; model `g1-vla-finetune`; version `v1` | Compile and inspect parameters without running GPU work. |
 | Pipeline artifact | [vla_finetune_pipeline.yaml](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/vla_finetune_pipeline.yaml) | Same path; currently aligned | Four stages: data preparation → fine-tune/export → model registration → ONNX validation. Uses in-cluster image `image-registry.openshift-image-registry.svc:5000/vla-training/vla-training:latest` | Compare compiled YAML with source and verify image availability. |
 | Training image | [Containerfile](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/container/Containerfile) | Same path; currently aligned | Clones `https://github.com/NVIDIA/Isaac-GR00T.git`; installs GPU ONNX Runtime from the documented package index | Verify build network access and package compatibility before building. |
-| Runtime configuration | [config.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/config.py) and [constants.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/constants.py) | Same paths; currently aligned | MinIO endpoint `http://minio.mlflow.svc:9000`; MLflow endpoint `https://mlflow.redhat-ods-applications.svc:8443`; Model Registry endpoint `http://wbc-model-registry.rhoai-model-registries.svc:8080` | Verify these services resolve and authenticate from `vla-training`. |
+| Runtime configuration | [config.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/config.py) and [constants.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/constants.py) | Same paths; fork updates the S3 endpoint for migration | SeaweedFS endpoint `http://seaweedfs.mlflow.svc:8333`; MLflow endpoint `https://mlflow.redhat-ods-applications.svc:8443`; Model Registry endpoint `http://wbc-model-registry.rhoai-model-registries.svc:8080` | Verify these services resolve and authenticate from `vla-training`. |
 | Data preparation | [data_prep.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/data_prep.py) | Same path; currently aligned | Downloads/caches the base model and dataset, then writes to S3-compatible storage under configured prefixes | Run only after storage and HF access checks pass. |
 | Fine-tuning/export | [fine_tune.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/fine_tune.py) | Fork adds serving-artifact hardening | Produces full resume state under `checkpoint/`, a validated clean GR00T serving directory under `model/`, and ONNX under `onnx/`; GPU and step count must be explicit for a smoke run | Start with a short, bounded smoke run and verify the model prefix contains weights at its root. |
 | ONNX validation | [validate_onnx.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/validate_onnx.py) | Same path; currently aligned | Reads the generated ONNX artifact from S3-compatible storage and validates model inputs/outputs | Make this the first post-training acceptance gate. |
 | Model registration | [register_model.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/register_model.py) | Same path; currently aligned | Registers `g1-vla-finetune` with a version and URI in the RHOAI Model Registry; records lineage metadata | Verify registry API and database readiness before the run. |
 | Promotion tooling | [promote.py](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/workloads/vla-training/src/vla_training/promote.py) | Same path; contract not yet approved | Existing code assumes an older promotion/serving shape; it must not be run blindly | Reconcile it with the active Deployment-based serving manifests. |
-| DSPA/KFP platform | [platform/dspa](https://github.com/RHPhysicalAI/industrial-ai-showcase/tree/main/infrastructure/gitops/apps/platform/dspa) | Same structure; fork BuildConfig source points to `https://github.com/rhkp/industrial-ai-showcase.git` | Namespace `vla-training`; pipeline image `vla-training:latest`; secrets `git-source-secret`, `minio-credentials`, and `hf-credentials` | Verify DSPA, BuildConfig, image, service account, and secret projections. |
-| MLflow/MinIO | [platform/mlflow](https://github.com/RHPhysicalAI/industrial-ai-showcase/tree/main/infrastructure/gitops/apps/platform/mlflow) | Same path; currently aligned | Artifact destination `s3://mlflow-artifacts/`; MinIO service is in namespace `mlflow`; credentials are Vault-sourced | Verify pods, bucket initialization, S3 credentials, and tracking health. |
+| DSPA/KFP platform | [platform/dspa](https://github.com/RHPhysicalAI/industrial-ai-showcase/tree/main/infrastructure/gitops/apps/platform/dspa) | Same structure; fork BuildConfig source points to `https://github.com/rhkp/industrial-ai-showcase.git` | Namespace `vla-training`; pipeline image `vla-training:latest`; secrets `git-source-secret`, `s3-credentials`, and `hf-credentials` | Verify DSPA, BuildConfig, image, service account, and secret projections. |
+| MLflow/SeaweedFS | [platform/mlflow](https://github.com/RHPhysicalAI/industrial-ai-showcase/tree/main/infrastructure/gitops/apps/platform/mlflow) | Same consumer path; shared SeaweedFS base passed isolated S3 validation; live cutover pending | Artifact destination `s3://mlflow-artifacts/`; SeaweedFS service is in namespace `mlflow`; credentials are Vault-sourced | Verify pods, bucket initialization, S3 credentials, and tracking health. |
 | Model Registry | [platform/model-registry](https://github.com/RHPhysicalAI/industrial-ai-showcase/tree/main/infrastructure/gitops/apps/platform/model-registry) | Same path; currently aligned | Registry `wbc-model-registry` in `rhoai-model-registries`; database secret is externalized | Verify service, database, and registry API health. |
 | Serving manifests | [factory-b workloads](https://github.com/RHPhysicalAI/industrial-ai-showcase/tree/main/infrastructure/gitops/apps/workloads/factory-b) and [robot-edge workloads](https://github.com/RHPhysicalAI/industrial-ai-showcase/tree/main/infrastructure/gitops/apps/workloads/robot-edge) | Same paths; fork adds isolated canary helper | Current manifests use `openvla-server` Deployments, model cache PVCs, `policy-version`, and `s3://vla-training/vla-finetune/...` model paths | Select an isolated canary target; do not alter the live Cloud VLA VM. |
 | Deployment-mode contract | [vla-model-deployment-modes.md](https://github.com/RHPhysicalAI/industrial-ai-showcase/blob/main/docs/vla-model-deployment-modes.md) | Same path; documentation needs reconciliation | Describes KServe `InferenceService` examples, while active manifests use `openvla-server` Deployments | Update documentation only after the serving target is selected and verified. |
@@ -65,7 +67,7 @@ These are implementation dependencies, not secrets:
 | Training dataset | `nvidia/PhysicalAI-Robotics-GR00T-Teleop-G1` | Hugging Face read access through the `hf-credentials` Secret. |
 | GR00T source | <https://github.com/NVIDIA/Isaac-GR00T.git> | Build-time Git access. |
 | ONNX Runtime package index | <https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/> | Build-time package access. |
-| MinIO API | `http://minio.mlflow.svc:9000` | `minio-credentials`; bucket `vla-training`. |
+| SeaweedFS API | `http://seaweedfs.mlflow.svc:8333` | `vla-training/s3-credentials` with `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`; bucket `vla-training`. |
 | MLflow tracking | `https://mlflow.redhat-ods-applications.svc:8443` | Tracking access from pipeline components. |
 | Model Registry | `http://wbc-model-registry.rhoai-model-registries.svc:8080` | Registry API access and database readiness. |
 | Git source for DSPA build | Upstream: `https://github.com/RHPhysicalAI/industrial-ai-showcase.git`; fork: `https://github.com/rhkp/industrial-ai-showcase.git` | `git-source-secret`; fork is the intended build source. |
@@ -82,7 +84,7 @@ These are implementation dependencies, not secrets:
 
 - DSPA/KFP API and dashboard are available.
 - `vla-training` namespace and pipeline image are ready.
-- MinIO, MLflow, and Model Registry are healthy.
+- SeaweedFS, MLflow, and Model Registry are healthy.
 - Required Secret names exist without printing values.
 - One intended L40S GPU is available without evicting Isaac Sim or Cosmos.
 
@@ -104,7 +106,7 @@ These are implementation dependencies, not secrets:
 
 ### Gate 4 — Artifact and lineage acceptance
 
-- Verify base model, dataset/cache, checkpoint, and ONNX objects in MinIO.
+- Verify base model, dataset/cache, checkpoint, and ONNX objects in SeaweedFS.
 - Verify ONNX validation output.
 - Verify MLflow metrics and Model Registry version/URI/lineage.
 - Record run ID, artifact URI, model version, and validation result without
@@ -147,7 +149,7 @@ These are implementation dependencies, not secrets:
 - Pipeline compile hash or artifact name.
 - KFP run ID and component status.
 - GPU node/product used for the run.
-- MinIO artifact prefixes and object existence checks.
+- SeaweedFS artifact prefixes and object existence checks.
 - ONNX validation result.
 - MLflow run ID and Model Registry version.
 - Canary endpoint readiness and representative response.

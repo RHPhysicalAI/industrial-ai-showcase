@@ -29,10 +29,10 @@ def _configure_gpu_step(task: dsl.PipelineTask) -> None:
     kubernetes.add_toleration(task, key="nvidia.com/gpu", operator="Exists", effect="NoSchedule")
     kubernetes.use_secret_as_env(
         task,
-        secret_name="minio-credentials",
+        secret_name="s3-credentials",
         secret_key_to_env={
-            "MINIO_ROOT_USER": "AWS_ACCESS_KEY_ID",
-            "MINIO_ROOT_PASSWORD": "AWS_SECRET_ACCESS_KEY",
+            "AWS_ACCESS_KEY_ID": "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY": "AWS_SECRET_ACCESS_KEY",
         },
     )
     kubernetes.use_secret_as_env(
@@ -52,10 +52,10 @@ def _configure_cpu_step(task: dsl.PipelineTask) -> None:
     kubernetes.add_toleration(task, key="nvidia.com/gpu", operator="Exists", effect="NoSchedule")
     kubernetes.use_secret_as_env(
         task,
-        secret_name="minio-credentials",
+        secret_name="s3-credentials",
         secret_key_to_env={
-            "MINIO_ROOT_USER": "AWS_ACCESS_KEY_ID",
-            "MINIO_ROOT_PASSWORD": "AWS_SECRET_ACCESS_KEY",
+            "AWS_ACCESS_KEY_ID": "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY": "AWS_SECRET_ACCESS_KEY",
         },
     )
     kubernetes.set_image_pull_policy(task, "Always")

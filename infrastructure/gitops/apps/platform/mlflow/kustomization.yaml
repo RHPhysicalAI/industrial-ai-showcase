@@ -7,8 +7,29 @@ resources:
   - vault-static-secret.yaml
   - vault-rhoai-apps-s3.yaml
   - cnpg-cluster.yaml
-  - minio-pvc.yaml
-  - minio-deployment.yaml
-  - minio-service.yaml
-  - minio-bucket-init-job.yaml
+  - ../../../components/seaweedfs
+  - bucket-init-job.yaml
   - mlflow.yaml
+patches:
+  # Do not set a global namespace: this app also projects Vault secrets into
+  # redhat-ods-applications for the operator-managed MLflow server.
+  - target:
+      name: seaweedfs.*
+    patch: |-
+      - op: add
+        path: /metadata/namespace
+        value: mlflow
+  - target:
+      kind: Deployment
+      name: seaweedfs
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/envFrom/0/secretRef/name
+        value: mlflow-s3-credentials
+  - target:
+      kind: PersistentVolumeClaim
+      name: seaweedfs-data
+    patch: |-
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 200Gi

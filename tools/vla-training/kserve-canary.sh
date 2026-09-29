@@ -9,7 +9,7 @@ isvc_name="${VLA_KSERVE_NAME:-trained-model-kserve-canary}"
 artifact_uri="${VLA_KSERVE_ARTIFACT_URI:-}"
 image="${VLA_KSERVE_IMAGE:-}"
 local_port="${VLA_KSERVE_LOCAL_PORT:-18080}"
-s3_endpoint="${VLA_KSERVE_S3_ENDPOINT:-http://minio.mlflow.svc:9000}"
+s3_endpoint="${VLA_KSERVE_S3_ENDPOINT:-http://seaweedfs.mlflow.svc:8333}"
 keep=false
 
 usage() {
@@ -119,7 +119,7 @@ for secret_name in storage-config hf-token-trained-model "$registry_secret"; do
        | .metadata.namespace = $namespace
        | .metadata.name = $target_name
        | if .metadata.name == "storage-config" then
-           .metadata.annotations = {"serving.kserve.io/s3-endpoint": $s3_endpoint, "serving.kserve.io/s3-usehttps": "0", "serving.kserve.io/s3-verifyssl": "0"}
+           .metadata.annotations = {"serving.kserve.io/s3-endpoint": $s3_endpoint, "serving.kserve.io/s3-usehttps": "0", "serving.kserve.io/s3-verifyssl": "0", "serving.kserve.io/s3-usevirtualbucket": "false", "serving.kserve.io/s3-region": "us-east-1"}
          else . end' \
     | oc_cmd apply -f - >/dev/null
 done

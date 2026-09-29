@@ -10,7 +10,7 @@ Phase 0 stands up two Git-reconciled OpenShift clusters — an OSD hub with L40S
 
 - **Two clusters, one repo, one Argo.** OSD hub + self-managed companion SNO, both reconciled from Git. 7 companion Applications `Synced + Healthy` via cross-cluster ApplicationSet (PR #22).
 - **GPU.** L40S + L4 nodes labeled by GFD; smoke tests on both classes pass (`nvidia-smi` reports correctly on each). PR #10 (L40S) + Session 15 L4 verify.
-- **OpenShift AI 3.4 EA1** on hub, full DSC including `trainer`. MLflow backend (CNPG Postgres + MinIO, Vault-sourced creds). PRs #13–#15.
+- **OpenShift AI 3.4 EA1** on hub, full DSC including `trainer`. MLflow backend (CNPG Postgres + S3 artifact storage, Vault-sourced creds). PRs #13–#15 established the historical backend; SeaweedFS is the 2026-09-29 migration target and is not validated by those PRs.
 - **Security on companion.** FIPS day-1 (`fips=1` cmdline, `crypto.fips_enabled=1`). DISA STIG V2R3 scan: FAIL 119 → 19 after one reboot (105 of 106 auto-remediations; 1 strand-risk waiver). Platform `ClusterImagePolicy` enforcing Red Hat release-signing key. PR #20.
 - **Cross-cluster observability.** Hub Thanos returns `companion + local-cluster`; 95 companion `up` series flowing through ACM MCO (PR #23).
 - **OpenShift Virtualization** on companion — HyperConverged reconciled, 28 pods running. VMs live here; hub is container-only by design (PR #21, ADR-017).

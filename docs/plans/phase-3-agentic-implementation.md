@@ -634,7 +634,7 @@ AUDIT_SERVICE_URL: http://audit-service:8090
 GITHUB_TOKEN: (from Secret)
 GITHUB_REPO: (owner/repo)
 KAFKA_BOOTSTRAP_SERVERS: amq-streams-kafka-bootstrap.amq-streams.svc:9092
-SHOWCASE_MODE: "true"  # Uses HuggingFace model URIs instead of MLflow/MinIO
+SHOWCASE_MODE: "true"  # Uses HuggingFace model URIs instead of MLflow/SeaweedFS
 ```
 
 **State Model**: Ephemeral — single-turn conversations, no persistent LangGraph checkpointer. Audit trail stored via audit-service (see Component 7).

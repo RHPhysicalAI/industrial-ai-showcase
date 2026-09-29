@@ -1,6 +1,12 @@
 # mlflow (platform layer)
 
-RHOAI-managed MLflow backed by CNPG Postgres + community MinIO. Session 06 landed the base; Session 08b swapped the committed placeholder S3 Secrets for Vault-sourced `VaultStaticSecret`s.
+RHOAI-managed MLflow uses CNPG Postgres and S3 artifact storage. Session 06 established the backend; Session 08b moved placeholder S3 Secrets into Vault. Those historical sessions did not deploy SeaweedFS.
+
+The 2026-09-29 migration target references the shared `infrastructure/gitops/components/seaweedfs/` Kustomize base and patches its credential Secret name and `200Gi` PVC capacity. It runs one replica of `docker.io/chrislusf/seaweedfs:4.48` in `mini` mode. The S3-only Service is `http://seaweedfs.mlflow.svc.cluster.local:8333`; `mlflow-s3-credentials` and `s3://mlflow-artifacts/` stay unchanged. DSPA shares this endpoint and uses `vla-training/s3-credentials` with `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`. Bucket Jobs use `public.ecr.aws/aws-cli/aws-cli:2.34.0`.
+
+The isolated S3 canary passed, including access from `vla-training`; see [validation evidence](../../../../../tools/object-storage/VALIDATION.md). Existing cluster stores are upstream-managed and shared; follow the [controlled copy/cutover guide](../../../../../tools/object-storage/README.md) before migrating live data or consumers.
+
+Bucket-init Jobs are Argo CD `Sync` hooks in wave `1`, with bounded retries and a 600-second timeout. This creates buckets during Sync, before dependent applications must become healthy; deferring creation until after health would deadlock a new DSPA waiting for its missing bucket.
 
 ## Accepted Phase-0 concessions
 

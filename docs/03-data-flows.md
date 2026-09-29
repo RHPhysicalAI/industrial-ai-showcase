@@ -71,7 +71,7 @@ The only scripted inputs are the two presenter buttons. Everything downstream â€
 
 Defined in `workloads/fleet-manager/schemas/` as Avro. Core event types:
 
-- `CameraFrameEvent`: `{camera_id, timestamp, aisle_id, jpeg_bytes_ref}` (payload points at MinIO or inline)
+- `CameraFrameEvent`: the current publisher embeds JPEG bytes as base64 in `frame_b64`, with `camera_id`, `aisle_id`, `state`, and `emitted_at`; the SeaweedFS camera library is a separate S3 staging copy, not a per-frame read dependency.
 - `SafetyAlert`: `{alert_id, timestamp, aisle_id, camera_id, detection_label, confidence, source_model}`
 - `Mission`: `{mission_id, target_robot_id, mission_type, parameters, deadline}` â€” `target_robot_id` is the forklift id (`fl-07` in Phase 1)
 - `TelemetryEvent`: `{robot_id, timestamp, pose, joint_state, battery, current_mission_id, status}`

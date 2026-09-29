@@ -1,5 +1,7 @@
 # Phase 2 additions
 
+> Storage terminology updated 2026-09-29: SeaweedFS references describe the current migration target, not what historical Phase 2 sessions deployed. CPU-only S3 validation in `showcase-storage-canary` passed; live data/consumer cutover remains pending; see the [storage guide](tools/object-storage/README.md).
+
 This document describes every capability added in Phase 2 of the Physical AI Showcase, what each piece does for the showcase story, and where the gaps are.
 
 All Phase 2 work is currently uncommitted — ~35 modified and new files across the working tree.
@@ -123,15 +125,15 @@ All Phase 2 work is currently uncommitted — ~35 modified and new files across 
 
 **Files added**: `infrastructure/gitops/apps/platform/dspa/` (5 manifests)
 
-**What it is**: A `DataSciencePipelinesApplication` CR in the `vla-training` namespace, backed by an auto-deployed MariaDB for pipeline metadata and external MinIO (shared with the MLflow stack in `mlflow` namespace) for artifact storage. Includes VaultStaticSecrets for MinIO credentials and HuggingFace token, and a bucket-init PostSync Job that creates the `vla-training` S3 bucket.
+**What it is**: A `DataSciencePipelinesApplication` CR in the `vla-training` namespace, backed by an auto-deployed MariaDB for pipeline metadata and shared S3 storage in `mlflow` (SeaweedFS is the migration target) for artifacts. VaultStaticSecrets project S3 credentials into `vla-training/s3-credentials` (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) and supply the HuggingFace token. The bucket-init Job uses `public.ecr.aws/aws-cli/aws-cli:2.34.0` as an Argo CD `Sync` hook in wave `1`, with bounded retries and a 600-second timeout. Creating the `vla-training` bucket during Sync prevents a new DSPA from waiting for a bucket whose creation is gated on application health.
 
 **Showcase value**: DSPA is the execution environment for the VLA training pipeline. It's what lets you say "this runs on RHOAI, not on someone's laptop." The Vault integration for secrets demonstrates production-grade credential management.
 
-**How it's used**: The pipeline YAML is submitted to DSPA's API server, which orchestrates the four container steps. Pipeline run metadata is stored in MariaDB; artifacts (model weights, validation reports) land in MinIO.
+**How it's used**: The pipeline YAML is submitted to DSPA's API server, which orchestrates the four container steps. Pipeline run metadata is stored in MariaDB; artifacts (model weights, validation reports) land in SeaweedFS.
 
 **Criticality**: **Required for pipeline execution**. Without it, the training pipeline has no runtime. The Lineage view in the Console works without DSPA (it uses seed data), but actually running the pipeline requires DSPA to be deployed and healthy.
 
-**Phase 1 mitigation**: New namespace (`vla-training`) with its own resources. No modifications to existing namespaces or deployments. The MinIO cross-reference (`minio.mlflow.svc.cluster.local`) is a read-only consumer of the existing MLflow MinIO — it accesses a separate bucket (`vla-training`) and doesn't affect the MLflow `mlflow` bucket. The ApplicationSet auto-discovers the new directory. **Dependency**: requires the HuggingFace token to be pre-seeded in Vault at `kv/vla-training/hf`. If that path doesn't exist in Vault, the VaultStaticSecret will fail to reconcile, but that failure is scoped to `vla-training` namespace.
+**Phase 1 mitigation**: The training namespace has its own resources but shares the storage service with MLflow. The migration endpoint is `http://seaweedfs.mlflow.svc.cluster.local:8333`; training reads and writes the `vla-training` bucket while MLflow keeps `mlflow-artifacts`. Separate buckets preserve object naming, but capacity and availability are shared, so migration requires controlled copy/cutover for both consumers. The ApplicationSet auto-discovers the directory. **Dependency**: the HuggingFace token must be pre-seeded in Vault at `kv/vla-training/hf`; if absent, that VaultStaticSecret fails to reconcile in `vla-training`.
 
 ---
 

@@ -8,7 +8,7 @@ and associated assets (textures, materials, models) to connected
 applications.
 
 For a Kubernetes engineer, the closest analogy is an object store (like
-S3 or MinIO) with real-time collaboration features (like a shared
+S3 or SeaweedFS) with real-time collaboration features (like a shared
 document server). Nucleus stores the 3D world that Isaac Sim loads,
 Omniverse renders, and connected tools modify.
 
