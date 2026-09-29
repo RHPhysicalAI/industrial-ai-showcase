@@ -6,7 +6,7 @@ metadata:
 spec:
   # Git generator: one Application per directory under apps/platform/.
   # Same pattern as the operators ApplicationSet. First content:
-  # mlflow backend (CNPG + MinIO + bucket-init + MLflow CR).
+  # mlflow backend (CNPG + SeaweedFS + bucket-init + MLflow CR).
   generators:
     - git:
         repoURL: https://github.com/RHPhysicalAI/industrial-ai-showcase.git

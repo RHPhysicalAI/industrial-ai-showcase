@@ -10,10 +10,8 @@ namespace: warehouse-data
 
 resources:
   - namespace.yaml
-  - minio-credentials.yaml
-  - minio-pvc.yaml
-  - minio-deployment.yaml
-  - minio-service.yaml
+  - vault-secrets.yaml
+  - ../../../components/seaweedfs
   - bucket-init-job.yaml
 
 configMapGenerator:

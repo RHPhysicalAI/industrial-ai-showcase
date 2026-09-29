@@ -1,0 +1,349 @@
+---
+- name: Provision the hosted-demo NVIDIA VLA VM
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    runtime_user: vla
+    runtime_uid: 1500
+    runtime_home: /var/lib/vla-serving
+    model_cache_value: "{{ cloud_model_cache | default('/var/cache/vla-models') }}"
+    source_checkout: /var/lib/vla-serving/source
+    listen_port: "{{ cloud_vla_port | default(8000) }}"
+    vla_mode_value: "{{ cloud_vla_mode | default('mock') }}"
+    container_image_value: "{{ cloud_container_image | default('localhost/openvla-server:slim') }}"
+    vla_base_flavor_value: "{{ cloud_vla_base_flavor | default('slim') }}"
+    build_image_value: "{{ cloud_build_image | default(false) | bool }}"
+    force_image_build_value: "{{ cloud_force_image_build | default(false) | bool }}"
+    install_groot_value: "{{ cloud_install_groot | default(true) | bool }}"
+    model_weights_value: "{{ cloud_model_weights | default('openvla/openvla-7b') }}"
+    groot_model_path_value: "{{ cloud_groot_model_path | default('') }}"
+    groot_embodiment_tag_value: "{{ cloud_groot_embodiment_tag | default('REAL_G1') }}"
+    groot_video_key_value: "{{ cloud_groot_video_key | default('ego_view') }}"
+    allowed_source_cidr_value: "{{ cloud_allowed_source_cidr | default('') }}"
+    git_repo_url_value: "{{ cloud_git_repo_url | default('https://github.com/RHPhysicalAI/industrial-ai-showcase.git') }}"
+    git_repo_ref_value: "{{ cloud_git_repo_ref | default('main') }}"
+    build_source_mode_value: "{{ cloud_build_source_mode | default('git') }}"
+    hf_token_value: "{{ cloud_hf_token | default('') }}"
+    install_nvidia_driver_value: "{{ cloud_install_nvidia_driver | default(true) | bool }}"
+    reboot_after_driver_value: "{{ cloud_reboot_after_driver | default(true) | bool }}"
+
+  pre_tasks:
+    - name: Require the supported Ubuntu operating system
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == 'Ubuntu'
+        fail_msg: >-
+          This profile targets Ubuntu cloud GPU hosts. Detected
+          {{ ansible_distribution }} {{ ansible_distribution_version }};
+          add an explicit OS profile before proceeding.
+
+    - name: Require an explicit restricted source CIDR
+      ansible.builtin.assert:
+        that:
+          - allowed_source_cidr_value | length > 0
+          - allowed_source_cidr_value != '0.0.0.0/0'
+          - "'<' not in allowed_source_cidr_value"
+        fail_msg: >-
+          Set VLA_ALLOWED_SOURCE_CIDR to the SNO's actual egress address/CIDR;
+          refusing to open the VLA service to the whole Internet.
+
+    - name: Require a supported build source mode
+      ansible.builtin.assert:
+        that:
+          - build_source_mode_value in ['git', 'working-tree']
+        fail_msg: >-
+          cloud_build_source_mode must be either git or working-tree.
+
+  tasks:
+    - name: Install Ubuntu host packages
+      ansible.builtin.apt:
+        name:
+          - build-essential
+          - ca-certificates
+          - curl
+          - dkms
+          - git
+          - gnupg
+          - linux-headers-generic
+          - podman
+          - firewalld
+          - python3-firewall
+          - ubuntu-drivers-common
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Check NVIDIA driver visibility before installation
+      ansible.builtin.command: nvidia-smi --query-gpu=name --format=csv,noheader
+      register: nvidia_smi_before
+      check_mode: false
+      changed_when: false
+      failed_when: false
+
+    - name: Install the recommended Ubuntu server NVIDIA driver
+      ansible.builtin.command: ubuntu-drivers install --gpgpu
+      register: nvidia_driver_install
+      when:
+        - install_nvidia_driver_value
+        - nvidia_smi_before.rc != 0
+
+    - name: Reboot after NVIDIA driver installation
+      ansible.builtin.reboot:
+        msg: Rebooting to load the NVIDIA kernel driver before configuring containers.
+        reboot_timeout: 900
+        connect_timeout: 10
+        post_reboot_delay: 10
+      when:
+        - install_nvidia_driver_value
+        - nvidia_smi_before.rc != 0
+        - nvidia_driver_install is changed
+        - reboot_after_driver_value
+
+    - name: Detect the installed NVIDIA server driver branch
+      ansible.builtin.shell:
+        cmd: >-
+          dpkg-query -W -f='${Package}\n' |
+          sed -n 's/^nvidia-headless-no-dkms-\([0-9][0-9]*\)-server-open$/\1/p' |
+          head -1
+      register: nvidia_driver_branch
+      check_mode: false
+      changed_when: false
+      when: nvidia_smi_before.rc != 0
+
+    - name: Require a detected NVIDIA server driver branch
+      ansible.builtin.assert:
+        that:
+          - nvidia_driver_branch.stdout | trim | length > 0
+        fail_msg: >-
+          NVIDIA kernel modules are present, but the installed server driver
+          branch could not be detected. Inspect the Ubuntu NVIDIA packages.
+      when: nvidia_smi_before.rc != 0
+
+    - name: Install the matching NVIDIA userspace utilities
+      ansible.builtin.apt:
+        name: "nvidia-utils-{{ nvidia_driver_branch.stdout | trim }}-server"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      when: nvidia_smi_before.rc != 0
+
+    - name: Check NVIDIA driver visibility after installation
+      ansible.builtin.command: nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
+      register: nvidia_smi
+      check_mode: false
+      changed_when: false
+      failed_when: false
+
+    - name: Require a working NVIDIA driver
+      ansible.builtin.assert:
+        that:
+          - nvidia_smi.rc == 0
+          - nvidia_smi.stdout | length > 0
+        fail_msg: >-
+          The Tesla T4 is visible on PCI, but nvidia-smi is not ready. If the
+          driver was just installed, reboot the VM and rerun this playbook.
+          Otherwise inspect the Ubuntu NVIDIA driver installation.
+
+    - name: Ensure firewalld is running
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+        enabled: true
+
+    - name: Create the NVIDIA repository keyring directory
+      ansible.builtin.file:
+        path: /usr/share/keyrings
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Download the NVIDIA Container Toolkit repository key
+      ansible.builtin.get_url:
+        url: https://nvidia.github.io/libnvidia-container/gpgkey
+        dest: /tmp/nvidia-container-toolkit.gpg
+        mode: "0644"
+
+    - name: Install the NVIDIA Container Toolkit repository keyring
+      ansible.builtin.command:
+        cmd: >-
+          gpg --dearmor --yes
+          --output /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+          /tmp/nvidia-container-toolkit.gpg
+      args:
+        creates: /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+
+    - name: Download the NVIDIA Container Toolkit apt source
+      ansible.builtin.get_url:
+        url: https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list
+        dest: /tmp/nvidia-container-toolkit.list
+        mode: "0644"
+
+    - name: Add signed-by to the NVIDIA Container Toolkit apt source
+      ansible.builtin.replace:
+        path: /tmp/nvidia-container-toolkit.list
+        regexp: '^deb https://'
+        replace: 'deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://'
+
+    - name: Detect the Debian package architecture
+      ansible.builtin.command: dpkg --print-architecture
+      register: apt_architecture
+      check_mode: false
+      changed_when: false
+
+    - name: Pin the NVIDIA Container Toolkit source to the package architecture
+      ansible.builtin.replace:
+        path: /tmp/nvidia-container-toolkit.list
+        regexp: '\$\(ARCH\)'
+        replace: "{{ apt_architecture.stdout | trim }}"
+
+    - name: Install the NVIDIA Container Toolkit apt source
+      ansible.builtin.copy:
+        src: /tmp/nvidia-container-toolkit.list
+        dest: /etc/apt/sources.list.d/nvidia-container-toolkit.list
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Install the NVIDIA Container Toolkit
+      ansible.builtin.apt:
+        name: nvidia-container-toolkit
+        state: present
+        update_cache: true
+        cache_valid_time: 0
+
+    - name: Create the NVIDIA CDI directory
+      ansible.builtin.file:
+        path: /etc/cdi
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Generate the NVIDIA CDI specification for Podman
+      ansible.builtin.command:
+        cmd: nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+      register: nvidia_cdi_generate
+      changed_when: true
+
+    - name: Check Podman NVIDIA CDI configuration
+      ansible.builtin.command: nvidia-ctk cdi list
+      register: nvidia_cdi
+      check_mode: false
+      changed_when: false
+      failed_when: false
+
+    - name: Require NVIDIA CDI support
+      ansible.builtin.assert:
+        that:
+          - nvidia_cdi.rc == 0
+          - "'nvidia.com/gpu' in nvidia_cdi.stdout"
+        fail_msg: >-
+          NVIDIA CDI is unavailable after installing NVIDIA Container Toolkit;
+          ensure nvidia.com/gpu is visible to Podman.
+
+    - name: Create runtime user
+      ansible.builtin.user:
+        name: "{{ runtime_user }}"
+        uid: "{{ runtime_uid }}"
+        home: "{{ runtime_home }}"
+        shell: /sbin/nologin
+        system: true
+        create_home: true
+        groups:
+          - video
+          - render
+        append: true
+
+    - name: Create runtime directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ runtime_user }}"
+        group: "{{ runtime_user }}"
+        mode: "0750"
+      loop:
+        - "{{ model_cache_value }}"
+        - /etc/vla-serving
+        - /etc/containers/systemd
+
+    - name: Checkout the repository when building locally
+      ansible.builtin.git:
+        repo: "{{ git_repo_url_value }}"
+        version: "{{ git_repo_ref_value }}"
+        dest: "{{ source_checkout }}"
+        force: true
+      when:
+        - build_image_value
+        - build_source_mode_value == 'git'
+
+    - name: Check whether the configured container image exists
+      ansible.builtin.command: podman image exists "{{ container_image_value }}"
+      register: configured_image
+      changed_when: false
+      failed_when: false
+
+    - name: Build the VLA container image when it is absent
+      ansible.builtin.command:
+        cmd: >-
+          podman build
+          --network=host
+          --build-arg BASE_FLAVOR={{ vla_base_flavor_value }}
+          --build-arg INSTALL_GROOT={{ install_groot_value | ternary('true', 'false') }}
+          --file workloads/vla-serving-host/container/Containerfile
+          --tag {{ container_image_value }}
+          .
+        chdir: "{{ source_checkout }}"
+      when:
+        - build_image_value
+        - configured_image.rc != 0 or force_image_build_value
+      notify: restart-vla
+
+    - name: Verify the configured container image exists
+      ansible.builtin.command: podman image exists "{{ container_image_value }}"
+      changed_when: false
+
+    - name: Render the VLA runtime environment
+      ansible.builtin.template:
+        src: openvla.env.j2
+        dest: /etc/vla-serving/openvla.env
+        owner: root
+        group: root
+        mode: "0600"
+      notify: restart-vla
+
+    - name: Render the NVIDIA Quadlet unit
+      ansible.builtin.template:
+        src: openvla-server.container.j2
+        dest: /etc/containers/systemd/openvla-server.container
+        owner: root
+        group: root
+        mode: "0644"
+      notify: restart-vla
+
+    - name: Permit the restricted SNO egress CIDR to reach VLA
+      ansible.posix.firewalld:
+        rich_rule: "rule family=ipv4 source address={{ allowed_source_cidr_value }} port port={{ listen_port }} protocol=tcp accept"
+        permanent: true
+        immediate: true
+        state: enabled
+
+    - name: Reload systemd after Quadlet changes
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Enable and start the VLA service
+      ansible.builtin.systemd:
+        name: openvla-server.service
+        enabled: true
+        state: started
+
+  handlers:
+    - name: restart-vla
+      ansible.builtin.systemd:
+        name: openvla-server.service
+        state: restarted
+        daemon_reload: true

@@ -2,6 +2,8 @@
 
 This project was developed with assistance from AI tools.
 
+> Storage update (2026-09-29): SeaweedFS passed [isolated S3 validation](../tools/object-storage/VALIDATION.md) in `showcase-storage-canary`, including access from `vla-training`. Live data/consumer cutover remains pending. This document retains the earlier serving-mode design, not evidence of a full serving deployment on SeaweedFS. Use the [object-storage copy/cutover guide](../tools/object-storage/README.md) and [native GR00T canary](../tools/vla-training/kserve-canary.md) for current validation. Paths under `s3://mlflow/models/...` below are historical examples; use the artifact URI actually recorded by your training run, normally under `s3://vla-training/.../model`.
+
 ## Overview
 
 The VLA (Vision-Language-Action) models used by factory InferenceServices can operate in two modes:
@@ -38,11 +40,11 @@ VLA Training Pipeline
 MLflow Model Registry
   ↓ (registers model metadata)
   ↓
-MinIO S3 Storage
+SeaweedFS S3 Storage
   ↓ (stores model weights at s3://mlflow/models/vla-warehouse/vX.Y)
   ↓
 KServe InferenceService
-  ↓ (downloads from MinIO, serves via vLLM)
+  ↓ (downloads from S3, serves via the configured runtime)
   ↓
 Factory edge locations consume model
 ```
@@ -53,15 +55,24 @@ To use real GR00T VLA models from the training pipeline:
 
 ### 1. Ensure Training Pipeline Has Run
 
-The training pipeline must have successfully uploaded at least one model version to MLflow/MinIO:
+The training pipeline must have uploaded at least one model version to S3 and recorded it in MLflow. After a validated cutover, inspect the target using standard AWS CLI tooling. In one terminal, forward the ClusterIP endpoint:
 
 ```bash
-# Check if models exist in MinIO
-oc exec -n mlflow minio-<pod-name> -- mc ls local/mlflow/models/vla-warehouse/
-
-# Check MLflow model registry
-oc exec -n mlflow mlflow-db-1 -- psql -d mlflow -c "SELECT name, version FROM model_versions WHERE name='vla-warehouse';"
+oc port-forward -n mlflow svc/seaweedfs 8333:8333
 ```
+
+In another terminal, list the training bucket with credentials scoped to a subshell:
+
+```bash
+(
+  export AWS_ACCESS_KEY_ID="$(oc get secret -n vla-training s3-credentials -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)"
+  export AWS_SECRET_ACCESS_KEY="$(oc get secret -n vla-training s3-credentials -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)"
+  export AWS_DEFAULT_REGION=us-east-1 AWS_EC2_METADATA_DISABLED=true AWS_PAGER=""
+  aws --endpoint-url http://127.0.0.1:8333 s3 ls s3://vla-training/ --recursive
+)
+```
+
+Keep shell tracing disabled and confirm the corresponding version and artifact URI in MLflow. In-cluster helper Jobs use `public.ecr.aws/aws-cli/aws-cli:2.34.0` with Secret references; do not assume a storage-server container includes a client CLI.
 
 ### 2. Update InferenceService storageUri
 
@@ -96,7 +107,7 @@ git push
 ```
 
 The InferenceService will:
-- Download model weights from MinIO (s3://mlflow/...)
+- Download model weights from the configured SeaweedFS S3 artifact URI
 - Load into vLLM engine (~2-5 minutes for model loading)
 - Become Ready and serve inference requests
 
@@ -122,12 +133,12 @@ When an agent proposes promoting a factory to a new model version:
 1. Agent generates a PR updating the `storageUri` in the InferenceService manifest
 2. Operator approves the PR (or rejects it)
 3. PR auto-merges and Argo CD syncs the change
-4. KServe downloads the NEW model version from the EXISTING path in MLflow/MinIO
+4. KServe downloads the NEW model version from the EXISTING S3 path recorded in MLflow
 5. Factory switches to the new model version
 
-**The model must already exist in MLflow/MinIO** before promotion. Models are uploaded by:
+**The model must already exist in S3 and be recorded in MLflow** before promotion. Models are uploaded by:
 - The VLA training pipeline (workloads/vla-training)
-- Manual upload via `mc` or `mlflow` CLI (for testing)
+- Manual upload using `aws --endpoint-url <s3-endpoint> s3 cp --recursive <model-directory> s3://<bucket>/<version>/model/`, followed by the required MLflow registration (for testing)
 
 ## Troubleshooting
 
@@ -170,11 +181,11 @@ spec:
     serviceAccountName: vla-warehouse-sa
 ```
 
-### Model download fails from MinIO
+### Model download fails from SeaweedFS
 
 **Symptom:** `Init:Error`, logs show "Failed to fetch model. No model found in models/vla-warehouse/vX.Y"
 
-**Cause:** Model doesn't exist at the specified path in MinIO
+**Cause:** Model doesn't exist at the specified S3 path, or the data has not been copied and verified on the target SeaweedFS store
 
 **Fix:**
 - Run the training pipeline to upload a model, OR
@@ -184,8 +195,8 @@ spec:
 
 | Aspect | Showcase Mode | Production Mode |
 |--------|---------------|-----------------|
-| **Model Source** | Hugging Face (`hf://meta-llama/Llama-3.2-3B-Instruct`) | MLflow/MinIO (`s3://mlflow/models/vla-warehouse/vX.Y`) |
-| **Startup Time** | ~2-5 minutes (HF download + vLLM load) | ~2-5 minutes (MinIO download + vLLM load) |
+| **Model Source** | Hugging Face (`hf://meta-llama/Llama-3.2-3B-Instruct`) | MLflow-recorded SeaweedFS S3 artifact URI |
+| **Startup Time** | ~2-5 minutes (HF download + vLLM load) | Depends on S3 artifact size and serving runtime |
 | **Prerequisites** | Internet access to Hugging Face | Training pipeline has run, models in MLflow |
 | **Use Case** | Sales demos, partner showcases, quick deployments | Real production deployments, customer sites |
 | **Model Quality** | Generic Llama 3.2 (not task-specific) | Fine-tuned GR00T VLA (warehouse-specific) |

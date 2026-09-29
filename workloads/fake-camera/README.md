@@ -6,7 +6,7 @@ Companion-side "on-site" warehouse camera. Per ADR-027 step 7.
 
 Publishes the currently-selected JPEG frame to `warehouse.cameras.aisle3` at 1 Hz (configurable). HTTP `POST /state {"state": "<name>"}` switches which frame is emitted — that's the mechanism behind the Console's **Drop Pallet** button in the demo narrative.
 
-The Phase-1 frame library is baked into the container image at `/frames/`. JPEG sources live under `workloads/obstruction-detector/test-images/` (same pair the Cosmos Reason 2-8B trial was validated with, also present in the hub MinIO `warehouse-camera-library` for operator browsing).
+The Phase-1 frame library is baked into the container image at `/frames/`. JPEG sources live under `workloads/obstruction-detector/test-images/` (same pair the Cosmos Reason 2-8B trial was validated with). The matching hub `warehouse-camera-library` S3 bucket targets SeaweedFS in the 2026-09-29 migration for operator browsing and staging; this is not evidence of a completed cutover. Runtime frame publication reads the baked-in files.
 
 ## Why not stream from an actual camera
 
@@ -42,6 +42,8 @@ The Session-18 demo story is "on-site edge captures real camera frames, hub-side
 - `GET /readyz` — returns `ready` only while the publish loop is running
 - `GET /state` — current state name
 - `POST /state {"state":"obstructed"}` — switches emitted frame; 400 if unknown state
+
+The command consumer uses a fresh per-process group and starts at the live tail, so restarting the service does not replay retained historical camera commands.
 
 ## Deploy
 

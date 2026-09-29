@@ -8,6 +8,7 @@
 
 - **Consumes**: Kafka topic `fleet.events` (camera/scene events from `camera-adapter`), Kafka topic `fleet.telemetry` (robot telemetry echoed back from `mission-dispatcher`). Optional in Phase 2+: `mes.orders` (brownfield beat).
 - **Produces**: Kafka topic `fleet.missions` (routed to the companion cluster for execution).
+- **Reset behavior**: `demo.reset` on `fleet.events` clears active missions and obstruction state held by the in-memory demo planner.
 - **HTTP**: `GET /healthz`, `GET /metrics` (Prometheus), `POST /internal/decisions/simulate` (dev/demo only).
 - **State**: PostgreSQL via CloudNativePG — mission history, decision audit log, policy-version pins.
 

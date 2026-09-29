@@ -13,8 +13,23 @@ A pod-native KServe custom-predictor path returns in Phase 3 when the Jetson Tho
 ## Interfaces
 
 - **HTTP server** on the companion Fedora host, bound to a bridge network address reachable from the SNO CNI range.
-  - `POST /act` — input: `{image: base64-encoded RGB, instruction: str}`, output: `{action: [dx, dy, dz, droll, dpitch, dyaw, dgrasp], model_version: str, trace_id: str}`.
+  - `POST /act` — input: `{image: base64-encoded RGB, instruction: str}`, output: `{action: list[float], model_version: str, trace_id: str}`.
   - `GET /healthz`, `GET /metrics`.
+
+### Action-space boundary
+
+The legacy Mission Dispatcher contract exposes seven numeric values, historically
+described as `dx, dy, dz, droll, dpitch, dyaw, dgrasp`. That shape is still
+preserved for compatibility.
+
+The trained Teleop-G1 GR00T policy does not natively emit that contract. It
+emits a 16-step action chunk with seven named modalities totaling 43 joint
+values: `left_leg`, `right_leg`, `waist`, `left_arm`, `left_hand`, `right_arm`,
+and `right_hand`. The server now validates those keys and dimensions before
+returning the legacy-shaped response, but the current seven-value response is
+only a compatibility projection. It is not a validated 43-DOF-to-Cartesian
+robot-control mapping and must not be promoted as live robot control until the
+downstream mapping is implemented and tested.
 
 ## Primary model
 

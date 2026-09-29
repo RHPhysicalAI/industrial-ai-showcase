@@ -60,7 +60,8 @@ class S3Config:
             endpoint_url=self.endpoint,
             aws_access_key_id=self.access_key,
             aws_secret_access_key=self.secret_key,
-            config=BotoConfig(s3={"addressing_style": "path"}),
+            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+            config=BotoConfig(signature_version="s3v4", s3={"addressing_style": "path"}),
         )
 
 
@@ -89,7 +90,10 @@ class VlaTrainingConfig:
     dataset_repo: str = field(
         default_factory=lambda: os.environ.get("VLA_DATASET_REPO", "nvidia/PhysicalAI-Robotics-GR00T-Teleop-G1")
     )
-    embodiment_tag: str = field(default_factory=lambda: os.environ.get("VLA_EMBODIMENT_TAG", "UNITREE_G1"))
+    # The bundled dataset and modality definition are the Teleop-G1 schema,
+    # which is registered by GR00T as NEW_EMBODIMENT.  Keep the default in
+    # configuration aligned with the model that the pipeline actually trains.
+    embodiment_tag: str = field(default_factory=lambda: os.environ.get("VLA_EMBODIMENT_TAG", "NEW_EMBODIMENT"))
     num_gpus: int = field(default_factory=lambda: _int_env("VLA_NUM_GPUS", 1))
     max_steps: int = field(default_factory=lambda: _int_env("VLA_MAX_STEPS", 2000))
     global_batch_size: int = field(default_factory=lambda: _int_env("VLA_GLOBAL_BATCH_SIZE", 64))

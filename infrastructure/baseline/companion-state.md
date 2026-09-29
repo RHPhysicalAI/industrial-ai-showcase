@@ -228,7 +228,7 @@ Registered into hub ACM MCO in Session 14:
 
 - `metrics-collector` + `uwl-metrics-collector` remote_write platform + workload metrics to hub Thanos Receiver via cluster-proxy.
 - 95 `up` series from companion visible in hub Thanos. Grafana on hub dashboards render per-cluster views with a `cluster` selector.
-- Long-term retention: `thanos` bucket on the hub's obs-storage MinIO. 30d raw / 60d 5m / 90d 1h per MCO CR.
+- Long-term retention: `thanos` bucket on the hub's `obs-storage` S3 store. 30d raw / 60d 5m / 90d 1h per MCO CR. SeaweedFS is the 2026-09-29 migration target, not a deployment verified by this historical capture; see [ADR-021](../../docs/07-decisions.md#adr-021-seaweedfs-for-in-cluster-s3-odf-not-installed-here).
 
 ---
 

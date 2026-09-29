@@ -1,0 +1,24 @@
+[Unit]
+Description=Hosted-demo NVIDIA VLA serving runtime
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+ContainerName=openvla-server
+Image={{ container_image_value }}
+Network=host
+EnvironmentFile=/etc/vla-serving/openvla.env
+AddDevice=nvidia.com/gpu=all
+Environment=NVIDIA_VISIBLE_DEVICES=all
+Environment=NVIDIA_DRIVER_CAPABILITIES=compute,utility
+Volume={{ model_cache_value }}:/var/cache/vla-models:Z
+User={{ runtime_uid }}
+Group={{ runtime_uid }}
+
+[Service]
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target default.target

@@ -1,5 +1,7 @@
 # Phase 0 Kickoff Plan — Session Backlog
 
+> Storage terminology updated 2026-09-29: historical sessions below established the S3 services. SeaweedFS is the current migration target in ADR-021, not a claim about what those sessions deployed. Current setup and validation are in the [object-storage migration guide](../../tools/object-storage/README.md).
+
 This plan orders the remaining Phase 0 work (post–Session 01) into concrete Claude Code sessions. It is the backlog Session 02 onward works through in order, with explicit parallel tracks where the work is genuinely independent.
 
 - **Source of truth for Phase 0 scope**: `docs/04-phased-plan.md` (Phase 0 section).
@@ -73,16 +75,16 @@ Every session is: **one feature branch, one PR, DCO-signed, `Co-Authored-by: Cla
 
 ### Session 03 — Platform operators wave 1
 
-- **Scope**: Install the "platform plumbing" operators that every application needs. Reshape per Session 03 cluster recon (2026-04-17): ODF dropped in favor of MinIO (ADR-021); OpenTelemetry+Tempo+Grafana individual operators replaced by Cluster Observability Operator (Red Hat-supported, subsumes the individual pieces); Grafana decision deferred to Session 07.
+- **Scope**: Install the "platform plumbing" operators that every application needs. Reshape per Session 03 cluster recon (2026-04-17): ODF dropped in favor of a lightweight S3 service (ADR-021, now updated for SeaweedFS); OpenTelemetry+Tempo+Grafana individual operators replaced by Cluster Observability Operator (Red Hat-supported, subsumes the individual pieces); Grafana decision deferred to Session 07.
 - **Operators landed**:
   - `cloud-native-postgresql` (certified, channel `stable-v1.29`) — Postgres for MLflow, Fleet Manager state, LangGraph state.
-  - ~~`minio-object-store-operator`~~ — **removed in Session 06b** (requires commercial license). Replaced by community MinIO deployed as plain manifests alongside each consumer per ADR-021.
+  - The original commercial object-store operator was **removed in Session 06b**. S3 storage uses plain manifests; the current SeaweedFS replacement follows ADR-021 and requires no storage operator.
   - `cluster-logging` (redhat, channel `stable-6.5`) — log routing via `ClusterLogForwarder`.
   - `loki-operator` (redhat, channel `stable-6.5`) — log storage via `LokiStack`.
   - `cluster-observability-operator` (redhat, channel `stable`) — Prometheus / OTel / Tempo in one operator.
 - **Deliverables**:
   - One Application per operator under `infrastructure/gitops/apps/operators/<name>/` (namespace + OperatorGroup + Subscription). Picked up automatically by the `operators` ApplicationSet.
-  - ADR-021 (MinIO on hub; no ODF).
+  - ADR-021 (in-cluster S3, now SeaweedFS on hub; no ODF).
 - **Depends on**: Session 02.
 - **OSD vs companion**: hub.
 - **GPU workload?**: No.
@@ -122,17 +124,17 @@ Every session is: **one feature branch, one PR, DCO-signed, `Co-Authored-by: Cla
   - `tests/smoke/gpu/{l40s,l4}.yaml` — plain Jobs (`oc apply -f` on demand). L40S runs immediately. L4 nodes now present (user self-provisioned 2× `g6.2xlarge` during the session); both classes smoke-testable.
   - DSC drift re-check in `infrastructure/baseline/osd-hub-state.md` — no drift from Session 01.
   - New `platform` ApplicationSet layer (`clusters/hub/appsets/platform.yaml` + `apps/platform/*` generator).
-  - `apps/platform/mlflow/` backend: CNPG Cluster + community MinIO (PVC + Deployment + Service on `quay.io/minio/minio`) + bucket-init Job (`mc mb mlflow-artifacts`) + MLflow CR wiring `backendStoreUriFrom` → CNPG Secret, `artifactsDestination: s3://mlflow-artifacts/`, `envFrom: mlflow-s3-credentials`.
+  - `apps/platform/mlflow/` backend: CNPG Cluster + S3 storage + bucket-init Job + MLflow CR wiring `backendStoreUriFrom` → CNPG Secret, `artifactsDestination: s3://mlflow-artifacts/`, `envFrom: mlflow-s3-credentials`. Current migration target: single-replica `docker.io/chrislusf/seaweedfs:4.48` `mini`, `200Gi`, Service `seaweedfs:8333`; bucket initialization uses `aws s3api head-bucket` / `create-bucket` from `public.ecr.aws/aws-cli/aws-cli:2.34.0` as a `Sync` hook in wave `1`, with bounded retries and a 600-second timeout.
   - Cleanup pre-apply: `oc delete mlflow/mlflow` + `oc delete namespace ai-showcase-mlops` (residue from abandoned three-chart Helm release).
 - **Security shortcut**: placeholder credentials in Git. Session 08 swaps to Vault-sourced ExternalSecrets.
-- **Depends on**: Sessions 03 (CNPG, MinIO operators) + 04b (Argo CD cluster-admin RBAC).
+- **Depends on**: Sessions 03 (CNPG and storage prerequisites) + 04b (Argo CD cluster-admin RBAC).
 - **OSD vs companion**: hub.
 - **Estimated sessions**: 1 (completed as one PR).
 
 ### Session 07 — Observability baseline
 
 - **Landed** (under `infrastructure/gitops/apps/observability/`, new `observability` ApplicationSet):
-  - `storage/` — dedicated community MinIO in `obs-storage` namespace, backs Loki.
+  - `storage/` — dedicated S3 storage in `obs-storage` namespace, backs Loki. Current target: shared SeaweedFS `mini` base, existing `100Gi` capacity retained, S3-only Service `seaweedfs:8333`, credentials in `obs-s3-credentials`. Isolated S3 validation passed in `showcase-storage-canary`; live data/consumer cutover remains pending.
   - `loki/` — `LokiStack` (`1x.demo`, S3-backed), Logging 6.x `ClusterLogForwarder` with application+infrastructure pipelines, collector SA + required ClusterRoleBindings.
   - `ui-plugins/` — Logging + Monitoring UIPlugins (CoO-provided; Red Hat-supported path; no standalone Grafana needed for Phase 0 per D3).
   - `rules/` — `GpuIdleLongRunning` PrometheusRule (powers the 30m-idle signal for GPU scale-down); `GpuClassMismatchPlaceholder` stub for the ADR-018 alert that unlocks once Session 14 Thanos federation exposes kube-state-metrics to UWM.
@@ -152,7 +154,7 @@ Every session is: **one feature branch, one PR, DCO-signed, `Co-Authored-by: Cla
   - ADR-022 (CoO UIPlugin over standalone Grafana, retrospective from Session 07) and ADR-023 (Vault + VSO).
 - **Sigstore deferred out of Phase 0**: The `policy-controller-operator` v1.0.0 from redhat-operators ships CRDs whose conversion-webhook `clientConfig` references a `webhook` service the operator never creates, plus a cert SAN mismatch. OCP 4.21 **already has** Sigstore admission via the platform `config.openshift.io/v1 ClusterImagePolicy` API (the preloaded `openshift` CIP enforces OCP release signatures through it) — a completely separate stack from the `policy.sigstore.dev/v1beta1` CRDs the operator would add. Platform CIPs have **no warn mode** — they're enforce-only, so shipping one scoped to our registry without real signing material would block Phase 1 image pulls the instant Phase 1 began. Correct move: **introduce `config.openshift.io/v1 ClusterImagePolicy` alongside the first signed image in Phase 1**, with keys sourced from Vault (now available post-Session-08b).
 - **Scope-split decision**: the Phase-0-shortcut cleanup (placeholder Secrets → VaultStaticSecrets, MLflow CA trust fix) moves to Session 08b because Vault requires a manual init/unseal step that isn't automatable by an ApplicationSet sync. Session 08 lands the infrastructure; 08b runs after the user initializes Vault.
-- **Session 08c (doc-only)**: After 08b migrated the S3/MinIO/Loki Secrets to Vault, two MLflow-specific shortcuts remained — `redhat-ods-applications/mlflow-db-app` is a manual cross-namespace mirror of a CNPG-generated Secret, and the Postgres URI carries `?sslmode=disable` to skip verification of CNPG's self-signed CA. Both are accepted as Phase-0 concessions (intra-cluster traffic is mesh-mTLS-protected) and documented in `infrastructure/gitops/apps/platform/mlflow/README.md`. Full fix (CNPG `managed.roles` + CA-bundle ConfigMap + `sslmode=verify-full`) lands in Phase 1+ alongside the first workload that genuinely demands end-to-end TLS.
+- **Session 08c (doc-only)**: After 08b migrated the object-store and Loki Secrets to Vault, two MLflow-specific shortcuts remained — `redhat-ods-applications/mlflow-db-app` is a manual cross-namespace mirror of a CNPG-generated Secret, and the Postgres URI carries `?sslmode=disable` to skip verification of CNPG's self-signed CA. Both are accepted as Phase-0 concessions (intra-cluster traffic is mesh-mTLS-protected) and documented in `infrastructure/gitops/apps/platform/mlflow/README.md`. Full fix (CNPG `managed.roles` + CA-bundle ConfigMap + `sslmode=verify-full`) lands in Phase 1+ alongside the first workload that genuinely demands end-to-end TLS.
 - **Depends on**: Session 02 (GitOps), Session 04b (Argo CD cluster-admin RBAC).
 - **OSD vs companion**: hub. Companion security (STIG, FIPS, Sigstore **enforce** mode) is Session 11.
 - **GPU workload?**: No.
@@ -248,7 +250,7 @@ Every session is: **one feature branch, one PR, DCO-signed, `Co-Authored-by: Cla
 | # | Title | Depends on | Cluster | GPU class used | Est. sessions |
 |---|---|---|---|---|---|
 | 02 | GitOps bootstrap | 01 | hub | — | 1 (done) |
-| 03 | Platform operators (CNPG, MinIO, Logging, Loki, CoO) | 02 | hub | — | 1 (done) |
+| 03 | Platform operators and storage prerequisites (CNPG, S3, Logging, Loki, CoO) | 02 | hub | — | 1 (done) |
 | 04 | Service Mesh 3 control plane | 02 | hub | — | 1 (done) |
 | 05 | Orchestration operators (ACM, AMQ Streams, AAP) | 03 | hub | — | 1 (done) |
 | 06 | RHOAI DSC validation + GPU smoke tests + MLflow backend | 03 | hub | L40S + L4 | 1 (done) |

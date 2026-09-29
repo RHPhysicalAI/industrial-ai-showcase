@@ -30,6 +30,7 @@ from common_lib.kafka import JsonProducer
 from common_lib.logging import configure_logging
 from wms_stub import __version__
 from wms_stub.scenarios import get_scenario, list_scenarios
+from wms_stub.scene import build_scene_alert
 from wms_stub.settings import WmsStubSettings
 
 if TYPE_CHECKING:
@@ -195,6 +196,15 @@ async def reset_scene() -> dict[str, str]:
         obstructed=False,
         detail="manual scene reset via console",
     )
+    event = FleetEvent(
+        trace_id=trace_id,
+        event_class=EventClass.DEMO_RESET,
+        source="wms-stub",
+        location="hub",
+        confidence=1.0,
+        payload={"reason": "manual scene reset via console"},
+    )
+    producer.send("fleet.events", key="demo", value=event)
     producer.send("fleet.safety.alerts", key=settings.camera_id, value=alert)
     producer.flush(timeout=2.0)
 
@@ -361,7 +371,22 @@ async def _set_camera_state(target_state: str) -> dict[str, str]:
         state=target_state,
     )
     producer.send(settings.camera_commands_topic, key=settings.camera_id, value=cmd)
+
+    # The camera command changes the on-site image, but the digital twin and
+    # Fleet Manager consume SafetyAlert events.  Emit the deterministic demo
+    # transition here as well so the scripted button does not depend on a
+    # later VLM classification to update the twin.  Real camera frames still
+    # flow through fake-camera → obstruction-detector → the same topic.
+    alert = build_scene_alert(settings, trace_id, target_state)
+    if alert is not None:
+        producer.send(settings.alerts_topic, key=settings.camera_id, value=alert)
+
     producer.flush(timeout=2.0)
 
-    log.info("camera.command.sent", trace_id=trace_id, target=target_state)
+    log.info(
+        "camera.command.sent",
+        trace_id=trace_id,
+        target=target_state,
+        safety_alert_emitted=alert is not None,
+    )
     return {"status": "ok", "camera_state": target_state}

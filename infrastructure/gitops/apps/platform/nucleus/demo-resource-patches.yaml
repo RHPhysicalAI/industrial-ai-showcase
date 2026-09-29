@@ -1,0 +1,174 @@
+# Demo-lab profile for the single-node RWO Nucleus topology.
+#
+# The Hub worker hosting nucleus-api is shared with other demo workloads and
+# has 7.5 vCPU allocatable. Keep limits unchanged; lower requests reflect the
+# observed idle footprint and allow all Nucleus services to co-locate on the
+# same node as required by nucleus-data (ReadWriteOnce).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nucleus-api
+  namespace: omniverse-nucleus
+spec:
+  template:
+    spec:
+      containers:
+        - name: nucleus-api
+          resources:
+            requests:
+              cpu: 250m
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nucleus-auth
+  namespace: omniverse-nucleus
+spec:
+  template:
+    spec:
+      containers:
+        - name: nucleus-auth
+          resources:
+            requests:
+              cpu: 100m
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nucleus-discovery
+  namespace: omniverse-nucleus
+spec:
+  template:
+    spec:
+      containers:
+        - name: nucleus-discovery
+          resources:
+            requests:
+              cpu: 50m
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nucleus-lft
+  namespace: omniverse-nucleus
+spec:
+  template:
+    spec:
+      containers:
+        - name: nucleus-lft
+          resources:
+            requests:
+              cpu: 100m
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nucleus-lft-lb
+  namespace: omniverse-nucleus
+spec:
+  template:
+    spec:
+      containers:
+        - name: nucleus-lft-lb
+          resources:
+            requests:
+              cpu: 50m
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nucleus-log-processor
+  namespace: omniverse-nucleus
+spec:
+  template:
+    spec:
+      containers:
+        - name: nucleus-log-processor
+          resources:
+            requests:
+              cpu: 50m
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nucleus-monpx
+  namespace: omniverse-nucleus
+spec:
+  template:
+    spec:
+      containers:
+        - name: nucleus-monpx
+          resources:
+            requests:
+              cpu: 50m
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nucleus-navigator
+  namespace: omniverse-nucleus
+spec:
+  template:
+    spec:
+      containers:
+        - name: nucleus-navigator
+          resources:
+            requests:
+              cpu: 50m
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nucleus-resolver-cache
+  namespace: omniverse-nucleus
+spec:
+  template:
+    spec:
+      containers:
+        - name: nucleus-resolver-cache
+          resources:
+            requests:
+              cpu: 50m
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nucleus-search
+  namespace: omniverse-nucleus
+spec:
+  template:
+    spec:
+      containers:
+        - name: nucleus-search
+          resources:
+            requests:
+              cpu: 100m
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nucleus-tagging
+  namespace: omniverse-nucleus
+spec:
+  template:
+    spec:
+      containers:
+        - name: nucleus-tagging
+          resources:
+            requests:
+              cpu: 100m
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nucleus-thumbnails
+  namespace: omniverse-nucleus
+spec:
+  template:
+    spec:
+      containers:
+        - name: nucleus-thumbnails
+          resources:
+            requests:
+              cpu: 100m

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 
-from common_lib.events import FleetMission, FleetOpsEvent, FleetTelemetry, MissionKind, OpsEventKind
+from common_lib.events import FleetMission, FleetOpsEvent, MissionKind, OpsEventKind
 from common_lib.kafka import JsonConsumer, JsonProducer
 from common_lib.logging import configure_logging
 from mission_dispatcher import __version__
@@ -121,7 +121,7 @@ class Dispatcher:
 
     def handle_proceed(self, mission: FleetMission) -> None:
         execution = self._active.get(mission.robot_id)
-        if execution and execution.paused:
+        if execution and mission.trace_id == execution.trace_id:
             self._log.info("clearance.granting", robot_id=mission.robot_id)
             execution.grant_clearance()
 

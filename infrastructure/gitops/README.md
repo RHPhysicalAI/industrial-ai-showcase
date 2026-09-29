@@ -15,13 +15,39 @@ After step 2, every change under `infrastructure/gitops/clusters/<cluster>/` is 
 
 Step 2 requires the referenced `clusters/<cluster>/` path to exist on the `main` branch (Argo CD resolves `targetRevision: main`). On the first session that introduces a cluster's GitOps content, apply step 2 **after** the PR merges.
 
+## Repository profiles
+
+The committed base is the legacy/upstream profile and points at
+`RHPhysicalAI/industrial-ai-showcase`. The fork profile is an explicit root
+Application; it keeps the live fork deployment on `rhkp` without changing the
+upstream defaults.
+
+For the upstream/legacy deployment, apply:
+
+```bash
+oc apply -f infrastructure/gitops/bootstrap/root-application.yaml
+```
+
+For the fork deployment, apply exactly one root Application instead:
+
+```bash
+oc apply -f infrastructure/gitops/bootstrap/root-application-rhkp.yaml
+```
+
+The fork root Application selects the fork repository sources and adds inline
+Kustomize patches to generated Applications. Those patches rewrite
+OpenShift BuildConfig Git sources to the fork at render time. No Jinja,
+cross-tree component, or global Kustomize setting is required by Argo CD. The
+direct hosted-SNO helper uses `GIT_REPO_URL` from its ignored `.env` for the
+same selection.
+
 ## Argo CD instance choice
 
 This reference uses the **default `openshift-gitops` Argo CD instance** the operator creates automatically. Per Red Hat's docs, that instance exists specifically for cluster-ops work (operators, OLM, cluster config) and ships with cluster-scoped permissions and OpenShift OAuth SSO wired up. Phase 0 is 100% cluster-ops.
 
 The `openshift-gitops` namespace hosts only Argo CD's own workloads and the `Application` / `ApplicationSet` / `AppProject` CRs that Argo CD reads. No user workloads land there; every workload gets its own namespace and an Application that reconciles into it.
 
-A second Argo CD instance for application-tier tenant isolation can be added later if Phase 1+ workloads demand it; the first instance would manage the second via an Application.
+A second Argo CD instance for application-tier tenant isolation can be added later if future workload tiers demand it; the first instance would manage the second via an Application.
 
 ## Directory layout
 

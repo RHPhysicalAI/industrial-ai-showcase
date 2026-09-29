@@ -51,6 +51,18 @@ class MissionPlanner:
     robots: dict[str, ActiveMission] = field(default_factory=dict)
     obstructed_aisles: set[str] = field(default_factory=set)
 
+    def reset(self, log: BoundLogger) -> None:
+        """Clear all in-memory demo state after an explicit fleet reset."""
+        cleared_robots = len(self.robots)
+        cleared_aisles = len(self.obstructed_aisles)
+        self.robots.clear()
+        self.obstructed_aisles.clear()
+        log.info(
+            "planner.reset",
+            cleared_robots=cleared_robots,
+            cleared_obstructed_aisles=cleared_aisles,
+        )
+
     def dispatch(self, mission: FleetMission, log: BoundLogger) -> None:
         """Register a new DISPATCH mission from wms-stub."""
         route = str(mission.params.get("route_aisle", "aisle-3"))
@@ -117,6 +129,14 @@ class MissionPlanner:
         """
         active = self.robots.get(robot_id)
         if active is None:
+            return None
+        if active.phase != Phase.DISPATCHED:
+            log.debug(
+                "approach_point.ignored_duplicate",
+                robot_id=robot_id,
+                aisle=aisle_id,
+                phase=active.phase,
+            )
             return None
 
         active.phase = Phase.AWAITING_CLEARANCE

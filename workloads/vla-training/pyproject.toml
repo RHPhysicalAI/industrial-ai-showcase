@@ -21,11 +21,13 @@ dev = [
 ]
 pipeline = [
     "kfp>=2.14.3,<3.0",
-    "kfp-kubernetes>=1.4.0,<2.0",
+    "kfp-kubernetes>=2.14.3,<3.0",
 ]
 deploy = [
     "huggingface-hub>=0.23.0,<1.0",
-    "model-registry>=0.3.8,<1.0",
+    # RHOAI's deployed registry currently exposes the v1alpha3 API. Keep
+    # this pinned until the cluster-side registry is upgraded to v1.
+    "model-registry==0.3.14",
 ]
 
 [tool.setuptools.packages.find]

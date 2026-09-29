@@ -1,15 +1,23 @@
 # This project was developed with assistance from AI tools.
-"""VLA model adapters — each returns a 7-DOF action vector for a given (image, instruction)."""
+"""VLA model adapters — each preserves the public 7-value action API."""
 
 from __future__ import annotations
 
 import base64
 import io
 import random
+import threading
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, ClassVar, Protocol
 
 import numpy as np
+
+from openvla_server.action_contract import (
+    TELEOP_G1_ACTION_DIMS,
+    TELEOP_G1_ACTION_KEYS,
+    legacy_7_value_compatibility_projection,
+    validate_teleop_g1_action_chunk,
+)
 
 if TYPE_CHECKING:
     from PIL.Image import Image
@@ -54,24 +62,50 @@ class OpenvlaAdapter:
             return
         # Deferred import — PyTorch + transformers are heavy and only pulled when we need them.
         import torch  # type: ignore[import-not-found]
-        from transformers import AutoModelForVision2Seq, AutoProcessor  # type: ignore[import-not-found]
+        from transformers import (  # type: ignore[import-not-found]
+            AutoModelForVision2Seq,
+            AutoProcessor,
+        )
 
         dtype = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp32": torch.float32}[self._torch_dtype]
         self._processor = AutoProcessor.from_pretrained(self._weights, trust_remote_code=True)
         self._model = AutoModelForVision2Seq.from_pretrained(
             self._weights,
+            # OpenVLA's custom model class does not implement Transformers' SDPA capability hook.
+            # Keep the legacy-compatible eager attention path explicit.
+            attn_implementation="eager",
             torch_dtype=dtype,
+            # The CUDA image uses low_cpu_mem_usage, which initializes parameters on
+            # the meta device. Let Transformers place the loaded model instead of
+            # calling .to(cuda) on meta-backed parameters afterward.
+            device_map="auto",
             low_cpu_mem_usage=True,
             trust_remote_code=True,
-        ).to(self._device)
+        )
         self._model.eval()
 
     def infer(self, image: Image, instruction: str) -> list[float]:
         self._ensure_loaded()
         assert self._processor is not None and self._model is not None
+        import torch  # type: ignore[import-not-found]
 
         prompt = f"In: What action should the robot take to {instruction}?\nOut:"
         inputs = self._processor(prompt, image).to(self._device, dtype=self._model.dtype)
+
+        # The legacy OpenVLA remote wrapper appends the special empty output token
+        # (29871) to input_ids inside predict_action(), but leaves attention_mask
+        # unchanged.  Transformers then builds a multimodal mask that is one token
+        # shorter than the generated input. Keep the original wrapper contract and
+        # extend only the matching mask before handing inputs to predict_action().
+        input_ids = inputs.get("input_ids")
+        attention_mask = inputs.get("attention_mask")
+        if input_ids is not None and attention_mask is not None:
+            needs_output_token = any(int(token) != 29871 for token in input_ids[:, -1].tolist())
+            if needs_output_token and attention_mask.shape[-1] == input_ids.shape[-1]:
+                inputs["attention_mask"] = torch.cat(
+                    [attention_mask, attention_mask.new_ones((attention_mask.shape[0], 1))], dim=-1
+                )
+
         action = self._model.predict_action(**inputs, unnorm_key=self._unnorm_key, do_sample=False)
         return list(action.tolist() if hasattr(action, "tolist") else action)
 
@@ -165,6 +199,8 @@ _G1_STATE_DIMS = {
 }
 _G1_ACTION_KEYS = list(_G1_STATE_DIMS.keys())
 
+_TELEOP_G1_STATE_DIMS = TELEOP_G1_ACTION_DIMS
+
 
 def _build_g1_state_placeholder() -> dict[str, np.ndarray]:
     """Build a numerically safe placeholder state for REAL_G1.
@@ -184,39 +220,73 @@ def _build_g1_state_placeholder() -> dict[str, np.ndarray]:
     return state
 
 
+def _build_teleop_g1_state_placeholder() -> dict[str, np.ndarray]:
+    """Build a zero state matching the Teleop-G1 43-DOF joint schema."""
+    return {
+        part: np.zeros((1, 1, dim), dtype=np.float32)
+        for part, dim in _TELEOP_G1_STATE_DIMS.items()
+    }
+
+
 class GR00TAdapter:
-    """GR00T N1.7 adapter using Gr00tPolicy for real VLA inference."""
+    """GR00T N1.7 adapter using Gr00tPolicy for real VLA inference.
 
-    _BUILTIN_TAGS = {"REAL_G1", "XDOF", "XDOF_SUBTASK", "OXE_DROID_RELATIVE_EEF_RELATIVE_JOINT"}
+    The Teleop-G1 training contract is wider than the existing robot-edge
+    HTTP contract: its state/action modality has 43 joint values, while the
+    deployed Mission Dispatcher integration consumes the established 7-value
+    response. Keep that boundary explicit until downstream action mapping is
+    validated; this adapter must not silently change the live demo contract.
+    """
 
-    def __init__(self, model_path: str, embodiment_tag: str = "REAL_G1", device: str = "cuda") -> None:
+    _BUILTIN_TAGS: ClassVar[set[str]] = {
+        "REAL_G1", "XDOF", "XDOF_SUBTASK", "OXE_DROID_RELATIVE_EEF_RELATIVE_JOINT"
+    }
+
+    def __init__(
+        self,
+        model_path: str,
+        embodiment_tag: str = "REAL_G1",
+        device: str = "cuda",
+        video_key: str = "ego_view",
+    ) -> None:
         self._model_path = model_path
         self._embodiment_tag = embodiment_tag
         self._device = device
         self._policy = None
-        self._video_key = "ego_view"
+        # Multiple mission requests can arrive while the first request is loading
+        # the checkpoint. Serialize initialization so custom embodiment
+        # registration and GR00T construction happen exactly once per process.
+        self._load_lock = threading.Lock()
+        self._video_key = video_key
+        self._video_horizon = 2
         self.model_version = f"groot-{Path(model_path).name}"
 
     def _register_custom_embodiment(self) -> None:
-        from gr00t.configs.data.embodiment_configs import register_modality_config  # type: ignore[import-not-found]
+        from gr00t.configs.data.embodiment_configs import (  # type: ignore[import-not-found]
+            register_modality_config,
+        )
         from gr00t.data.embodiment_tags import EmbodimentTag  # type: ignore[import-not-found]
         from gr00t.data.types import (  # type: ignore[import-not-found]
-            ActionConfig, ActionFormat, ActionRepresentation, ActionType, ModalityConfig,
+            ActionConfig,
+            ActionFormat,
+            ActionRepresentation,
+            ActionType,
+            ModalityConfig,
         )
 
         config = {
             "video": ModalityConfig(delta_indices=[0], modality_keys=[self._video_key]),
-            "state": ModalityConfig(delta_indices=[0], modality_keys=_G1_ACTION_KEYS),
+            "state": ModalityConfig(delta_indices=[0], modality_keys=list(TELEOP_G1_ACTION_KEYS)),
             "action": ModalityConfig(
                 delta_indices=list(range(16)),
-                modality_keys=_G1_ACTION_KEYS,
+                modality_keys=list(TELEOP_G1_ACTION_KEYS),
                 action_configs=[
                     ActionConfig(
                         rep=ActionRepresentation.RELATIVE if k in ("left_arm", "right_arm")
                         else ActionRepresentation.ABSOLUTE,
                         type=ActionType.NON_EEF, format=ActionFormat.DEFAULT,
                     )
-                    for k in _G1_ACTION_KEYS
+                    for k in TELEOP_G1_ACTION_KEYS
                 ],
             ),
             "language": ModalityConfig(delta_indices=[0], modality_keys=["annotation.human.task_description"]),
@@ -226,15 +296,19 @@ class GR00TAdapter:
     def _ensure_loaded(self) -> None:
         if self._policy is not None:
             return
-        from gr00t.policy.gr00t_policy import Gr00tPolicy  # type: ignore[import-not-found]
+        with self._load_lock:
+            if self._policy is not None:
+                return
+            from gr00t.policy.gr00t_policy import Gr00tPolicy  # type: ignore[import-not-found]
 
-        if self._embodiment_tag not in self._BUILTIN_TAGS:
-            self._register_custom_embodiment()
-        self._policy = Gr00tPolicy(
-            embodiment_tag=self._embodiment_tag,
-            model_path=self._model_path,
-            device=self._device,
-        )
+            if self._embodiment_tag not in self._BUILTIN_TAGS:
+                self._video_horizon = 1
+                self._register_custom_embodiment()
+            self._policy = Gr00tPolicy(
+                embodiment_tag=self._embodiment_tag,
+                model_path=self._model_path,
+                device=self._device,
+            )
 
     def infer(self, image: Image, instruction: str) -> list[float]:
         self._ensure_loaded()
@@ -243,16 +317,22 @@ class GR00TAdapter:
         img_arr = np.array(image, dtype=np.uint8)
         if img_arr.ndim == 2:
             img_arr = np.stack([img_arr] * 3, axis=-1)
-        # REAL_G1 uses delta_indices=[0,1] for video (2 frames) and [0] for state.
-        # Duplicate the single frame to fill the temporal horizon.
-        video_frames = np.stack([img_arr, img_arr], axis=0)  # (T=2, H, W, C)
+        # REAL_G1 uses delta_indices=[0,1]; the custom Teleop-G1 modality uses
+        # delta_indices=[0]. Duplicate only when the selected modality requires it.
+        video_frames = np.stack([img_arr] * self._video_horizon, axis=0)
         obs: dict = {
-            "video": {self._video_key: video_frames[np.newaxis, ...]},  # (B=1, T=2, H, W, C)
-            "state": _build_g1_state_placeholder(),
+            "video": {self._video_key: video_frames[np.newaxis, ...]},
+            "state": (
+                _build_teleop_g1_state_placeholder()
+                if self._embodiment_tag == "NEW_EMBODIMENT"
+                else _build_g1_state_placeholder()
+            ),
             "language": {"annotation.human.task_description": [[instruction]]},
         }
 
         action_chunk, _ = self._policy.get_action(obs)
+        if self._embodiment_tag == "NEW_EMBODIMENT":
+            validate_teleop_g1_action_chunk(action_chunk)
         action: list[float] = []
         for key in action_chunk:
             vals = action_chunk[key]
@@ -260,7 +340,7 @@ class GR00TAdapter:
                 action.extend(vals.flatten().tolist())
             elif isinstance(vals, list):
                 action.extend(vals)
-        return action[:7] if len(action) >= 7 else action
+        return legacy_7_value_compatibility_projection(action)
 
 
 def _is_onnx_dir(path: str) -> bool:
@@ -291,6 +371,7 @@ def build_adapter(
     model_cache_dir: str = "/tmp/model_cache",
     groot_model_path: str = "",
     groot_embodiment_tag: str = "NEW_EMBODIMENT",
+    groot_video_key: str = "ego_view",
 ) -> VlaAdapter:
     mode = mode.lower()
     if mode == "mock":
@@ -298,7 +379,12 @@ def build_adapter(
     if mode == "groot":
         model_path = groot_model_path or weights
         resolved = _resolve_weights(model_path, s3_endpoint=s3_endpoint, model_cache_dir=model_cache_dir)
-        return GR00TAdapter(model_path=resolved, embodiment_tag=groot_embodiment_tag, device=device)
+        return GR00TAdapter(
+            model_path=resolved,
+            embodiment_tag=groot_embodiment_tag,
+            device=device,
+            video_key=groot_video_key,
+        )
     if mode in ("openvla", "onnx"):
         resolved = _resolve_weights(weights, s3_endpoint=s3_endpoint, model_cache_dir=model_cache_dir)
         if _is_onnx_dir(resolved) or mode == "onnx":

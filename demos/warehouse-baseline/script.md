@@ -1,5 +1,7 @@
 # 5-min Warehouse Baseline demo script
 
+> Storage terminology updated 2026-09-29: SeaweedFS names the migration target in ADR-021, not a backend verified by the historical demo sessions. CPU-only S3 validation in `showcase-storage-canary` passed; live data/consumer cutover remains pending; see the [storage guide](../../tools/object-storage/README.md).
+
 **Audience**: Archetype A — "What is industrial physical AI?"
 **Length**: 5 minutes. Hard cap — this is the session that has to fit in a hallway conversation or the first 5 minutes of a longer meeting.
 **Venue**: the Showcase Console, novice mode. Single demo path, scripted, no improvised navigation.
@@ -28,7 +30,7 @@ Per `assets/README.md` and ADR-027:
 - Cameras: fake-camera service on the companion publishes AI-generated photorealistic warehouse frames to Kafka at ~1 Hz; the twin shows clean USD. That twin-vs-reality separation is intentional — real cameras show grime, twins don't.
 
 Components exercised (and only these):
-- **Hub**: Nucleus (scene assets), Isaac Sim on L40S (digital twin + MJPEG viewport), Cosmos Reason 2-8B on L40S (Qwen3-VL-derivative; 2B trial on L4 failed the quality bar, see ADR-027), obstruction-detector pod (Kafka camera consumer → Cosmos Reason → safety-alert publisher), Fleet Manager (replan-on-alert), WMS-stub (mission trigger), MinIO (camera-image library), Showcase Console.
+- **Hub**: Nucleus (scene assets), Isaac Sim on L40S (digital twin + MJPEG viewport), Cosmos Reason 2-8B on L40S (Qwen3-VL-derivative; 2B trial on L4 failed the quality bar, see ADR-027), obstruction-detector pod (Kafka camera consumer → Cosmos Reason → safety-alert publisher), Fleet Manager (replan-on-alert), WMS-stub (mission trigger), SeaweedFS (camera-image library), Showcase Console.
 - **Companion**: fake-camera service (Kafka publisher + HTTP state endpoint), Mission Dispatcher with Waypoint Planner (5 Hz pose emission), OpenVLA host-native (manipulation policy, called on pick — not for navigation).
 - **Cross-cluster**: MirrorMaker2 federation on `warehouse.cameras.*`, `warehouse.telemetry.forklifts.*`, `fleet.missions`, `fleet.safety.alerts`.
 
@@ -127,7 +129,7 @@ For the 5-min script to be runnable, Phase 1 must deliver (per `docs/04-phased-p
 2. Scene-pack overlay USD composing the above with approach-point markers, aisle signage, cameras, and docks.
 3. `warehouse-topology.yaml` as the single source of truth for coordinates.
 4. Isaac Sim 6.0 runner on hub with the MJPEG viewport server and the twin-update subscriber (consumes telemetry + alerts).
-5. AI-generated photorealistic warehouse frames (`aisle3_empty.jpg`, `aisle3_pallet.jpg`, siblings) staged on MinIO.
+5. AI-generated photorealistic warehouse frames (`aisle3_empty.jpg`, `aisle3_pallet.jpg`, siblings) staged on SeaweedFS.
 6. Fake-camera service on companion publishing to `warehouse.cameras.aisle3` with HTTP `POST /state` endpoint.
 7. Cosmos Reason 2-8B on hub L40S (served via vLLM 0.11.0 + `--reasoning-parser qwen3`).
 8. Obstruction-detector pod on hub consuming camera frames and publishing `fleet.safety.alerts`.
@@ -152,6 +154,6 @@ For the 5-min script to be runnable, Phase 1 must deliver (per `docs/04-phased-p
 ## Open items to resolve before recording the demo as an offline-fallback
 
 - **Nucleus credentials** for USD upload. Fallback: bundle USD into the Isaac Sim Kit container image.
-- **AI image set**: user produces the `aisle3_empty.jpg` / `aisle3_pallet.jpg` (and siblings) photorealistic set with SDXL/Flux/Midjourney; we wire the MinIO bucket + upload path.
+- **AI image set**: user produces the `aisle3_empty.jpg` / `aisle3_pallet.jpg` (and siblings) photorealistic set with SDXL/Flux/Midjourney; we wire the SeaweedFS bucket + upload path.
 - **Cosmos Reason 2-8B runtime** (validated on 2026-04-20): Qwen3-VL-derivative, served via `vllm/vllm-openai:v0.11.0` + `--reasoning-parser qwen3` + `--max-model-len=8192` on L40S (bfloat16, `gpu-memory-utilization=0.9`). Per-frame latency ~3-6 s. The 2B variant was trialed on L4 and missed pallet detection outright; 8B is the Phase-1 choice.
 - **Narration copy**: the template above is guidance; refine with specific wording when the pipeline is end-to-end working.

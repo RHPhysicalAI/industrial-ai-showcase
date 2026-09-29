@@ -1,5 +1,7 @@
 # OSD Hub Cluster Baseline
 
+> Storage note (2026-09-29): this captures historical cluster observations. The current S3 migration target is SeaweedFS per [ADR-021](../../docs/07-decisions.md#adr-021-seaweedfs-for-in-cluster-s3-odf-not-installed-here); it was not verified in the sessions recorded below.
+
 Captured state of the OpenShift Dedicated hub cluster. This file is living documentation — re-capture when material state changes (operator upgrades, GPU node replacement, RHOAI version bumps).
 
 - **Captured**: 2026-04-17
@@ -267,7 +269,7 @@ First concrete OSD SRE restriction encountered. ADR-017 anticipated this class o
 
 ### Finding 6 — **MLflow backend wired in Session 06**
 
-`mlflowoperator` Managed in DSC, MLflow v3.9.0 per `.status.components.mlflowoperator.releases`. Session 06 landed the backend: CNPG `Cluster/mlflow-db` in `mlflow` namespace, MinIO AIStor `ObjectStore/mlflow` with bucket `mlflow-artifacts`, and a cluster-scoped `MLflow/mlflow` CR wired to both. Prior residue (cluster-scoped `MLflow/mlflow` from the abandoned three-chart Helm release + empty `ai-showcase-mlops` namespace) was removed as a pre-apply step.
+`mlflowoperator` Managed in DSC, MLflow v3.9.0 per `.status.components.mlflowoperator.releases`. Session 06 landed the backend: CNPG `Cluster/mlflow-db` in `mlflow` namespace, the original object-store deployment with bucket `mlflow-artifacts`, and a cluster-scoped `MLflow/mlflow` CR wired to both. That historical backend is superseded by the 2026-09-29 SeaweedFS decision; this baseline is not evidence of its deployment. Prior residue (cluster-scoped `MLflow/mlflow` from the abandoned three-chart Helm release + empty `ai-showcase-mlops` namespace) was removed as a pre-apply step.
 
 The `workloads/common/python-lib/tracking/` abstraction (Phase 1 scope) reads from this MLflow instance.
 

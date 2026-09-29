@@ -283,6 +283,13 @@ function ScenarioPanel({
               ))}
             </Flex>
           </StackItem>
+          {lastResult && (
+            <StackItem>
+              <span className="showcase-event-kind" role="status" aria-live="polite">
+                {lastResult}
+              </span>
+            </StackItem>
+          )}
         </Stack>
       </CardBody>
     </Card>

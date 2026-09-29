@@ -34,4 +34,14 @@ uvicorn mission_dispatcher.main:app --reload --port 8081
 
 ## Status
 
-Phase 1 scaffolding only. Implementation blocked on (a) Kafka topics live, (b) host-VLA endpoint reachable, (c) bridge-network wiring from SNO CNI range to host bridge IP (plan item 12).
+The dispatcher calls the VLA endpoint after a route reaches its destination and
+emits the VLA lifecycle events. The response is currently recorded for
+observability; this workload does not yet send the returned action to a robot
+or simulator command interface. `VlaAction` now strictly validates the
+existing seven-value response (`dx, dy, dz, droll, dpitch, dyaw, dgrasp`) so a
+malformed result cannot silently cross that boundary.
+
+The next integration gate is to identify the target forklift/simulator command
+schema and implement a named, tested mapping. That work is intentionally
+separate from the working Mission Dispatch and Drop Pallet baseline; no
+actuation behavior is changed by the response validation.

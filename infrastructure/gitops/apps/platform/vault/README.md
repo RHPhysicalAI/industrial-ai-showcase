@@ -42,19 +42,29 @@ printf 'path "kv/data/*" {\n  capabilities = ["read"]\n}\n' | vault policy write
 vault write auth/kubernetes/role/vso-read bound_service_account_names='*' bound_service_account_namespaces='*' policies=vso-read ttl=24h
 ```
 
-## Seed the Phase-0 placeholder values
+## Seed storage credentials out of band
 
-VSO projects these KV paths into Kubernetes Secrets in the consumer namespaces. Put the values once; rotation later is a `vault kv put` with new values + a pod restart of the consumer.
+VSO projects these KV paths into Kubernetes Secrets in the consumer namespaces. Supply approved credential values through local shell variables; do not commit them or enable shell tracing. The historical Phase-0 placeholders are not valid setup instructions. Coordinate credential rotation and endpoint changes with the [storage copy/cutover procedure](../../../../../tools/object-storage/README.md); the SeaweedFS migration has not yet been validated against live consumers.
 
 ```bash
 # Still inside the pod shell from the previous step
-vault kv put kv/mlflow/s3 AWS_ACCESS_KEY_ID=mlflow-root AWS_SECRET_ACCESS_KEY=phase-0-placeholder-rotate-in-s08
-vault kv put kv/obs/s3 AWS_ACCESS_KEY_ID=obs-root AWS_SECRET_ACCESS_KEY=phase-0-placeholder-rotate-in-s08
-vault kv put kv/loki/s3 access_key_id=obs-root access_key_secret=phase-0-placeholder-rotate-in-s08 bucketnames=loki-logs endpoint=http://minio.obs-storage.svc.cluster.local:9000 region=us-east-1
-vault kv put kv/coturn/credentials password=phase-0-placeholder-rotate-before-demo
+: "${MLFLOW_S3_ACCESS_KEY_ID:?Supply the approved MLflow S3 access key}"
+: "${MLFLOW_S3_SECRET_ACCESS_KEY:?Supply the approved MLflow S3 secret}"
+: "${OBS_S3_ACCESS_KEY_ID:?Supply the approved observability S3 access key}"
+: "${OBS_S3_SECRET_ACCESS_KEY:?Supply the approved observability S3 secret}"
+: "${WAREHOUSE_S3_ACCESS_KEY_ID:?Supply the approved warehouse S3 access key}"
+: "${WAREHOUSE_S3_SECRET_ACCESS_KEY:?Supply the approved warehouse S3 secret}"
+vault kv put kv/mlflow/s3 AWS_ACCESS_KEY_ID="$MLFLOW_S3_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$MLFLOW_S3_SECRET_ACCESS_KEY"
+vault kv put kv/obs/s3 AWS_ACCESS_KEY_ID="$OBS_S3_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$OBS_S3_SECRET_ACCESS_KEY"
+vault kv put kv/loki/s3 access_key_id="$OBS_S3_ACCESS_KEY_ID" access_key_secret="$OBS_S3_SECRET_ACCESS_KEY" bucketnames=loki-logs endpoint=http://seaweedfs.obs-storage.svc.cluster.local:8333 region=us-east-1
+vault kv put kv/warehouse/s3 AWS_ACCESS_KEY_ID="$WAREHOUSE_S3_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$WAREHOUSE_S3_SECRET_ACCESS_KEY"
 ```
 
-The `VaultStaticSecret` CRs in `apps/platform/mlflow/`, `apps/observability/storage/`, and `apps/observability/loki/` reference these paths.
+The storage Secrets are `mlflow-s3-credentials` for MLflow (unchanged), `vla-training/s3-credentials` for training, `obs-storage/obs-s3-credentials`, and `warehouse-data/s3-credentials`. They expose `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`; Loki's Secret uses its own schema shown above. The warehouse `VaultStaticSecret` uses mount `kv`, path `warehouse/s3`. The CRs live with MLflow, DSPA, observability storage/Loki, and the warehouse camera library.
+
+Loki's `VaultStaticSecret` template fixes the projected `endpoint` to `http://seaweedfs.obs-storage.svc.cluster.local:8333`; an old value in `kv/loki/s3` cannot keep the consumer on the retired endpoint. Credentials remain Vault-sourced. The seed example includes the same endpoint for consistency, but the projection template controls the Kubernetes Secret value.
+
+Seed unrelated service credentials separately, for example `kv/coturn/credentials`, using an approved password rather than a committed placeholder.
 
 ## After a pod restart
 

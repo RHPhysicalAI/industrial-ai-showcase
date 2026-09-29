@@ -1,6 +1,10 @@
 # hub-acm/observability — MultiClusterObservability
 
-Hub-side MCO manifests that deploy the Thanos stack + Grafana on the hub and auto-deploy the `metrics-collector` addon onto every ACM-managed cluster. Managed clusters `remote_write` their platform metrics to the hub Thanos Receiver; long-term retention lives in MinIO (`obs-storage/thanos` bucket).
+Hub-side MCO manifests deploy the Thanos stack + Grafana on the hub and auto-deploy the `metrics-collector` addon onto every ACM-managed cluster. Managed clusters `remote_write` their platform metrics to the hub Thanos Receiver; the storage migration targets SeaweedFS in `obs-storage`, bucket `thanos`.
+
+The 2026-09-29 target uses the shared SeaweedFS Kustomize base, `docker.io/chrislusf/seaweedfs:4.48` `mini`, one replica, and a new `100Gi` PVC matching the repository's previous capacity. The isolated [S3 canary passed](../../../../../tools/object-storage/VALIDATION.md); Thanos itself was not migrated in that test. Existing upstream-managed stores are shared. Follow the [controlled copy/cutover guide](../../../../../tools/object-storage/README.md) before changing the live Thanos Secret or endpoint.
+
+Storage bucket-init Jobs run as Argo CD `Sync` hooks in wave `1`, with bounded retries and a 600-second timeout. Loki's `VaultStaticSecret` template fixes the projected endpoint to `http://seaweedfs.obs-storage.svc.cluster.local:8333`, overriding any stale endpoint stored in Vault. Thanos's imperative Secret below must still be updated as part of the controlled cutover.
 
 ## What reconciles from Git
 
@@ -25,11 +29,11 @@ oc get secret -n openshift-config pull-secret -o yaml | \
 
 ### 2. `thanos-object-storage`
 
-Thanos config pointing at the MinIO in `obs-storage` (shared with Session 07 observability; pre-created `thanos/` bucket in Session 14):
+After copying and verifying the data, Thanos targets SeaweedFS in `obs-storage`. Sessions 07 and 14 established the historical observability storage and `thanos` bucket; the endpoint and Secret below describe the current migration contract:
 
 ```bash
-AK=$(oc get secret -n obs-storage obs-minio-credentials -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
-SK=$(oc get secret -n obs-storage obs-minio-credentials -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
+AK=$(oc get secret -n obs-storage obs-s3-credentials -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
+SK=$(oc get secret -n obs-storage obs-s3-credentials -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
 cat <<EOF | oc apply -f -
 apiVersion: v1
 kind: Secret
@@ -42,21 +46,35 @@ stringData:
     type: s3
     config:
       bucket: thanos
-      endpoint: minio.obs-storage.svc.cluster.local:9000
+      endpoint: seaweedfs.obs-storage.svc.cluster.local:8333
       insecure: true
       access_key: $AK
       secret_key: $SK
 EOF
+unset AK SK
 ```
 
-The MinIO bucket must exist first:
+The target bucket must exist first. During controlled target setup, use the official AWS CLI image and project credentials from the Secret without placing values in the command line:
 
 ```bash
-oc run -n obs-storage --rm --restart=Never -i --attach minio-probe \
-  --image=minio/mc:latest --env="HOME=/tmp" \
-  --env="MINIO_ROOT_USER=$(oc get secret -n obs-storage obs-minio-credentials -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)" \
-  --env="MINIO_ROOT_PASSWORD=$(oc get secret -n obs-storage obs-minio-credentials -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)" \
-  --command -- sh -c 'mc alias set s http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc mb -p s/thanos'
+oc run -n obs-storage s3-bucket-init --rm --restart=Never -i --attach \
+  --image=public.ecr.aws/aws-cli/aws-cli:2.34.0 \
+  --overrides='{
+    "spec": {
+      "containers": [{
+        "name": "s3-bucket-init",
+        "image": "public.ecr.aws/aws-cli/aws-cli:2.34.0",
+        "envFrom": [{"secretRef": {"name": "obs-s3-credentials"}}],
+        "env": [
+          {"name": "AWS_DEFAULT_REGION", "value": "us-east-1"},
+          {"name": "AWS_EC2_METADATA_DISABLED", "value": "true"},
+          {"name": "AWS_PAGER", "value": ""}
+        ],
+        "command": ["/bin/sh", "-ec"],
+        "args": ["aws --endpoint-url http://seaweedfs:8333 s3api head-bucket --bucket thanos || aws --endpoint-url http://seaweedfs:8333 s3api create-bucket --bucket thanos"]
+      }]
+    }
+  }'
 ```
 
 ## What MCO deploys
@@ -83,7 +101,7 @@ On each ACM-managed cluster (via the `observability-controller` addon): `metrics
 - `retentionResolution1h: 90d` — 1-hour downsampled, 90 days.
 - `retentionInLocal: 1d` — local PVC retention (ingester-side), 1 day.
 
-All three downsamples live in MinIO long-term. Bump up for real workloads.
+All three downsamples use the S3 store for long-term retention. Preserve that data during migration to SeaweedFS; size capacity and retention for real workloads.
 
 ## Unified Grafana
 

@@ -31,6 +31,10 @@ class OpenvlaSettings(BaseSettings):
         default="NEW_EMBODIMENT",
         description="GR00T embodiment tag for the target robot (e.g. NEW_EMBODIMENT for Unitree G1).",
     )
+    groot_video_key: str = Field(
+        default="ego_view",
+        description="Video observation key expected by the selected GR00T embodiment.",
+    )
 
     s3_endpoint: str = Field(default="", description="S3-compatible endpoint URL for s3:// model URIs.")
     model_cache_dir: str = Field(default="/tmp/model_cache", description="Local directory to cache S3-downloaded models.")

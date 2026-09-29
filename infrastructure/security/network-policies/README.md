@@ -14,7 +14,7 @@ resources:
   - <workload-specific allowlist>.yaml
 ```
 
-The `default-deny-all` policy denies all ingress + egress. The three `allow-*` companions unblock the reconcile + metrics + DNS paths every workload needs. Workload-specific allowlists (e.g., MLflow → MinIO, Loki → obs-storage MinIO) live next to the workload's other manifests.
+The `default-deny-all` policy denies all ingress + egress. The three `allow-*` companions unblock the reconcile + metrics + DNS paths every workload needs. Workload-specific allowlists (e.g., MLflow → SeaweedFS, Loki → obs-storage SeaweedFS) live next to the workload's other manifests.
 
 ## Retroactive application
 

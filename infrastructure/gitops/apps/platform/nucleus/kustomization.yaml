@@ -44,3 +44,4 @@ resources:
 # Strategic merge patches — pod affinity for RWO PVC co-location
 patchesStrategicMerge:
   - pod-affinity-patches.yaml
+  - demo-resource-patches.yaml

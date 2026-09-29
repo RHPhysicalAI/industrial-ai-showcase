@@ -11,6 +11,7 @@ from common_lib.kafka import JsonConsumer, JsonProducer
 
 from obstruction_detector.cosmos_client import CosmosClient, ObstructionVerdict
 from obstruction_detector.debounce import DebounceState
+from obstruction_detector.state import effective_obstruction
 
 if TYPE_CHECKING:
     from structlog.stdlib import BoundLogger
@@ -49,17 +50,20 @@ async def run(
             consumer.commit()
             continue
 
+        obstructed = effective_obstruction(frame.state, verdict.obstruction, frame.trace_id, log)
         log.info(
             "frame.reasoned",
             trace_id=frame.trace_id,
             camera_id=frame.camera_id,
-            obstructed=verdict.obstruction,
+            obstructed=obstructed,
+            model_obstructed=verdict.obstruction,
+            frame_state=frame.state,
             confidence=round(verdict.confidence, 3),
             label=verdict.label,
         )
 
-        if state.observe(verdict.obstruction):
-            _emit_alert(frame, verdict, producer, settings, log)
+        if state.observe(obstructed):
+            _emit_alert(frame, verdict, obstructed, producer, settings, log)
 
         consumer.commit()
 
@@ -67,6 +71,7 @@ async def run(
 def _emit_alert(
     frame: CameraFrameEvent,
     verdict: ObstructionVerdict,
+    obstructed: bool,
     producer: JsonProducer,
     settings: "ObstructionDetectorSettings",
     log: "BoundLogger",
@@ -75,10 +80,10 @@ def _emit_alert(
         trace_id=frame.trace_id,
         aisle_id=frame.aisle_id,
         camera_id=frame.camera_id,
-        detection_label=verdict.label or ("obstruction" if verdict.obstruction else "clear"),
+        detection_label=verdict.label or ("obstruction" if obstructed else "clear"),
         confidence=verdict.confidence,
         source_model=settings.cosmos_model,
-        obstructed=verdict.obstruction,
+        obstructed=obstructed,
         detail=verdict.detail,
     )
     producer.send(settings.alerts_topic, key=alert.aisle_id, value=alert)

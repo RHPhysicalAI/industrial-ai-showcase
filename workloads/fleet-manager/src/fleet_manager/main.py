@@ -19,7 +19,15 @@ from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 
-from common_lib.events import FleetMission, FleetTelemetry, MesOrder, MissionKind, SafetyAlert
+from common_lib.events import (
+    EventClass,
+    FleetEvent,
+    FleetMission,
+    FleetTelemetry,
+    MesOrder,
+    MissionKind,
+    SafetyAlert,
+)
 from common_lib.kafka import JsonConsumer, JsonProducer
 from common_lib.logging import configure_logging
 from fleet_manager import __version__
@@ -136,6 +144,29 @@ async def _consume_telemetry(
         consumer.commit()
 
 
+async def _consume_events(
+    consumer: JsonConsumer[FleetEvent],
+    planner: MissionPlanner,
+    log: "BoundLogger",
+) -> None:
+    """Consume fleet lifecycle events that reset in-memory planner state."""
+    loop = asyncio.get_running_loop()
+    while True:
+        event = await loop.run_in_executor(None, consumer.poll, 1.0)
+        if event is None:
+            await asyncio.sleep(0)
+            continue
+        if event.event_class == EventClass.DEMO_RESET:
+            planner.reset(log)
+            log.info(
+                "demo.reset.received",
+                event_id=str(event.event_id),
+                trace_id=event.trace_id,
+                source=event.source,
+            )
+        consumer.commit()
+
+
 async def _consume_mes_orders(
     consumer: JsonConsumer[MesOrder],
     producer: JsonProducer,
@@ -190,6 +221,12 @@ async def lifespan(app: FastAPI):
         topic=settings.telemetry_topic,
         model=FleetTelemetry,
     )
+    events_consumer = JsonConsumer(
+        bootstrap_servers=settings.kafka_bootstrap_servers,
+        group_id=f"{settings.consumer_group_id}-events",
+        topic=settings.events_topic,
+        model=FleetEvent,
+    )
     mes_consumer = JsonConsumer(
         bootstrap_servers=settings.kafka_bootstrap_servers,
         group_id=f"{settings.consumer_group_id}-mes",
@@ -209,6 +246,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(
             _consume_telemetry(telemetry_consumer, producer, planner, settings.missions_topic, log)
         ),
+        asyncio.create_task(_consume_events(events_consumer, planner, log)),
         asyncio.create_task(
             _consume_mes_orders(
                 mes_consumer, producer, planner, settings.missions_topic,
@@ -225,6 +263,7 @@ async def lifespan(app: FastAPI):
         missions_consumer.close()
         alerts_consumer.close()
         telemetry_consumer.close()
+        events_consumer.close()
         mes_consumer.close()
         producer.flush(timeout=5.0)
         log.info("shutdown")

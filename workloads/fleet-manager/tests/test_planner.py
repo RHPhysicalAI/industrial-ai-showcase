@@ -43,6 +43,20 @@ def test_approach_point_clears_when_aisle_unobstructed() -> None:
     assert planner.robots["fl-07"].phase == Phase.IN_AISLE
 
 
+def test_repeated_approach_telemetry_does_not_emit_duplicate_proceed() -> None:
+    """Repeated telemetry near the approach-point is idempotent after PROCEED."""
+    planner = MissionPlanner()
+    _dispatch_mission(planner)
+
+    first = planner.robot_at_approach_point("fl-07", "aisle-3", log)
+    duplicate = planner.robot_at_approach_point("fl-07", "aisle-3", log)
+
+    assert first is not None
+    assert first.kind == MissionKind.PROCEED
+    assert duplicate is None
+    assert planner.robots["fl-07"].phase == Phase.IN_AISLE
+
+
 def test_approach_point_holds_when_aisle_obstructed() -> None:
     """Robot at approach-point is held when aisle is obstructed."""
     planner = MissionPlanner()
@@ -121,3 +135,15 @@ def test_mission_completed_removes_robot() -> None:
     _dispatch_mission(planner)
     planner.mission_completed("fl-07", log)
     assert "fl-07" not in planner.robots
+
+
+def test_reset_clears_active_missions_and_obstructions() -> None:
+    """An explicit demo reset clears all in-memory planner state."""
+    planner = MissionPlanner()
+    _dispatch_mission(planner)
+    planner.obstructed_aisles.add("aisle-3")
+
+    planner.reset(log)
+
+    assert planner.robots == {}
+    assert planner.obstructed_aisles == set()

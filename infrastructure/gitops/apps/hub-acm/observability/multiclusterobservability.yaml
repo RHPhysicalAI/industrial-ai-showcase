@@ -6,7 +6,7 @@ metadata:
 # Store, Compactor, Ruler) + Grafana on the hub and auto-deploys
 # metrics-collector on every managed cluster. Managed clusters
 # remote_write their platform metrics to the hub Thanos Receiver.
-# Long-term metrics go into the thanos bucket on the in-cluster MinIO
+# Long-term metrics go into the thanos bucket on the in-cluster SeaweedFS
 # in obs-storage (pre-created in Session 14).
 spec:
   # Retention: 30d hot in Thanos ingesters, 90d in the object store.

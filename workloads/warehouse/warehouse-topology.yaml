@@ -72,9 +72,9 @@ cameras:
     # Rotation: pitched 60° down from horizontal, looking west-to-east along aisle.
     rotation_deg: [60.0, 0.0, 0.0]
     publishes_topic: warehouse.cameras.aisle3
-    # Frames served by the companion-side fake-camera service from the MinIO
-    # image library (ADR-027 step 6). Keys are named states; values are the
-    # object names in MinIO bucket `warehouse-camera-library`.
+    # Companion-side fake-camera serves its baked-in /frames/ copies.
+    # Keys are named states; filenames match the SeaweedFS migration target
+    # bucket `warehouse-camera-library` (ADR-027 step 6, updated ADR-021).
     frame_library:
       empty: aisle3_empty.jpg
       obstructed: aisle3_pallet.jpg

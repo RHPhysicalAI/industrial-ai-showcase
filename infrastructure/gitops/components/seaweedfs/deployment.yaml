@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: seaweedfs
+  labels:
+    app.kubernetes.io/name: seaweedfs
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: seaweedfs
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: seaweedfs
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: seaweedfs
+          image: docker.io/chrislusf/seaweedfs:4.48
+          # Bypass the image's root-oriented entrypoint. OpenShift assigns UID/GID.
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              : "${AWS_ACCESS_KEY_ID:?S3 credentials are required}"
+              : "${AWS_SECRET_ACCESS_KEY:?S3 credentials are required}"
+              exec weed mini -dir=/data -ip=127.0.0.1 -ip.bind=0.0.0.0 \
+                -s3.port=8333 -s3.allowDeleteBucketNotEmpty=false \
+                -s3.autoCreateBucket=false -s3.iam.readOnly=true \
+                -s3.port.iceberg=0 -s3.port.lance=0 \
+                -webdav=false -admin.ui=false -master.telemetry=false
+          env:
+            - name: HOME
+              value: /tmp
+          envFrom:
+            - secretRef:
+                name: s3-credentials
+          ports:
+            - name: s3
+              containerPort: 8333
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          startupProbe:
+            tcpSocket:
+              port: s3
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: s3
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: s3
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: seaweedfs-data
