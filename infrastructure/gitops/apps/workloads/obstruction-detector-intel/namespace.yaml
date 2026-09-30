@@ -1,0 +1,12 @@
+# This project was developed with assistance from AI tools.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: intel-vla-training
+  labels:
+    opendatahub.io/dashboard: "true"
+    kubernetes.io/metadata.name: intel-vla-training
+    app.kubernetes.io/part-of: intel-variant
+  annotations:
+    openshift.io/description: "Intel variant VLA training and perception workloads"
+    openshift.io/display-name: "Intel VLA Training"

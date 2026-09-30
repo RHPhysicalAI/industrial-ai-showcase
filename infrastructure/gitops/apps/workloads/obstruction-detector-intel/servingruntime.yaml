@@ -1,0 +1,45 @@
+# This project was developed with assistance from AI tools.
+#
+# OpenVINO Model Server runtime for the Intel variant's YOLOv8 predictor.
+# Previously existed only in-cluster; committed here so the workload is
+# reproducible from git and mirrorable for air-gapped installs.
+apiVersion: serving.kserve.io/v1alpha1
+kind: ServingRuntime
+metadata:
+  name: kserve-ovms-runtime
+  namespace: intel-vla-training
+  labels:
+    variant: intel
+spec:
+  supportedModelFormats:
+  - name: openvino_ir
+    version: opset1
+    autoSelect: true
+  protocolVersions:
+  - v2
+  containers:
+  - name: kserve-container
+    # Pinned to a digest, not :latest. An unpinned tag is not reproducibly
+    # mirrorable and lets the served runtime change without a manifest change,
+    # which breaks the air-gap constraint in CLAUDE.md.
+    # Digest resolved 2026-09-29 from the running predictor; corresponds to
+    # OVMS 2026.4.0.869b2186a / OpenVINO backend 2026.4.0-22959.
+    # NOTE: this is the upstream community image, not a Red Hat-supported
+    # artifact. See docs/13-intel-task4-validation-report.md section 6.
+    image: docker.io/openvino/model_server@sha256:11d3acfb28b38412f17752856cb3ea33c3680648c9268ff5a680cc7ef4287cd9
+    args:
+    # OVMS serves gRPC on --port and REST on --rest_port. The KServe-managed
+    # predictor Service maps port 80 to 8080 (gRPC), so REST clients use the
+    # separate yolov8-detector-rest Service. See yolov8-inference-service.yaml.
+    - --port=8080
+    - --rest_port=8081
+    - --model_name={{.Name}}
+    - --model_path=/mnt/models
+    - --file_system_poll_wait_seconds=0
+    resources:
+      requests:
+        cpu: "1"
+        memory: 2Gi
+      limits:
+        cpu: "2"
+        memory: 4Gi

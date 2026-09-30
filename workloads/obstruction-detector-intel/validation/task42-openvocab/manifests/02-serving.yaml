@@ -1,0 +1,79 @@
+apiVersion: serving.kserve.io/v1alpha1
+kind: ServingRuntime
+metadata:
+  name: kserve-ovms-runtime
+  namespace: intel-vla-training
+  labels: {variant: intel}
+spec:
+  supportedModelFormats:
+  - {name: openvino_ir, version: opset1, autoSelect: true}
+  protocolVersions: [v2]
+  containers:
+  - name: kserve-container
+    # Same digest validated in Task 4.1 (OVMS 2026.4.0 / OpenVINO 2026.4.0-22959).
+    # Upstream community image, not a Red Hat-supported artifact.
+    image: docker.io/openvino/model_server@sha256:11d3acfb28b38412f17752856cb3ea33c3680648c9268ff5a680cc7ef4287cd9
+    args:
+    # OVMS ports read inverted: --port is gRPC, --rest_port is REST.
+    - --port=8080
+    - --rest_port=8081
+    - --model_name={{.Name}}
+    - --model_path=/mnt/models
+    - --file_system_poll_wait_seconds=0
+    ports:
+    - {containerPort: 8081, protocol: TCP}
+    resources:
+      requests: {cpu: "1", memory: 2Gi}
+      # CLIP IR alone is ~605Mi on disk; the 1Gi limit used in Task 4.1 would OOM.
+      limits:   {cpu: "2", memory: 6Gi}
+---
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: fastsam
+  namespace: intel-vla-training
+  annotations:
+    # No Knative on this cluster; RawDeployment is also the KServe default here.
+    serving.kserve.io/deploymentMode: RawDeployment
+spec:
+  predictor:
+    model:
+      modelFormat: {name: openvino_ir}
+      runtime: kserve-ovms-runtime
+      # Parent prefix, NOT the version dir. OVMS expects <name>/<version>/.
+      storageUri: pvc://model-fastsam/fastsam
+---
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: clip
+  namespace: intel-vla-training
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+spec:
+  predictor:
+    model:
+      modelFormat: {name: openvino_ir}
+      runtime: kserve-ovms-runtime
+      storageUri: pvc://model-clip/clip
+---
+# KServe's predictor Service maps :80 to gRPC (8080). REST needs its own Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: fastsam-rest
+  namespace: intel-vla-training
+spec:
+  selector:
+    serving.kserve.io/inferenceservice: fastsam
+  ports: [{name: rest, port: 8081, targetPort: 8081}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clip-rest
+  namespace: intel-vla-training
+spec:
+  selector:
+    serving.kserve.io/inferenceservice: clip
+  ports: [{name: rest, port: 8081, targetPort: 8081}]

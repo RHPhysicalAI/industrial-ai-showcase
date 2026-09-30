@@ -1,0 +1,18 @@
+# This project was developed with assistance from AI tools.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: intel-vla-training
+
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - imagestream.yaml
+  - buildconfig.yaml
+  - servingruntime.yaml
+  - yolov8-inference-service.yaml
+  - deployment.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: intel-variant
+  app.kubernetes.io/component: perception

@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: obstruction-detector-intel
+  namespace: intel-vla-training
+  labels:
+    app: obstruction-detector-intel
+    variant: intel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: obstruction-detector-intel
+  template:
+    metadata:
+      labels:
+        app: obstruction-detector-intel
+        variant: intel
+    spec:
+      serviceAccountName: obstruction-detector-intel
+      containers:
+      - name: detector
+        image: image-registry.openshift-image-registry.svc:5000/intel-vla-training/obstruction-detector-intel:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        env:
+        - name: SERVICE_NAME
+          value: "obstruction-detector-intel"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "fleet-kafka-bootstrap.fleet-ops:9092"
+        - name: FRAMES_TOPIC
+          value: "warehouse.cameras.aisle3"
+        - name: ALERTS_TOPIC
+          value: "fleet.safety.alerts"
+        - name: CONSUMER_GROUP
+          value: "obstruction-detector-intel"
+        - name: YOLO_ENDPOINT_URL
+          value: "http://yolov8-detector-rest.intel-vla-training.svc.cluster.local:8081"
+        - name: YOLO_MODEL
+          value: "yolov8m-openvino"
+        - name: YOLO_REQUEST_TIMEOUT_S
+          value: "10.0"
+        - name: DWELL_FRAMES
+          value: "2"
+        - name: AISLE_ID
+          value: "aisle-3"
+        resources:
+          requests:
+            cpu: "250m"
+            memory: 512Mi
+          limits:
+            cpu: "500m"
+            memory: 1Gi
+        # Probe budgets are deliberately wide. Detection parsing decodes ~706K
+        # floats from the KServe v2 JSON response synchronously, which blocks
+        # the asyncio event loop for 4.7-10s per frame, so /healthz cannot
+        # answer inside a normal 1s timeout. At the default timeoutSeconds: 1
+        # this pod was liveness-killed roughly every 80s. These values tolerate
+        # a blocked loop rather than restarting a working service.
+        # Proper fix is to move parsing off the event loop or use gRPC/binary
+        # tensors -- see docs/13-intel-task4-validation-report.md section 3.2a.
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 15
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 20
+          timeoutSeconds: 10
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: obstruction-detector-intel
+  namespace: intel-vla-training
+  labels:
+    app: obstruction-detector-intel
+spec:
+  selector:
+    app: obstruction-detector-intel
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+  type: ClusterIP
