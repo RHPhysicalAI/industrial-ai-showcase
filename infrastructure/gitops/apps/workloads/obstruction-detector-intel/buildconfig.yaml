@@ -1,0 +1,28 @@
+# This project was developed with assistance from AI tools.
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: obstruction-detector-intel
+  namespace: intel-vla-training
+  labels:
+    app: obstruction-detector-intel
+    variant: intel
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/RHPhysicalAI/industrial-ai-showcase.git
+      ref: feat/intel-variant-architecture
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: workloads/obstruction-detector-intel/Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: obstruction-detector-intel:latest
+  triggers:
+    - type: ConfigChange
+    - type: ImageChange
+  successfulBuildsHistoryLimit: 2
+  failedBuildsHistoryLimit: 2

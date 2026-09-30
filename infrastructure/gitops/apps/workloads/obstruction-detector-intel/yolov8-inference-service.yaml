@@ -1,0 +1,59 @@
+# This project was developed with assistance from AI tools.
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: yolov8-detector
+  namespace: intel-vla-training
+  labels:
+    app: yolov8-detector
+    variant: intel
+    model: yolov8m-openvino
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+spec:
+  predictor:
+    # S3 endpoint + http/tls settings come from annotations on the secret
+    # attached to this ServiceAccount; KServe's pod mutator reads them there,
+    # not from this InferenceService. See minio-s3-secret.
+    serviceAccountName: yolov8-sa
+    model:
+      modelFormat:
+        name: openvino_ir
+      # OVMS resolves the numbered version dir (yolov8m/1/) beneath this prefix.
+      storageUri: "s3://models/yolov8m"
+      runtime: kserve-ovms-runtime
+      resources:
+        requests:
+          cpu: "2"
+          memory: 4Gi
+        limits:
+          cpu: "4"
+          memory: 8Gi
+      env:
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: GRPC_PORT
+          value: "8081"
+        - name: REST_PORT
+          value: "8080"
+---
+# OVMS serves gRPC on 8080 and REST on 8081. The KServe-managed
+# `yolov8-detector-predictor` Service points port 80 at 8080 (gRPC) and is
+# reconciled back on every edit, so REST clients need their own Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: yolov8-detector-rest
+  namespace: intel-vla-training
+  labels:
+    app: yolov8-detector
+    variant: intel
+spec:
+  selector:
+    serving.kserve.io/inferenceservice: yolov8-detector
+  ports:
+  - name: rest
+    port: 8081
+    targetPort: 8081
+    protocol: TCP
+  type: ClusterIP
