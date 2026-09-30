@@ -1,0 +1,102 @@
+{
+  "measured_at": "2026-09-29",
+  "measured_by": "workloads/obstruction-detector-intel/validation/probe.py",
+  "measurement_boundary": "YoloClient.reason() entry to return; excludes Kafka consume/produce",
+  "environment": {
+    "platform": "OpenShift Dedicated hub, RHOAI 3.4.0 EA1",
+    "serving_runtime": "OpenVINO Model Server 2026.4.0.869b2186a",
+    "openvino_backend": "2026.4.0-22959",
+    "runtime_image": "docker.io/openvino/model_server:latest",
+    "node_instance_type": "m5.2xlarge",
+    "cpu": "Intel Xeon Platinum 8259CL @ 2.50GHz",
+    "accelerator": "none (CPU inference)",
+    "predictor_limits": {"cpu": "4", "memory": "8Gi"},
+    "detector_limits": {"cpu": "500m", "memory": "1Gi"},
+    "model": "yolov8m OpenVINO IR FP32, input x.1 [1,3,640,640], output out_0 [1,84,8400]",
+    "confidence_threshold": 0.5
+  },
+  "gates": {
+    "accuracy": {"threshold": ">=80%", "source": "docs/13-intel-task4-validation-report.md"},
+    "latency": {"threshold": "<500ms end-to-end", "source": "docs/13-intel-task4-validation-report.md"}
+  },
+  "results": [
+    {
+      "image": "aisle3_pallet.jpg",
+      "provenance": "fake-camera workload, 'obstructed' state frame -- the authoritative demo input",
+      "dims": "1920x1080",
+      "ground_truth": "pallet obstructing the aisle",
+      "obstructed": false,
+      "label": "clear",
+      "confidence": 1.0,
+      "confidence_note": "hardcoded 1.0 on the clear branch; not a model confidence",
+      "latency_ms_runs": [10295.2, 8301.5, 9508.8],
+      "latency_ms_median": 9508.8,
+      "classification": "FALSE NEGATIVE",
+      "cause": "'pallet' is not a COCO-80 class; no detection clears the 0.5 threshold"
+    },
+    {
+      "image": "aisle3_empty.jpg",
+      "provenance": "fake-camera workload, 'empty' state frame -- the authoritative demo input",
+      "dims": "1920x1080",
+      "ground_truth": "empty aisle",
+      "obstructed": false,
+      "label": "clear",
+      "confidence": 1.0,
+      "latency_ms_runs": [6974.6, 6785.4, 6521.2],
+      "latency_ms_median": 6785.4,
+      "classification": "TRUE NEGATIVE"
+    },
+    {
+      "image": "warehouse_3.jpg",
+      "provenance": "COCO val2017 000000001000.jpg, renamed -- NOT a warehouse scene",
+      "dims": "640x480",
+      "ground_truth": "person",
+      "obstructed": true,
+      "label": "person",
+      "confidence": 0.9301,
+      "latency_ms_runs": [7120.7, 9380.4, 8088.3],
+      "latency_ms_median": 8088.3,
+      "classification": "TRUE POSITIVE",
+      "note": "serving-path sanity check only; a COCO-trained model on a COCO val image is near-tautological"
+    },
+    {
+      "image": "warehouse_2.jpg",
+      "provenance": "COCO val2017 000000000632.jpg, renamed -- NOT a warehouse scene",
+      "dims": "640x483",
+      "ground_truth": "chair / potted plant / bed",
+      "obstructed": true,
+      "label": "chair",
+      "confidence": 0.9197,
+      "latency_ms_runs": [],
+      "latency_ms_median": null,
+      "classification": "TRUE POSITIVE",
+      "note": "latency not captured in the rerun; earlier run consistent with the 6.6-9.6s band",
+      "letterbox_variant_confidence": 0.9109
+    },
+    {
+      "image": "warehouse_1.jpg",
+      "provenance": "COCO val2017 000000000285.jpg, renamed -- NOT a warehouse scene",
+      "dims": "586x640",
+      "ground_truth": "bear (0.958) -- not an obstruction class",
+      "obstructed": false,
+      "label": "clear",
+      "confidence": 1.0,
+      "latency_ms_runs": [],
+      "latency_ms_median": null,
+      "classification": "TRUE NEGATIVE"
+    }
+  ],
+  "summary": {
+    "demo_frames_correct": "1/2 (50%) -- BELOW the >=80% gate",
+    "coco_val_images_correct": "3/3 (100%) -- validates the serving path, not warehouse capability",
+    "latency_median_range_ms": [6521.2, 10295.2],
+    "latency_verdict": "13-19x over the <500ms gate",
+    "decisive_counterexample": "aisle3_pallet.jpg false negative, reproduced live end-to-end"
+  },
+  "known_gaps": [
+    "Agreed input set was >=10 images; only 5 were tested.",
+    "The <500ms gate is specified end-to-end (camera->alert); the measured boundary excludes Kafka, so true E2E is higher than reported. Conclusion holds a fortiori.",
+    "No false-positive characterisation: the 5-image set is too small to estimate an FP rate.",
+    "Cosmos Reason 2-8B baseline comparison not run."
+  ]
+}
